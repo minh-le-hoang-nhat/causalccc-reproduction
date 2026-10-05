@@ -12,7 +12,7 @@ Tested on Ubuntu 24.04 (native or WSL2). macOS should work with the adjustments 
 ## 0. Get the code
 
 ```bash
-git clone https://github.com/<owner>/causalccc-reproduction.git
+git clone https://github.com/minh-le-hoang-nhat/causalccc-reproduction.git
 cd causalccc-reproduction
 ```
 
