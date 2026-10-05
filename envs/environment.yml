@@ -1,0 +1,18 @@
+name: csbc-causalccc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - scanpy=1.12.4
+  - anndata=0.13.4
+  - numpy=2.5.3
+  - pandas=3.0.6
+  - scipy=1.18.1
+  - scikit-learn=1.9.1
+  - umap-learn=0.5.12
+  - leidenalg=0.12.0
+  - python-igraph=1.0.0
+  - matplotlib-base=3.11.2
+  - h5py=3.16.0
+  - ipykernel        # required: Positron must use the environment's own ipykernel (see docs/INSTALL.md)
+  - ipywidgets

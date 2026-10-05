@@ -1,0 +1,20 @@
+# Data are not tracked (see data/README.md)
+data/*
+!data/README.md
+
+# Large intermediate files
+*.h5ad
+*.rds
+*.RData
+
+# Python
+__pycache__/
+.ipynb_checkpoints/
+
+# R
+.Rhistory
+.Rproj.user/
+
+# OS / editor
+.DS_Store
+.vscode/
