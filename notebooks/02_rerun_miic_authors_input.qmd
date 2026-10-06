@@ -1,0 +1,502 @@
+---
+title: "02 – Rerun MIIC on the authors' input (case study 1)"
+subtitle: "Same input files, same settings: do we get the same network?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 01 described the files the authors uploaded to the CausalCCC web server and the network it returned. Here we
+run MIIC ourselves, on our computer, with the **same three input files** and the **same settings**, and compare our
+network with theirs. This is the most basic reproducibility test: if it fails, there is no point rebuilding the input
+files from the public data.
+
+Three things can make our result differ even if everything is done correctly:
+
+1. **Code version.** We use `miic` from the `causalccc` branch, commit `5ca0b22`, dated 23 January 2025. The authors'
+   server job ran on 21 January 2025, two days earlier, so the server cannot have used exactly this commit.
+2. **Randomness.** The confidence filter compares each link with 100 randomly shuffled versions of the data. Different
+   random shuffles give slightly different confidence values, so links close to the threshold can be kept in one run and
+   removed in another. We fix the random seed so that *our* run is repeatable, but we cannot know the server's seed.
+3. **Number of threads.** The server used 2. This should not change the result, but we keep 2 to stay close.
+
+**Inputs:** the authors' files in `data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/` (read only).
+**Outputs:** `results/02_rerun_miic/`: the full MIIC result (`miic_result.rds`) and our edge list (`edges_rerun.tsv`).
+
+::: {.callout-note}
+## Running time
+The MIIC run takes roughly 15 to 30 minutes. The notebook saves its result the first time and simply reloads it
+afterwards. To force a new run, delete `results/02_rerun_miic/miic_result.rds`.
+:::
+
+## Setup
+
+Besides the tidyverse we load `miic`. Loading it prints a few warnings such as "replacing previous import
+'data.table::first' by 'dplyr::first'": two of the packages `miic` uses define functions with the same name, and R tells
+us which one wins. They are harmless.
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(miic)
+
+find_repo_root <- function(dir = getwd()) {
+  # The repository root is the folder that contains both README.md and notebooks/
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+
+root        <- find_repo_root()
+job_dir     <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
+results_dir <- file.path(root, "results", "02_rerun_miic")
+
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/download_case1.sh first.")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+# Which miic are we using? It should be the causalccc branch, version 2.0.x.
+packageVersion("miic")
+```
+
+## 1. Read the inputs
+
+We read the three files the server used. `miic()` expects classic R data frames, so we convert the tibbles with
+`as.data.frame()`, which keeps column names such as `H2-D1_senders` unchanged. The L-R table must have columns named
+exactly `ligand` and `receptor`, because that is how `miic` looks them up.
+
+```{r}
+#| label: read-inputs
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+
+# The authors' network, to compare with ours
+edges_authors <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt_save"), show_col_types = FALSE)
+```
+
+We compare with `edgesList.miic.summary.txt_save`, the file written by the server run itself on 21 January 2025. The
+other version (`edgesList.miic.summary.txt`) was edited in April and differs only in the values given to the 18 L-R
+links (section 5).
+
+## 2. Translate the server settings into `miic()` arguments
+
+The server log (notebook 01, section 2) gives the options it used. Each one corresponds to an argument of `miic()`; the
+explanations below come from the `miic` documentation (`?miic`).
+
+| Server option                 | `miic()` argument           | Meaning                                                                                                  |
+| ----------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `-i`                          | `input_data`                | the mosaic table                                                                                         |
+| `-s`                          | `state_order`               | type and group of each variable                                                                          |
+| `--interact-edges`            | `interact_edges`            | the L-R pairs, which are kept whatever the data say                                                      |
+| `--complexity nml`            | `cplx = "nml"`              | how mutual information is corrected for the finite number of cells (the default)                         |
+| `--orientation`               | `orientation = TRUE`        | orient edges when the data allow it (the default)                                                        |
+| `-l orientation`              | `latent = "orientation"`    | allow hidden common causes (bidirected edges) when orienting (the default)                               |
+| `--orient_probab_ratio 0.01`  | `ori_proba_ratio = 0.01`    | accept an arrowhead only if (1 − p) / p < 0.01, i.e. p > 0.99. **The default is 1**, which accepts all orientations |
+| `--conf_shuffle 100`          | `n_shuffles = 100`          | number of shuffled datasets for the confidence filter (default 0: no filter)                             |
+| `--conf_ratio 0.01`           | `conf_threshold = 0.01`     | remove links whose confidence ratio is above 0.01 (default 0: no filter)                                 |
+| `--test_MAR`                  | `test_mar = TRUE`           | check that missing values do not bias conditional tests (the default)                                    |
+| `--consistency no`            | `consistent = "no"`         | no extra consistency step (the default)                                                                  |
+| `-e -1`                       | `n_eff = -1`                | cells are treated as independent samples (the default)                                                   |
+| `--miic_mode S`               | `mode = "S"`                | standard mode, not temporal (the default)                                                                |
+| `--n_threads 2`               | `n_threads = 2`             | number of processor cores used                                                                           |
+| `--max_nodes 200`             | (not needed)                | only used in temporal mode                                                                               |
+| `--plots`                     | (not needed)                | server-side drawings                                                                                     |
+
+Three settings differ from the defaults (`ori_proba_ratio`, `n_shuffles`, `conf_threshold`): forgetting them would give a
+different network. We still write every argument explicitly, so that the call documents itself.
+
+## 3. Run MIIC (or reload the saved result)
+
+`set.seed()` fixes R's random number generator. MIIC draws the random shuffles of the confidence filter from it, so the
+same seed gives the same shuffles and therefore the same result every time we run this notebook.
+
+The `if` block runs MIIC only when no saved result exists; otherwise it reads the saved one with `readRDS()`. While it
+runs, `miic` prints one line "Did not remove … edge" for each of the 18 L-R pairs: this is the branch confirming that it
+keeps them.
+
+```{r}
+#| label: run-miic
+
+result_file <- file.path(results_dir, "miic_result.rds")
+
+if (file.exists(result_file)) {
+  miic_result <- readRDS(result_file)
+  message("Loaded the saved result from ", result_file)
+} else {
+  set.seed(2026)
+  start <- Sys.time()
+  miic_result <- miic(
+    input_data      = as.data.frame(mosaic),
+    state_order     = as.data.frame(state_order),
+    interact_edges  = as.data.frame(lr_pairs),
+    cplx            = "nml",
+    orientation     = TRUE,
+    latent          = "orientation",
+    ori_proba_ratio = 0.01,
+    n_shuffles      = 100,
+    conf_threshold  = 0.01,
+    test_mar        = TRUE,
+    consistent      = "no",
+    n_eff           = -1,
+    mode            = "S",
+    n_threads       = 2
+  )
+  attr(miic_result, "run_time") <- Sys.time() - start   # keep the running time with the result
+  saveRDS(miic_result, result_file)
+}
+
+attr(miic_result, "run_time")
+```
+
+`miic()` returns a list of several tables. The one we need is `all.edges.summary`: one row per pair of genes examined,
+with the same columns as the authors' file plus two extra ones (`raw_contributions`, `contributions`).
+
+```{r}
+#| label: our-edges
+
+names(miic_result)
+
+edges_ours_raw <- as_tibble(miic_result$all.edges.summary)
+
+# Same columns as the authors' file?
+setdiff(names(edges_authors), names(edges_ours_raw))   # columns only the authors have
+setdiff(names(edges_ours_raw), names(edges_authors))   # columns only we have
+
+# Same number of rows?
+tibble(edge_list = c("authors", "ours"), rows = c(nrow(edges_authors), nrow(edges_ours_raw)))
+```
+
+## 4. A first difference: the L-R pairs are listed twice
+
+Our edge list has 18 more rows than the authors'. To compare links, we need a name for each link that does not depend
+on which gene is written as `x` and which as `y`: we use the two gene names sorted alphabetically (`pmin()` and `pmax()`
+return the "smaller" and the "larger" of two texts). Then we look at the rows of the L-R pairs in both files.
+
+```{r}
+#| label: lr-rows
+
+link_name <- function(a, b) paste(pmin(a, b), pmax(a, b), sep = " | ")
+
+lr_links <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+
+edges_ours_raw |>
+  filter(link_name(x, y) %in% lr_links) |>
+  select(x, y, type, info_shifted, Nxy_ai, infOrt, proba) |>
+  arrange(link_name(x, y)) |>
+  head(6)
+
+# How many rows per L-R pair in each file?
+tibble(edge_list = c("authors", "ours"),
+       rows_for_LR_pairs = c(sum(link_name(edges_authors$x, edges_authors$y) %in% lr_links),
+                             sum(link_name(edges_ours_raw$x, edges_ours_raw$y) %in% lr_links)))
+```
+
+Each L-R pair appears twice in our result:
+
+- a **placeholder row** written by the C++ core, which forces the pair into the network: strength 0, computed on 0
+  cells (`Nxy_ai = 0`, because no cell has both a sender and a receiver value), not oriented;
+- the **row added at the end** by the `causalccc` branch: strength set to the network's maximum, oriented ligand →
+  receptor (`proba = 0.5;1`).
+
+The authors' file contains only the second kind, so the code that ran on the server (two days older than ours) did not
+keep the placeholder rows. They carry no information, so we remove them before comparing: a row is a placeholder if it
+belongs to an L-R pair and was computed on 0 cells. (`%in%` is used rather than `==` because `Nxy_ai` is `NA` on the
+added rows, and `NA == 0` is `NA`, not `FALSE`.)
+
+We save the cleaned edge list as a text file, so that it can be opened without R and reused in later notebooks.
+
+```{r}
+#| label: remove-placeholders
+
+edges_ours <- edges_ours_raw |>
+  filter(!(link_name(x, y) %in% lr_links & Nxy_ai %in% 0))
+
+nrow(edges_ours)
+
+write_tsv(edges_ours, file.path(results_dir, "edges_rerun.tsv"))
+```
+
+## 5. Compare the two networks
+
+**Every pair examined.** MIIC examined 3,798 pairs of genes and decided for each whether to keep the link (`P`) or not
+(`N`). We first check that both runs took the same decision for every pair, and compare the values computed along the
+way: `info` (mutual information), `confidence` (the result of the random shuffles) and `proba` (orientation
+probabilities).
+
+```{r}
+#| label: all-pairs
+
+all_pairs <- inner_join(
+  edges_authors |> transmute(link = link_name(x, y), type, info, confidence, proba),
+  edges_ours    |> transmute(link = link_name(x, y), type, info, confidence, proba),
+  by = "link", suffix = c("_authors", "_ours"))
+
+# Counts of pairs
+tibble(
+  check = c("pairs found in both edge lists",
+            "pairs with the same decision (P or N)",
+            "pairs with the same orientation probabilities"),
+  pairs = c(nrow(all_pairs),
+            sum(all_pairs$type_authors == all_pairs$type_ours),
+            sum(all_pairs$proba_authors == all_pairs$proba_ours, na.rm = TRUE))
+)
+
+# Largest differences between the two runs
+tibble(
+  value = c("mutual information (info)", "confidence ratio"),
+  largest_difference = c(max(abs(all_pairs$info_authors - all_pairs$info_ours), na.rm = TRUE),
+                         max(abs(all_pairs$confidence_authors - all_pairs$confidence_ours), na.rm = TRUE))
+)
+```
+
+Numbers like `1.78e-15` are scientific notation: 1.78 × 10⁻¹⁵. Differences of that size are rounding noise from the
+computer's arithmetic: they mean "identical". The confidence ratios differ slightly, because they depend on the random
+shuffles, but by at most about 0.0009, more than ten times smaller than the 0.01 threshold, so they change no decision.
+
+**Retained links in a common format.** From now on we keep only the retained links. The orientation code `infOrt`
+refers to x and y, so when our link name puts the genes in the other order, the code must follow: 2 (x → y) becomes −2,
+while 1 (not oriented) and 6 (bidirected) stay the same.
+
+```{r}
+#| label: standardise
+
+standardise <- function(edge_list) {
+  edge_list |>
+    filter(type == "P") |>                      # retained links only
+    mutate(first  = pmin(x, y),
+           second = pmax(x, y),
+           link   = link_name(x, y),
+           # orientation from `first` to `second`: 2 = first -> second, -2 = second -> first
+           orientation = if_else(x == first | infOrt %in% c(1, 6), infOrt, -infOrt),
+           category = case_when(
+             str_detect(first, "_senders$") & str_detect(second, "_senders$")   ~ "within senders",
+             !str_detect(first, "_senders$") & !str_detect(second, "_senders$") ~ "within receivers",
+             .default = "ligand-receptor")) |>
+    select(link, first, second, category, orientation, is_causal, info_shifted, confidence)
+}
+
+links_authors <- standardise(edges_authors)
+links_ours    <- standardise(edges_ours)
+
+tibble(network = c("authors", "ours"),
+       links   = c(nrow(links_authors), nrow(links_ours)))
+```
+
+**Which links are shared?** `full_join()` puts the two tables side by side, matching rows on the link name, and keeps
+links found in only one of them (with `NA` on the other side). The suffixes `_authors` and `_ours` tell the two versions
+of each column apart.
+
+```{r}
+#| label: compare-links
+
+comparison <- full_join(links_authors, links_ours,
+                        by = c("link", "first", "second", "category"),
+                        suffix = c("_authors", "_ours")) |>
+  mutate(found_in = case_when(!is.na(orientation_authors) & !is.na(orientation_ours) ~ "both",
+                              !is.na(orientation_authors) ~ "authors only",
+                              .default = "ours only"))
+
+count(comparison, category, found_in)
+```
+
+The Jaccard index summarises the overlap in one number: shared links divided by all distinct links. It is 1 when the
+two networks have exactly the same links and 0 when they share none.
+
+```{r}
+#| label: jaccard
+
+mean(comparison$found_in == "both")
+```
+
+**Links found in only one network.** If there were any, we would want to know why. Links that come from randomness in
+the confidence filter should have a confidence ratio close to the 0.01 threshold, so we look them up in both complete
+edge lists (including rejected links). An empty table (`0 x 8`) means there is no such link.
+
+```{r}
+#| label: differing-links
+
+lookup <- function(edge_list) {
+  edge_list |>
+    mutate(link = link_name(x, y)) |>
+    select(link, type, confidence, info_shifted)
+}
+
+comparison |>
+  filter(found_in != "both") |>
+  select(link, found_in) |>
+  left_join(lookup(edges_authors), by = "link") |>
+  left_join(lookup(edges_ours), by = "link", suffix = c("_authors", "_ours")) |>
+  arrange(found_in, link)
+```
+
+**Strength of shared links.** `info_shifted` is the strength of a link (mutual information corrected for the number of
+cells). For links found by both runs, we compare the two values. Identical code and data should give identical values;
+we plot them and compute the largest difference.
+
+```{r}
+#| label: compare-strength
+#| fig-width: 5
+#| fig-height: 5
+
+shared <- comparison |> filter(found_in == "both", category != "ligand-receptor")
+
+shared |>
+  summarise(links = n(),
+            largest_difference = max(abs(info_shifted_authors - info_shifted_ours)),
+            correlation        = cor(info_shifted_authors, info_shifted_ours))
+
+ggplot(shared, aes(x = info_shifted_authors, y = info_shifted_ours, colour = category)) +
+  geom_abline(linetype = "dashed", colour = "grey60") +
+  geom_point(alpha = 0.7) +
+  labs(x = "link strength, authors' run", y = "link strength, our run", colour = NULL,
+       title = "Strength of the links found by both runs") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+**Orientations of shared links.** We cross-tabulate the orientation found by each run, using the codes of the common
+format (1 = not oriented, 2 = first → second, −2 = second → first, 6 = bidirected). Everything on the diagonal agrees.
+
+```{r}
+#| label: compare-orientation
+
+shared_all <- comparison |> filter(found_in == "both")
+
+table(authors = shared_all$orientation_authors, ours = shared_all$orientation_ours)
+
+# Genuine causation ("Y") in each run
+table(authors = shared_all$is_causal_authors, ours = shared_all$is_causal_ours)
+```
+
+## 6. The L-R links in the two versions of the authors' file
+
+`miic` does not compute the 18 L-R links: the `causalccc` branch adds them at the end, with a strength equal to the
+strongest link of the network (code in `R/parseResults.R` of the branch). We check that our run and the authors'
+January file give them the same strength, and look at what the April edit changed. For comparison, we also print the
+two largest values found among the gene–gene links.
+
+```{r}
+#| label: lr-values
+
+edges_april <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+
+lr_values <- function(edge_list, version) {
+  edge_list |>
+    filter(link_name(x, y) %in% lr_links) |>   # keep only the 18 L-R rows
+    transmute(ligand = x, receptor = y, strength = info_shifted, version = version)
+}
+
+bind_rows(lr_values(edges_ours, "ours"),
+          lr_values(edges_authors, "authors, January"),
+          lr_values(edges_april, "authors, April")) |>
+  pivot_wider(names_from = version, values_from = strength)
+
+# The strongest gene-gene link, measured in two ways
+edges_ours |>
+  filter(type == "P", !link_name(x, y) %in% lr_links) |>
+  summarise(max_info_shifted = max(info_shifted), max_info = max(info))
+```
+
+Our run and the January file agree: every L-R link gets the same strength, equal to the largest `info_shifted` of the
+network. In the April version, every link to the same receptor shares one value, and the values differ between
+receptors: the largest `info` of the network for Cd8a, much lower values for Klrd1, and only single digits for Dpp4.
+Neither the paper nor the tutorial says where these values come from. Since Figure 2 draws L-R edge thickness from
+such values, it was probably made from the April version: a question for the authors.
+
+## 7. A note on two columns
+
+**`proba`.** The `miic` documentation describes this column as "p(x->y);p(x<-y)". The code that writes it
+(`R/parseResults.R`, lines 184 and 231–232 of the branch) shows that the first number is the probability of an
+arrowhead **on the x side** and the second the probability of an arrowhead **on the y side**. Example: for x = B2m and
+y = Stat1, `proba = 0.99999;0.00015` means an arrowhead at B2m and not at Stat1, that is Stat1 → B2m, in agreement
+with `infOrt = −2`.
+
+**Why Tgfb1 is discrete** (question from notebook 01). The `causalCCC` package declares a variable discrete when it
+has 5 or fewer distinct values, and its function `causalCCC.state_order()` counts `NA` as one of them (it uses
+`n_distinct()` without `na.rm = TRUE`). In sender cells Tgfb1 takes 4 count values, plus `NA` from the receiver rows:
+5 in total, hence discrete. It is the only variable in this situation:
+
+```{r}
+#| label: discrete-rule
+
+distinct_with_na <- map_int(mosaic, n_distinct)   # NA counted as a value, as in causalCCC
+names(distinct_with_na)[distinct_with_na <= 5]
+```
+
+## 8. Do the paper's statements still hold in our network?
+
+Notebook 01 checked the authors' network. We repeat the two sharpest checks on ours: the neighbours of the H2 ligands,
+and the Stat1 → B2m genuine causation.
+
+```{r}
+#| label: claims-ours
+
+network_ours <- edges_ours |> filter(type == "P")
+
+h2_ligands <- unique(str_subset(lr_pairs$ligand, "^H2-"))
+claimed    <- paste0(c("Psmb8", "Ifi27l2b", "Slfn1", "Shisa5", "Irf7", "Mir703", "B2m"), "_senders")
+
+h2_neighbors <- network_ours |>
+  filter(x %in% h2_ligands | y %in% h2_ligands) |>
+  transmute(neighbor = if_else(x %in% h2_ligands, y, x))
+
+tibble(gene = claimed, neighbor_of_an_H2_ligand = claimed %in% h2_neighbors$neighbor)
+
+network_ours |>
+  filter(x %in% c("Stat1_senders", "B2m_senders"), y %in% c("Stat1_senders", "B2m_senders")) |>
+  select(x, y, infOrt, is_causal, proba)
+```
+
+## What we learned
+
+**The network is reproduced.** With the authors' three input files and the server's settings translated into `miic()`
+arguments, our run gives the same network as the server:
+
+- the same decision (kept or rejected) for all 3,798 gene pairs examined;
+- the same 364 retained links: 128 within CD4+ senders, 218 within CD8+ receivers, and the 18 L-R links;
+- identical link strengths and orientation probabilities (differences around 10⁻¹⁴, rounding noise);
+- identical orientations and the same 13 genuine causations;
+- confidence ratios very slightly different (random shuffles with a different seed), with no effect on any decision.
+
+The paper's statements checked in notebook 01 therefore hold for our run too.
+
+**One difference in bookkeeping.** Our version of `miic` lists each L-R pair twice: a placeholder row (strength 0, not
+oriented) and the row added at the end. The server's version, two days older, only kept the second. We remove the
+placeholders; anyone reusing this branch should do the same, otherwise the L-R links are counted twice and appear
+unoriented.
+
+**What this means for the project.** The computational step is reproducible. Remaining differences between the
+published result and a rebuilt analysis can only come from upstream: the preparation of the input files from the
+public data (cell and gene selection, L-R pairs), which notebooks 03 to 05 rebuild.
+
+**Points to note or ask the authors.**
+
+- The `miic` documentation describes the `proba` column in the wrong order (section 7).
+- `causalCCC.state_order()` counts `NA` as a value when deciding whether a variable is discrete. In a mosaic table every
+  variable has `NA`, so the effective rule is "4 or fewer observed values". This made Tgfb1 discrete in sender cells
+  but continuous in receiver cells, where it takes one more value. Is that intended?
+- The April edit of the edge list gave the L-R links per-receptor strengths whose origin is not documented
+  (section 6).
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```
