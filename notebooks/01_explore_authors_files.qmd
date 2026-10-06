@@ -1,0 +1,511 @@
+---
+title: "01 – Explore the CausalCCC authors' files (case study 1)"
+subtitle: "CD4⁺ (sender) → CD8⁺ (receiver) T cells, inguinal lymph nodes, NicheNet L-R pairs"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Before rebuilding anything ourselves, we look closely at the files the CausalCCC authors used to produce Figure 2 of
+the paper. They were downloaded by `scripts/download_case1.sh` from the web server job `eaP9Br0llvzxN07zZZEC` (sources in
+`data/README.md`). We want to understand:
+
+1. what CausalCCC takes as input (the "mosaic" table, the variable list, the L-R pairs) and with which settings it ran;
+2. what it produces (the network edge list) and how to read it;
+3. whether the published network supports what the paper says about Figure 2.
+
+This notebook only **reads** files: nothing in `data/` is modified and nothing is written.
+
+## Setup
+
+We load the tidyverse, a collection of packages for reading tables (`readr`), transforming them (`dplyr`, `tidyr`),
+handling text (`stringr`) and plotting (`ggplot2`).
+
+Then we locate the repository folder. When you run chunks one by one in Positron, R usually works from the repository
+folder; when Quarto renders the whole notebook, R works from `notebooks/`. The small function below walks up the folders
+until it finds the repository root, so that the same paths work in both cases.
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+find_repo_root <- function(dir = getwd()) {
+  # The repository root is the folder that contains both README.md and notebooks/
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+
+root    <- find_repo_root()
+job_dir <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
+
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/download_case1.sh first.")
+```
+
+## 1. Read the files
+
+Five files matter here:
+
+- `input.tsv`: the expression table uploaded to the server, one row per cell, one column per gene;
+- `clean_state_order.tsv`: one row per variable (gene), with its type and its group (ligand, receptor, …);
+- `clean_interact_edges.tsv`: the L-R pairs. It has no header line, so we name the two columns ourselves;
+- `edgesList.miic.summary.txt`: the network computed by the server;
+- `whole_run.log`: the log of the server run, which contains the exact command.
+
+```{r}
+#| label: read-files
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+edges       <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+run_log     <- read_lines(file.path(job_dir, "whole_run.log"))
+
+# Size of each table
+tibble(
+  table   = c("mosaic", "state_order", "lr_pairs", "edges"),
+  rows    = c(nrow(mosaic), nrow(state_order), nrow(lr_pairs), nrow(edges)),
+  columns = c(ncol(mosaic), ncol(state_order), ncol(lr_pairs), ncol(edges))
+)
+```
+
+## 2. How the server ran
+
+The log records the R command the server executed. We extract that line and print one option per line to make it
+readable.
+
+```{r}
+#| label: run-command
+
+run_log |>
+  str_subset("^Rscript") |>                   # keep the line that starts with "Rscript"
+  str_replace_all(" (--?[a-z])", "\n  \\1") |> # put each option (-x or --xxx) on a new line
+  cat()
+```
+
+Our current understanding of the main options (to be checked against the `miic` documentation, `?miic`, in notebook 02):
+
+| Option                             | Meaning                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `-i`, `-s`, `--interact-edges`     | the three input files: mosaic table, state order, L-R pairs                                                            |
+| `--complexity nml`                 | how MIIC corrects mutual information for the limited number of cells before deciding whether two genes are linked     |
+| `--orientation`, `-l orientation`  | orient edges when the data allow it, considering that unobserved (latent) variables may exist                          |
+| `--orient_probab_ratio 0.01`       | how strong the evidence must be to accept an orientation                                                               |
+| `--conf_shuffle 100 --conf_ratio 0.01` | confidence filter: compare each link with 100 shuffled versions of the data, remove links that are not clearly better |
+| `--consistency no`                 | an optional extra consistency check, not used                                                                          |
+| `--test_MAR`                       | a test for missing values, relevant because the mosaic table contains many `NA` (see section 3)                        |
+| `--miic_mode S`                    | CausalCCC-specific mode of the `causalccc` branch of `miic`                                                            |
+
+## 3. The mosaic table
+
+The sender cells (CD4⁺) and the receiver cells (CD8⁺) are **different cells**: there is no cell where we measure both
+the ligand of a CD4⁺ cell and the receptor of a CD8⁺ cell. CausalCCC therefore stacks them in one table:
+
+- sender cells have values only in the sender genes, whose names end with `_senders`;
+- receiver cells have values only in the receiver genes;
+- everything else is `NA` (missing).
+
+Seen from afar, the table looks like a mosaic of two filled blocks. MIIC learns links between sender genes from sender
+cells only, and between receiver genes from receiver cells only; the L-R pairs provide the bridges between the two
+blocks.
+
+We first sort the columns by side, then find which rows are sender cells: a row is a sender cell if it has at least one
+value in the sender columns.
+
+```{r}
+#| label: rows-and-columns
+
+sender_cols   <- str_subset(names(mosaic), "_senders$")
+receiver_cols <- setdiff(names(mosaic), sender_cols)
+
+# TRUE for a sender cell, FALSE for a receiver cell
+is_sender_row <- rowSums(!is.na(mosaic[, sender_cols])) > 0
+
+tibble(
+  what   = c("sender genes (columns)", "receiver genes (columns)", "sender cells (rows)", "receiver cells (rows)"),
+  number = c(length(sender_cols), length(receiver_cols), sum(is_sender_row), sum(!is_sender_row))
+)
+```
+
+Now we check that the mosaic is exactly as described: each block completely filled, everything else completely empty.
+
+```{r}
+#| label: check-blocks
+
+tibble(
+  check = c("sender cells: receiver genes are all NA",
+            "receiver cells: sender genes are all NA",
+            "sender cells: sender genes have no NA",
+            "receiver cells: receiver genes have no NA"),
+  ok = c(all(is.na(mosaic[is_sender_row, receiver_cols])),
+         all(is.na(mosaic[!is_sender_row, sender_cols])),
+         !anyNA(mosaic[is_sender_row, sender_cols]),
+         !anyNA(mosaic[!is_sender_row, receiver_cols]))
+)
+```
+
+Are sender and receiver cells mixed, or grouped? `rle()` ("run length encoding") counts how many identical values
+follow each other: one run per block of consecutive rows of the same kind.
+
+```{r}
+#| label: row-order
+
+rle(is_sender_row)
+```
+
+A picture of the table makes the structure obvious. We reshape it into a long format (one line per cell × gene), which
+is what `ggplot2` needs, and colour each position by whether it holds a value.
+
+```{r}
+#| label: plot-mosaic
+#| fig-width: 8
+#| fig-height: 5
+
+na_pattern <- mosaic |>
+  mutate(cell = row_number()) |>
+  pivot_longer(-cell, names_to = "gene", values_to = "count") |>
+  mutate(has_value = !is.na(count),
+         gene      = factor(gene, levels = c(sender_cols, receiver_cols)))
+
+ggplot(na_pattern, aes(x = gene, y = cell, fill = has_value)) +
+  geom_raster() +
+  geom_vline(xintercept = length(sender_cols) + 0.5) +
+  scale_y_reverse() +
+  scale_fill_manual(values = c(`TRUE` = "steelblue", `FALSE` = "grey90"),
+                    labels = c(`TRUE` = "value", `FALSE` = "NA")) +
+  labs(x = paste0("genes (", length(sender_cols), " sender | ", length(receiver_cols), " receiver)"),
+       y = "cells (rows of input.tsv)", fill = NULL,
+       title = "The mosaic table uploaded to CausalCCC") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), panel.grid = element_blank())
+```
+
+## 4. The variables (state order)
+
+The state order describes every variable. `var_type` is 1 for a continuous variable and 0 for a discrete one; `group`
+is the role of the gene in the network.
+
+```{r}
+#| label: state-order
+
+count(state_order, group)
+
+# Does the state order describe exactly the columns of the mosaic?
+setequal(names(mosaic), state_order$var_names)
+
+# Variables declared discrete
+state_order |> filter(var_type == 0)
+```
+
+One ligand is declared discrete while all other variables are continuous. A possible reason is that it takes few
+different values; we count the number of distinct values of each variable and show the smallest ones.
+
+```{r}
+#| label: distinct-values
+
+map_int(mosaic, \(column) n_distinct(column, na.rm = TRUE)) |>
+  sort() |>
+  head(5)
+```
+
+Gene names: only some names carry a `_senders` or `_receivers` suffix. We split each column name into a gene name and a
+side, then check two things: how many names have a suffix, and whether the sender genes also appear on the receiver
+side.
+
+```{r}
+#| label: gene-names
+
+genes <- tibble(variable = names(mosaic)) |>
+  mutate(side     = if_else(variable %in% sender_cols, "sender", "receiver"),
+         gene     = str_remove(variable, "_(senders|receivers)$"),
+         suffixed = str_detect(variable, "_(senders|receivers)$"))
+
+count(genes, side, suffixed)
+
+# Are all sender genes also measured on the receiver side?
+all(genes$gene[genes$side == "sender"] %in% genes$gene[genes$side == "receiver"])
+```
+
+The suffix is only added when a gene is present on both sides, to tell the two copies apart.
+
+Many selected genes have names like `Gm12345`, `Mir703` or `AL663027.1`: these are predicted genes, microRNA host
+genes or unnamed loci rather than well-characterised protein-coding genes. We count them, because whether they should be
+in the network is a question for our assessment of the preprocessing.
+
+```{r}
+#| label: predicted-genes
+
+genes |>
+  mutate(predicted_gene = str_detect(gene, "^(Gm[0-9]|Mir[0-9]|AL[0-9])")) |>
+  count(side, predicted_gene)
+```
+
+## 5. The ligand–receptor pairs
+
+```{r}
+#| label: lr-pairs
+
+lr_pairs
+
+# Is every ligand declared as a ligand, and every receptor as a receptor, in the state order?
+lr_pairs |>
+  summarise(all_ligands_ok   = all(ligand %in% state_order$var_names[state_order$group == "ligands"]),
+            all_receptors_ok = all(receptor %in% state_order$var_names[state_order$group == "receptors"]))
+```
+
+How widely are these ligands and receptors expressed? For each one we compute, within its own cell type, the fraction of
+cells where it is detected (count above 0).
+
+```{r}
+#| label: lr-expression
+#| fig-width: 7
+#| fig-height: 4.5
+
+lr_genes <- state_order |>
+  filter(group %in% c("ligands", "receptors")) |>
+  pull(var_names)
+
+lr_expression <- mosaic |>
+  select(all_of(lr_genes)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "count") |>
+  filter(!is.na(count)) |>                 # keep only the cells of the gene's own side
+  group_by(variable) |>
+  summarise(cells = n(), fraction_detected = mean(count > 0), mean_count = mean(count)) |>
+  left_join(select(state_order, variable = var_names, group), by = "variable")
+
+ggplot(lr_expression, aes(x = fraction_detected, y = reorder(variable, fraction_detected), fill = group)) +
+  geom_col() +
+  scale_x_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = "cells where the gene is detected", y = NULL, fill = NULL,
+       title    = "Detection of ligands and receptors",
+       subtitle = "ligands in CD4+ sender cells, receptors in CD8+ receiver cells") +
+  theme_minimal()
+```
+
+## 6. The values: raw counts?
+
+The paper asks for raw counts as input. Raw counts are whole numbers of molecules (UMIs), never negative.
+
+```{r}
+#| label: raw-counts
+
+values <- unlist(mosaic, use.names = FALSE)
+values <- values[!is.na(values)]
+
+tibble(
+  minimum       = min(values),
+  maximum       = max(values),
+  all_integers  = all(values == round(values)),
+  fraction_zero = mean(values == 0)
+)
+```
+
+## 7. The published network
+
+The edge list contains every pair of genes that MIIC examined. The column `type` says whether the link was kept
+(`P`, present) or rejected (`N`). We keep only the retained links, then sort them into three categories using the side
+of each gene.
+
+```{r}
+#| label: network
+
+count(edges, type)
+
+network <- edges |>
+  filter(type == "P") |>
+  mutate(side_x   = if_else(x %in% sender_cols, "sender", "receiver"),
+         side_y   = if_else(y %in% sender_cols, "sender", "receiver"),
+         category = case_when(side_x == "sender"   & side_y == "sender"   ~ "within senders (CD4+)",
+                              side_x == "receiver" & side_y == "receiver" ~ "within receivers (CD8+)",
+                              .default = "ligand-receptor link"))
+
+count(network, category)
+```
+
+The column `Nxy_ai` gives the number of cells used to evaluate each link. It confirms that links between sender genes
+are learnt from sender cells only, and links between receiver genes from receiver cells only.
+
+```{r}
+#| label: cells-per-link
+
+count(network, category, cells_used = Nxy_ai)
+```
+
+**Orientation.** The column `infOrt` codes the direction found by MIIC: 1 = not oriented, 2 = x → y, −2 = y → x,
+6 = bidirected (a sign of a hidden common cause). The column `is_causal` is `Y` when MIIC considers the edge a genuine
+causation, which the paper draws with a green arrowhead. The column `proba` holds two probabilities: that of an
+arrowhead on the x side, then that of an arrowhead on the y side. (The `miic` documentation words it differently; the
+code that writes the column confirms this reading, see notebook 02, section 6.)
+
+```{r}
+#| label: orientation
+
+network |>
+  mutate(orientation = case_when(infOrt ==  1 ~ "not oriented",
+                                 infOrt ==  2 ~ "x -> y",
+                                 infOrt == -2 ~ "y -> x",
+                                 infOrt ==  6 ~ "bidirected")) |>
+  count(category, orientation)
+
+count(network, is_causal)
+```
+
+**Hubs.** The number of links of each gene (its degree) shows which genes organise the network.
+
+```{r}
+#| label: hubs
+
+bind_rows(select(network, gene = x), select(network, gene = y)) |>
+  count(gene, name = "links", sort = TRUE) |>
+  head(10)
+```
+
+## 8. Does the network support the paper's description of Figure 2?
+
+The paper's Results section makes four statements about this network. We check each against the edge list. Two small
+tools first:
+
+- `neighbors_of()` lists the genes directly linked to a given gene;
+- `graph_distance()` counts how many links separate a gene from all the others, ignoring directions. It works like
+  ripples in water: step 1 finds the direct neighbours, step 2 their neighbours, and so on until no new gene is reached.
+
+```{r}
+#| label: graph-tools
+
+neighbors_of <- function(node, net = network) {
+  net |>
+    filter(x == node | y == node) |>
+    transmute(node, neighbor = if_else(x == node, y, x), infOrt, is_causal)
+}
+
+graph_distance <- function(net, from) {
+  distance <- setNames(0, from)   # distance 0 for the starting gene
+  frontier <- from                # genes reached at the last step
+  step     <- 0
+  repeat {
+    touching  <- net |> filter(x %in% frontier | y %in% frontier)
+    new_genes <- setdiff(unique(c(touching$x, touching$y)), names(distance))
+    if (length(new_genes) == 0) break
+    step     <- step + 1
+    distance <- c(distance, setNames(rep(step, length(new_genes)), new_genes))
+    frontier <- new_genes
+  }
+  distance
+}
+
+sender_network   <- filter(network, category == "within senders (CD4+)")
+receiver_network <- filter(network, category == "within receivers (CD8+)")
+```
+
+**Statement 1.** In the CD4⁺ sender network, the MHC class I ligands (H2 genes) have first-degree neighbours including
+Psmb8, Ifi27l2b, Slfn1, Shisa5, Irf7, Mir703 and B2m.
+
+```{r}
+#| label: claim-1
+
+h2_ligands   <- unique(str_subset(lr_pairs$ligand, "^H2-"))
+h2_neighbors <- map(h2_ligands, neighbors_of) |> list_rbind()
+
+claimed <- c("Psmb8", "Ifi27l2b", "Slfn1", "Shisa5", "Irf7", "Mir703", "B2m")
+
+tibble(gene = claimed) |>
+  mutate(linked_to = map_chr(gene, \(g) {
+    hits <- h2_neighbors |> filter(neighbor == paste0(g, "_senders"))
+    if (nrow(hits) == 0) "none" else paste(str_remove(hits$node, "_senders"), collapse = ", ")
+  }))
+```
+
+**Statement 2.** Stat1 is a genuine cause of B2m.
+
+```{r}
+#| label: claim-2
+
+network |>
+  filter(x %in% c("Stat1_senders", "B2m_senders"), y %in% c("Stat1_senders", "B2m_senders")) |>
+  select(x, y, infOrt, is_causal, proba)
+```
+
+Here x is B2m and y is Stat1, so `infOrt = -2` means y → x, that is Stat1 → B2m, and `is_causal = Y` marks it as a
+genuine causation.
+
+**Statement 3.** Stat1 shares direct or indirect associations with IFN-inducible genes (Ifi27l2b, Ifi27l2a, Ifi47) and
+IFN-stimulated genes (Isg15, Isg20). Distance 1 means a direct link.
+
+```{r}
+#| label: claim-3
+
+distance_from_stat1 <- graph_distance(sender_network, "Stat1_senders")
+
+tibble(gene = c("Ifi27l2b", "Ifi27l2a", "Ifi47", "Isg15", "Isg20")) |>
+  mutate(distance_from_Stat1 = distance_from_stat1[paste0(gene, "_senders")])
+```
+
+**Statement 4.** In the CD8⁺ receiver network, downstream interactions of the receptors Cd8a and Klrd1 include Cd8b1
+and Ly6c2, Ly6c1 and "Ly6ca". There is no gene called Ly6ca in the input; we assume a typo for Ly6a, which is present.
+
+```{r}
+#| label: claim-4
+
+neighbors_of("Cd8a")  |> filter(!str_detect(neighbor, "_senders$"))
+neighbors_of("Klrd1") |> filter(!str_detect(neighbor, "_senders$"))
+
+targets <- c("Cd8b1", "Ly6c2_receivers", "Ly6c1_receivers", "Ly6a_receivers")
+tibble(gene = targets,
+       distance_from_Cd8a  = graph_distance(receiver_network, "Cd8a")[targets],
+       distance_from_Klrd1 = graph_distance(receiver_network, "Klrd1")[targets])
+```
+
+## What we learned
+
+**Inputs.** The mosaic has 2,562 CD4⁺ sender cells and 1,645 CD8⁺ receiver cells (receivers first, then senders, not
+shuffled), and 144 genes: 10 ligands and 45 other genes on the sender side, 8 receptors and 81 other genes on the
+receiver side. All sender genes are also measured on the receiver side. Values are raw integer counts, as the paper
+requires. There is no column for the condition (steady state or LCMV infection), so both conditions are pooled.
+
+**Network.** 364 links were kept out of 3,798 examined: 128 within senders, 218 within receivers and the 18 L-R links,
+which were provided rather than learnt. Most links are not oriented; 13 are flagged as genuine causation.
+
+**Paper's statements.**
+
+- Statement 1 (neighbours of the H2 ligands): fully supported.
+- Statement 2 (Stat1 → B2m genuine causation): supported.
+- Statement 3 (Stat1 and IFN genes): supported, with direct and indirect links.
+- Statement 4 (downstream of Cd8a and Klrd1): only partly. Cd8b1 is a direct but non-oriented neighbour of Cd8a. The
+  Ly6 genes are two to three links away, mostly through non-oriented links, and "Ly6ca" is probably Ly6a. Klrd1 has a
+  single intracellular neighbour, the predicted gene Gm10076.
+
+**Questions for the next notebooks.**
+
+- Can we reproduce this network by running `miic` ourselves on these exact files (notebook 02)?
+- Why is one ligand (Tgfb1 in sender cells) declared discrete? It takes only 4 distinct values, the fewest of all
+  variables (answered in notebook 02, section 6).
+- Six of the 18 ligands and receptors are detected in fewer than 10 % of their cells (Cxcr3, Tgfb1, Cd86, Itgb1, H2-M3,
+  H2-Q4), and even Cd8a is detected in only two thirds of CD8+ cells. How reliable are links learnt from such sparse
+  genes?
+- About a quarter of the variables are predicted genes or microRNA host genes, and some of them (Mir703) are hubs. Is this
+  expected from the gene selection, or a sign of a preprocessing issue?
+- Would the network change if the condition (steady state / LCMV) were included as a variable?
+
+## Session information
+
+The versions of R and of the packages used to produce this report.
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```
