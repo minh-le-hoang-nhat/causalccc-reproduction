@@ -1,0 +1,218 @@
+var_names	var_type	levels_increasing_order	is_contextual	group	group_color
+MIF_Fibroblasts	1	NA	0	ligands	28827A
+CXCL12_Fibroblasts	1	NA	0	ligands	28827A
+PPIA_Fibroblasts	1	NA	0	ligands	28827A
+ANXA1_Fibroblasts	1	NA	0	ligands	28827A
+C3_Fibroblasts	1	NA	0	ligands	28827A
+CCL19_Fibroblasts	1	NA	0	ligands	28827A
+IGFBP3_Fibroblasts	1	NA	0	ligands	28827A
+CD74_Fibroblasts	1	NA	0	receptors	DE6343
+CD44_Fibroblasts	1	NA	0	receptors	DE6343
+ACKR3_Fibroblasts	1	NA	0	receptors	DE6343
+BSG_Fibroblasts	1	NA	0	receptors	DE6343
+TNFRSF1A_Fibroblasts	1	NA	0	receptors	DE6343
+P4HB_Fibroblasts	1	NA	0	receptors	DE6343
+AXL_Fibroblasts	1	NA	0	receptors	DE6343
+LGALS1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+TMSB10_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+S100A6_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CXCL14_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CFH_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CFD_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+S100A10_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+ANXA2_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+C1R_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+C1S_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+UBD_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+IL32_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CD63_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+TMSB4X_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+VIM_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+LUM_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+FTL_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+MFAP5_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+FBN1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL1A1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+NNMT_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL6A2_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL6A1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+S100A4_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+DCN_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+FTH1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+S100A11_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+ACTB_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CALM2_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+ACTG1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+EIF1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+SERF2_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+B2M_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+ITM2B_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+LAPTM4A_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+SH3BGRL3_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CRIP1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+TPT1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+LGALS3_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+SRP14_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+ANXA5_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CST3_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+FAU_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+UBA52_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+IFITM3_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+FSTL1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL1A2_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CLEC3B_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL6A5_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+COL3A1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+POSTN_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+CD55_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+IGFBP6_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+APCDD1_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+TNC_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+SLPI_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+APOD_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+APOE_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+HLA-DRA_Fibroblasts	1	NA	0	Fibroblasts genes	EBF5D8
+labels_Fibroblasts	0	APOE+ FIB,FBN1+ FIB,COL11A1+ FIB,Inflam. FIB	0	metadata	FFD050
+condition_Fibroblasts	0	NL,LS	0	metadata	FFD050
+MIF_T_cell	1	NA	0	ligands	28827A
+PPIA_T_cell	1	NA	0	ligands	28827A
+TNF_T_cell	1	NA	0	ligands	28827A
+ANXA1_T_cell	1	NA	0	ligands	28827A
+IL13_T_cell	1	NA	0	ligands	28827A
+CD40LG_T_cell	1	NA	0	ligands	28827A
+TNFSF14_T_cell	1	NA	0	ligands	28827A
+CD74_T_cell	1	NA	0	receptors	DE6343
+CD44_T_cell	1	NA	0	receptors	DE6343
+CXCR4_T_cell	1	NA	0	receptors	DE6343
+BSG_T_cell	1	NA	0	receptors	DE6343
+PTPRC_T_cell	1	NA	0	receptors	DE6343
+P4HB_T_cell	1	NA	0	receptors	DE6343
+TMSB10_T_cell	1	NA	0	T_cell genes	F0E2B6
+GAPDH_T_cell	1	NA	0	T_cell genes	F0E2B6
+TMSB4X_T_cell	1	NA	0	T_cell genes	F0E2B6
+VIM_T_cell	1	NA	0	T_cell genes	F0E2B6
+B2M_T_cell	1	NA	0	T_cell genes	F0E2B6
+ACTB_T_cell	1	NA	0	T_cell genes	F0E2B6
+PTMA_T_cell	1	NA	0	T_cell genes	F0E2B6
+PRDX1_T_cell	1	NA	0	T_cell genes	F0E2B6
+IL22_T_cell	1	NA	0	T_cell genes	F0E2B6
+ALOX5AP_T_cell	1	NA	0	T_cell genes	F0E2B6
+CSF2_T_cell	1	NA	0	T_cell genes	F0E2B6
+FOS_T_cell	1	NA	0	T_cell genes	F0E2B6
+JUNB_T_cell	1	NA	0	T_cell genes	F0E2B6
+DUSP1_T_cell	1	NA	0	T_cell genes	F0E2B6
+S100A6_T_cell	1	NA	0	T_cell genes	F0E2B6
+LGALS1_T_cell	1	NA	0	T_cell genes	F0E2B6
+S100A4_T_cell	1	NA	0	T_cell genes	F0E2B6
+ZFP36_T_cell	1	NA	0	T_cell genes	F0E2B6
+FAU_T_cell	1	NA	0	T_cell genes	F0E2B6
+DNAJB1_T_cell	1	NA	0	T_cell genes	F0E2B6
+MYL6_T_cell	1	NA	0	T_cell genes	F0E2B6
+PFN1_T_cell	1	NA	0	T_cell genes	F0E2B6
+ACTG1_T_cell	1	NA	0	T_cell genes	F0E2B6
+SH3BGRL3_T_cell	1	NA	0	T_cell genes	F0E2B6
+CRIP1_T_cell	1	NA	0	T_cell genes	F0E2B6
+TPI1_T_cell	1	NA	0	T_cell genes	F0E2B6
+UBA52_T_cell	1	NA	0	T_cell genes	F0E2B6
+CFL1_T_cell	1	NA	0	T_cell genes	F0E2B6
+HSPA1A_T_cell	1	NA	0	T_cell genes	F0E2B6
+HSP90AA1_T_cell	1	NA	0	T_cell genes	F0E2B6
+HLA-A_T_cell	1	NA	0	T_cell genes	F0E2B6
+HLA-B_T_cell	1	NA	0	T_cell genes	F0E2B6
+LMNA_T_cell	1	NA	0	T_cell genes	F0E2B6
+HLA-C_T_cell	1	NA	0	T_cell genes	F0E2B6
+HLA-E_T_cell	1	NA	0	T_cell genes	F0E2B6
+JUN_T_cell	1	NA	0	T_cell genes	F0E2B6
+GADD45B_T_cell	1	NA	0	T_cell genes	F0E2B6
+CD69_T_cell	1	NA	0	T_cell genes	F0E2B6
+NR4A2_T_cell	1	NA	0	T_cell genes	F0E2B6
+TNFRSF18_T_cell	1	NA	0	T_cell genes	F0E2B6
+FOSB_T_cell	1	NA	0	T_cell genes	F0E2B6
+DUSP2_T_cell	1	NA	0	T_cell genes	F0E2B6
+TNFRSF4_T_cell	1	NA	0	T_cell genes	F0E2B6
+NFKBIA_T_cell	1	NA	0	T_cell genes	F0E2B6
+H3F3B_T_cell	1	NA	0	T_cell genes	F0E2B6
+KLF6_T_cell	1	NA	0	T_cell genes	F0E2B6
+CCL5_T_cell	1	NA	0	T_cell genes	F0E2B6
+PPP1R15A_T_cell	1	NA	0	T_cell genes	F0E2B6
+BTG2_T_cell	1	NA	0	T_cell genes	F0E2B6
+labels_T_cell	0	TC,Inflam. TC,CD40LG+ TC,NKT	0	metadata	FFD050
+condition_T_cell	0	NL,LS	0	metadata	FFD050
+MIF_DCs	1	NA	0	ligands	28827A
+PPIA_DCs	1	NA	0	ligands	28827A
+LGALS9_DCs	1	NA	0	ligands	28827A
+TNF_DCs	1	NA	0	ligands	28827A
+GAS6_DCs	1	NA	0	ligands	28827A
+CD74_DCs	1	NA	0	receptors	DE6343
+CD44_DCs	1	NA	0	receptors	DE6343
+CXCR4_DCs	1	NA	0	receptors	DE6343
+FPR3_DCs	1	NA	0	receptors	DE6343
+ITGAX_DCs	1	NA	0	receptors	DE6343
+ITGB2_DCs	1	NA	0	receptors	DE6343
+CCR7_DCs	1	NA	0	receptors	DE6343
+ITGAM_DCs	1	NA	0	receptors	DE6343
+BSG_DCs	1	NA	0	receptors	DE6343
+TMEM219_DCs	1	NA	0	receptors	DE6343
+IL13RA1_DCs	1	NA	0	receptors	DE6343
+TNFRSF14_DCs	1	NA	0	receptors	DE6343
+TMSB10_DCs	1	NA	0	DCs genes	CEE4EC
+GAPDH_DCs	1	NA	0	DCs genes	CEE4EC
+LGALS1_DCs	1	NA	0	DCs genes	CEE4EC
+ACTB_DCs	1	NA	0	DCs genes	CEE4EC
+FAU_DCs	1	NA	0	DCs genes	CEE4EC
+GSTP1_DCs	1	NA	0	DCs genes	CEE4EC
+PTMA_DCs	1	NA	0	DCs genes	CEE4EC
+TMSB4X_DCs	1	NA	0	DCs genes	CEE4EC
+NFKBIA_DCs	1	NA	0	DCs genes	CEE4EC
+DUSP1_DCs	1	NA	0	DCs genes	CEE4EC
+HSPA1A_DCs	1	NA	0	DCs genes	CEE4EC
+RAC1_DCs	1	NA	0	DCs genes	CEE4EC
+FTH1_DCs	1	NA	0	DCs genes	CEE4EC
+FCER1G_DCs	1	NA	0	DCs genes	CEE4EC
+IRF8_DCs	1	NA	0	DCs genes	CEE4EC
+S100A4_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DQA2_DCs	1	NA	0	DCs genes	CEE4EC
+EIF2AK4_DCs	1	NA	0	DCs genes	CEE4EC
+CAMSAP2_DCs	1	NA	0	DCs genes	CEE4EC
+VIM_DCs	1	NA	0	DCs genes	CEE4EC
+LDHA_DCs	1	NA	0	DCs genes	CEE4EC
+SERF2_DCs	1	NA	0	DCs genes	CEE4EC
+S100A11_DCs	1	NA	0	DCs genes	CEE4EC
+OAZ1_DCs	1	NA	0	DCs genes	CEE4EC
+MYL6_DCs	1	NA	0	DCs genes	CEE4EC
+CFL1_DCs	1	NA	0	DCs genes	CEE4EC
+YBX1_DCs	1	NA	0	DCs genes	CEE4EC
+ENO1_DCs	1	NA	0	DCs genes	CEE4EC
+ARPC2_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DRA_DCs	1	NA	0	DCs genes	CEE4EC
+TXN_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DPA1_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DPB1_DCs	1	NA	0	DCs genes	CEE4EC
+LMNA_DCs	1	NA	0	DCs genes	CEE4EC
+RGS1_DCs	1	NA	0	DCs genes	CEE4EC
+NR4A3_DCs	1	NA	0	DCs genes	CEE4EC
+GPR183_DCs	1	NA	0	DCs genes	CEE4EC
+SH3BGRL3_DCs	1	NA	0	DCs genes	CEE4EC
+LIPA_DCs	1	NA	0	DCs genes	CEE4EC
+CTSB_DCs	1	NA	0	DCs genes	CEE4EC
+BIRC3_DCs	1	NA	0	DCs genes	CEE4EC
+CCL22_DCs	1	NA	0	DCs genes	CEE4EC
+EFHD2_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DQB1_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-B_DCs	1	NA	0	DCs genes	CEE4EC
+PFN1_DCs	1	NA	0	DCs genes	CEE4EC
+ANXA2_DCs	1	NA	0	DCs genes	CEE4EC
+S100A10_DCs	1	NA	0	DCs genes	CEE4EC
+ACTG1_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-C_DCs	1	NA	0	DCs genes	CEE4EC
+UBA52_DCs	1	NA	0	DCs genes	CEE4EC
+EEF1G_DCs	1	NA	0	DCs genes	CEE4EC
+ATP5E_DCs	1	NA	0	DCs genes	CEE4EC
+TPT1_DCs	1	NA	0	DCs genes	CEE4EC
+B2M_DCs	1	NA	0	DCs genes	CEE4EC
+S100A6_DCs	1	NA	0	DCs genes	CEE4EC
+CST3_DCs	1	NA	0	DCs genes	CEE4EC
+HLA-DQA1_DCs	1	NA	0	DCs genes	CEE4EC
+UBC_DCs	1	NA	0	DCs genes	CEE4EC
+labels_DCs	0	cDC1,cDC2,LC,Inflam. DC	0	metadata	FFD050
+condition_DCs	0	NL,LS	0	metadata	FFD050

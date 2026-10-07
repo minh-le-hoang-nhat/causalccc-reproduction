@@ -1,0 +1,392 @@
+---
+title: "04 – Rerun MIIC on the authors' input (case study 2)"
+subtitle: "Same input files, same settings: do we get the same network?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 02 showed that running `miic` ourselves on the authors' case study 1 files gives exactly the network of the
+web server. Here we do the same test for case study 2, which is larger (238 variables, 7,563 cells, three cell types)
+and contains discrete metadata variables.
+
+The same three sources of difference as in notebook 02 apply: code version (our `miic` commit is two days younger than
+the server run of 21 January 2025), randomness of the confidence filter, and number of threads. The server used **one
+thread** here, and so do we.
+
+**Inputs:** the authors' files in `data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/` (read only).
+**Outputs:** `results/case2/04_rerun_miic/`: the full MIIC result (`miic_result.rds`) and our edge list
+(`edges_rerun.tsv`).
+
+::: {.callout-note}
+## Running time
+The server needed about three hours. The notebook saves the result the first time and reloads it afterwards. To force
+a new run, delete `results/case2/04_rerun_miic/miic_result.rds`.
+:::
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(miic)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+results_dir <- file.path(root, "results", "case2", "04_rerun_miic")
+
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/case2/download_case2.sh first.")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+packageVersion("miic")
+```
+
+## 1. Read the inputs
+
+As in notebook 03, `guess_max = Inf` makes sure the metadata columns are read as text. The cell type of each row and
+of each column is found as in notebook 03.
+
+```{r}
+#| label: read-inputs
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+
+edges_authors <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+
+row_type <- case_when(!is.na(mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(mosaic, row_type)
+```
+
+Unlike case study 1, the server kept only one version of the result (there is no `_save` file).
+
+## 2. Discrete or continuous?
+
+Notebook 02 found that the `causalCCC` package declares a variable discrete when it has 5 or fewer distinct values,
+counting `NA` as a value. Does the state order of case study 2 follow the same rule?
+
+```{r}
+#| label: discrete-rule
+
+distinct_with_na <- map_int(mosaic, n_distinct)
+
+tibble(variable = names(mosaic), distinct_with_na, is_text = map_lgl(mosaic, is.character)) |>
+  left_join(select(state_order, variable = var_names, var_type), by = "variable") |>
+  count(var_type, is_text, five_or_fewer = distinct_with_na <= 5)
+```
+
+Here only the six text metadata are discrete, and no gene has 5 values or fewer, so the rule makes no difference. It
+is a close call, though: the sparsest genes have 6 values counting `NA`.
+
+```{r}
+#| label: sparsest-genes
+
+sort(distinct_with_na[state_order$var_names[state_order$var_type == 1]]) |> head(4)
+```
+
+## 3. Run MIIC (or reload the saved result)
+
+The same call as in notebook 02, except `n_threads = 1` to match the server.
+
+```{r}
+#| label: run-miic
+
+result_file <- file.path(results_dir, "miic_result.rds")
+
+if (file.exists(result_file)) {
+  miic_result <- readRDS(result_file)
+  message("Loaded the saved result from ", result_file)
+} else {
+  set.seed(2026)
+  start <- Sys.time()
+  miic_result <- miic(
+    input_data      = as.data.frame(mosaic),
+    state_order     = as.data.frame(state_order),
+    interact_edges  = as.data.frame(lr_pairs),
+    cplx            = "nml",
+    orientation     = TRUE,
+    latent          = "orientation",
+    ori_proba_ratio = 0.01,
+    n_shuffles      = 100,
+    conf_threshold  = 0.01,
+    test_mar        = TRUE,
+    consistent      = "no",
+    n_eff           = -1,
+    mode            = "S",
+    n_threads       = 1
+  )
+  attr(miic_result, "run_time") <- Sys.time() - start
+  saveRDS(miic_result, result_file)
+}
+
+attr(miic_result, "run_time")
+```
+
+## 4. Our edge list
+
+As in notebook 02, our version of `miic` lists each L-R pair twice: a placeholder row computed on 0 cells, and the row
+added at the end by the `causalccc` branch. We check this, then remove the placeholders.
+
+```{r}
+#| label: our-edges
+
+edges_ours_raw <- as_tibble(miic_result$all.edges.summary)
+
+lr_links <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+
+tibble(edge_list = c("authors", "ours (raw)"),
+       rows      = c(nrow(edges_authors), nrow(edges_ours_raw)),
+       rows_for_LR_pairs = c(sum(link_name(edges_authors$x, edges_authors$y) %in% lr_links),
+                             sum(link_name(edges_ours_raw$x, edges_ours_raw$y) %in% lr_links)))
+
+edges_ours <- edges_ours_raw |>
+  filter(!(link_name(x, y) %in% lr_links & Nxy_ai %in% 0))
+
+nrow(edges_ours)
+
+write_tsv(edges_ours, file.path(results_dir, "edges_rerun.tsv"))
+```
+
+## 5. Compare the two networks
+
+**Every pair examined.**
+
+```{r}
+#| label: all-pairs
+
+all_pairs <- inner_join(
+  edges_authors |> transmute(link = link_name(x, y), type, info, confidence, proba),
+  edges_ours    |> transmute(link = link_name(x, y), type, info, confidence, proba),
+  by = "link", suffix = c("_authors", "_ours"))
+
+tibble(
+  check = c("pairs in the authors' edge list",
+            "pairs found in both edge lists",
+            "pairs with the same decision (P or N)",
+            "pairs with the same orientation probabilities"),
+  pairs = c(nrow(edges_authors),
+            nrow(all_pairs),
+            sum(all_pairs$type_authors == all_pairs$type_ours),
+            sum(all_pairs$proba_authors == all_pairs$proba_ours, na.rm = TRUE))
+)
+
+tibble(
+  value = c("mutual information (info)", "confidence ratio"),
+  largest_difference = c(max(abs(all_pairs$info_authors - all_pairs$info_ours), na.rm = TRUE),
+                         max(abs(all_pairs$confidence_authors - all_pairs$confidence_ours), na.rm = TRUE))
+)
+```
+
+**Retained links.** `standardise()` (in `scripts/helpers.R`) now takes the cell type of each variable, to sort links
+into "within Fibroblasts", "within T_cell", "within DCs" and "ligand-receptor".
+
+```{r}
+#| label: compare-links
+
+links_authors <- standardise(edges_authors, col_type)
+links_ours    <- standardise(edges_ours, col_type)
+
+comparison <- full_join(links_authors, links_ours,
+                        by = c("link", "first", "second", "category"),
+                        suffix = c("_authors", "_ours")) |>
+  mutate(found_in = case_when(!is.na(orientation_authors) & !is.na(orientation_ours) ~ "both",
+                              !is.na(orientation_authors) ~ "authors only",
+                              .default = "ours only"))
+
+count(comparison, category, found_in) |>
+  pivot_wider(names_from = found_in, values_from = n, values_fill = 0)
+
+# Jaccard index: shared links / all distinct links
+mean(comparison$found_in == "both")
+```
+
+**Links found in only one network**, with their confidence ratio in both runs (threshold 0.01). An empty table means
+there is none.
+
+```{r}
+#| label: differing-links
+
+lookup <- function(edge_list) {
+  edge_list |>
+    mutate(link = link_name(x, y)) |>
+    select(link, type, confidence, info_shifted)
+}
+
+comparison |>
+  filter(found_in != "both") |>
+  select(link, found_in) |>
+  left_join(lookup(edges_authors), by = "link") |>
+  left_join(lookup(edges_ours), by = "link", suffix = c("_authors", "_ours")) |>
+  arrange(found_in, link)
+```
+
+**Strength and orientation of shared links.**
+
+```{r}
+#| label: compare-strength
+#| fig-width: 5
+#| fig-height: 5
+
+shared <- comparison |> filter(found_in == "both", category != "ligand-receptor")
+
+shared |>
+  summarise(links = n(),
+            largest_difference = max(abs(info_shifted_authors - info_shifted_ours)),
+            correlation        = cor(info_shifted_authors, info_shifted_ours))
+
+ggplot(shared, aes(x = info_shifted_authors, y = info_shifted_ours, colour = category)) +
+  geom_abline(linetype = "dashed", colour = "grey60") +
+  geom_point(alpha = 0.7) +
+  labs(x = "link strength, authors' run", y = "link strength, our run", colour = NULL,
+       title = "Strength of the links found by both runs") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#| label: compare-orientation
+
+shared_all <- comparison |> filter(found_in == "both")
+
+table(authors = shared_all$orientation_authors, ours = shared_all$orientation_ours)
+
+table(authors = shared_all$is_causal_authors, ours = shared_all$is_causal_ours)
+```
+
+## 6. Strength of the L-R links
+
+In case study 1 the server's own output gave every L-R link the largest `info_shifted` of the network, and a later
+edit (April 2025) replaced these values. Which of the two does the case study 2 file contain?
+
+```{r}
+#| label: lr-values
+
+lr_strength <- function(edge_list) {
+  edge_list |> filter(link_name(x, y) %in% lr_links) |> pull(info_shifted) |> unique()
+}
+
+max_gene_gene <- edges_ours |>
+  filter(type == "P", !link_name(x, y) %in% lr_links) |>
+  summarise(max(info_shifted)) |>
+  pull()
+
+list(authors = lr_strength(edges_authors), ours = lr_strength(edges_ours),
+     largest_gene_gene_link = max_gene_gene)
+```
+
+## 7. Do the paper's statements still hold in our network?
+
+The checks of notebook 03, section 6, repeated on our network.
+
+```{r}
+#| label: claims-ours
+
+intracellular_ours <- edges_ours |>
+  filter(type == "P", !link_name(x, y) %in% lr_links)
+
+claims <- tribble(
+  ~centre,              ~gene,
+  "CXCL12_Fibroblasts", "DCN",
+  "CXCL12_Fibroblasts", "APOD",
+  "CXCL12_Fibroblasts", "CFD",
+  "CXCR4_DCs",          "GPR183",
+  "CXCR4_DCs",          "NR4A3",
+  "CXCR4_DCs",          "VIM_DCs_DCs",
+  "CXCR4_T_cell",       "FOS",
+  "CXCR4_T_cell",       "JUNB"
+)
+
+claims |>
+  mutate(distance_ours = map2_dbl(centre, gene, \(c, g) graph_distance(intracellular_ours, c)[g]))
+
+edges_ours |>
+  filter(type == "P", link_name(x, y) %in% link_name("CXCL12_Fibroblasts", c("CXCR4_DCs", "CXCR4_T_cell"))) |>
+  select(x, y, infOrt, proba)
+```
+
+## What we learned
+
+The conclusions below are written after reading the outputs above.
+
+```{r}
+#| label: summary
+
+# (names differ from the objects: inside tibble(), a new column would hide an object of the same name)
+tibble(
+  quantity = c("pairs examined", "pairs with the same decision", "retained links, authors", "retained links, ours",
+               "links in both", "shared links with the same orientation", "genuine causations, authors",
+               "genuine causations, ours"),
+  value    = c(nrow(edges_authors), sum(all_pairs$type_authors == all_pairs$type_ours),
+               nrow(links_authors), nrow(links_ours), sum(comparison$found_in == "both"),
+               sum(shared_all$orientation_authors == shared_all$orientation_ours),
+               sum(links_authors$is_causal == "Y"), sum(links_ours$is_causal == "Y"))
+)
+```
+
+The 15 pairs whose orientation probabilities differ as text (section 5) are not real differences. In 14 of them, our
+run writes the two variables in the opposite order (the metadata variable as `x`), so the two probabilities are
+swapped. In the last one, the values differ in the 15th decimal place:
+
+```{r}
+#| label: proba-differences
+
+edges_authors |>
+  transmute(link = link_name(x, y), x_authors = x, proba_authors = proba) |>
+  inner_join(edges_ours |> transmute(link = link_name(x, y), x_ours = x, proba_ours = proba), by = "link") |>
+  filter(proba_authors != proba_ours) |>
+  mutate(same_order = x_authors == x_ours) |>
+  count(same_order)
+```
+
+**The network is reproduced exactly**, as for case study 1. With the authors' three files and the server's settings:
+
+- the same decision (kept or rejected) for all 8,458 pairs examined;
+- the same 715 retained links: 247 within fibroblasts, 200 within T cells, 225 within dendritic cells and the 43 L-R
+  links;
+- identical link strengths (differences below 10⁻¹²) and orientation probabilities;
+- identical orientations and the same 49 genuine causations;
+- confidence ratios slightly different (random shuffles with another seed, largest difference 0.008), with no effect on
+  any decision.
+
+Our run took 2.8 hours on one thread, close to the server's 3 hours.
+
+**L-R links.** Unlike case study 1, the authors' file was not edited afterwards: every L-R link has the strength of the
+strongest gene–gene link (11,579), in both files. That link joins two identical copies of S100A6 in fibroblasts
+(notebook 03, section 7), so with clean input the L-R links would get a different strength.
+
+**Bookkeeping.** As in notebook 02, our version of `miic` lists each L-R pair twice (86 rows instead of 43). We remove
+the placeholder rows.
+
+**Paper's statements.** All the checks of notebook 03 give the same distances in our network.
+
+**What this means for the project.** For both case studies, the MIIC step is reproducible from the authors' files.
+Any difference between the published networks and a rebuilt analysis can only come from how the input files were
+prepared, which notebook 05 examines for case study 2.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

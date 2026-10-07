@@ -11,7 +11,7 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 - [ ] **Case study 1** – CD4⁺ (sender) → CD8⁺ (receiver) T cells in inguinal lymph nodes, with NicheNet ligand–receptor pairs
       (data: Medaglia *et al.*, *Science* 2017).
 - [ ] **Case study 2** – fibroblasts, dendritic cells and T cells in atopic dermatitis, with CellChat ligand–receptor pairs
-      (data: He *et al.*, *J Allergy Clin Immunol* 2020).
+      (data: He *et al.*, *J Allergy Clin Immunol* 2020). Notebooks 03 (authors' files, paper's claims), 04 (MIIC rerun), 05 (rebuilding the input) and 06 (MIIC on the rebuilt input).
 - [ ] Assess the preprocessing of the input data used in the case studies.
 - [ ] Extensions of the published analyses (to be defined with the teaching team).
 - [ ] Analysis of a dataset shared with the BoNesis team, and comparison of the two approaches.
@@ -23,10 +23,18 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 ├── .Rprofile            # pins the CRAN snapshot used by this project
 ├── docs/INSTALL.md      # how to build the computing environment
 ├── envs/                # environment definitions and recorded package versions
-├── data/                # not tracked by Git – see data/README.md for sources
-├── notebooks/           # analyses, numbered in execution order
-├── scripts/             # reusable code and data download scripts
-└── results/figures/     # final figures
+├── data/                # not tracked by Git – see data/README.md; subfolders case1/, case2/
+├── notebooks/
+│   ├── 01_*, 02_*       # case study 1 (notebooks numbered in execution order across the project)
+│   └── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
+├── scripts/
+│   ├── helpers.R, run_miic.R   # shared by all case studies
+│   ├── download_case1.sh
+│   └── case2/           # download_case2.sh, MIIC job, preprocessing/ (kallisto|bustools)
+└── results/
+    ├── 02_rerun_miic/   # case study 1
+    ├── case2/           # one folder per notebook, same name
+    └── figures/
 ```
 
 ## Getting started

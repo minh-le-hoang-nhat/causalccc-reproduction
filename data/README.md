@@ -11,12 +11,12 @@ and how to obtain it, so that `data/` can be rebuilt from scratch.
 | ------------ | ----------------------------------------------------------- | -------------------------------------------- |
 | Case study 1 | `bash scripts/download_case1.sh`                            | about 770 MB                                 |
 |              | `bash scripts/download_case1.sh --with-geo`                 | also GEO raw data, about 860 MB in total     |
-| Case study 2 | not scripted yet (see [below](#sources--case-study-2))      |                                              |
+| Case study 2 | `bash scripts/case2/download_case2.sh`                            | about 5 MB                                   |
 
 Run the scripts from the root of the repository. They can be run again at any time: complete files are skipped,
 interrupted downloads resume, and files that were modified since the last run are reported. Each download is recorded
-in `download_log.tsv` (date, file, URL) and all checksums in `checksums.md5` (check by hand with
-`cd data && md5sum -c checksums.md5`).
+in `download_log.tsv` (date, file, URL) and all checksums in `checksums.md5` (case study 1) or `checksums_case2.md5`
+(case study 2). Check by hand with `cd data && md5sum -c checksums.md5`.
 
 ## Layout
 
@@ -24,11 +24,16 @@ in `download_log.tsv` (date, file, URL) and all checksums in `checksums.md5` (ch
 data/
 ├── README.md                                    (this file, tracked by Git)
 ├── download_log.tsv                             when and where each file was downloaded
-├── checksums.md5                                md5 checksums of all files
+├── checksums.md5                                md5 checksums of the case study 1 files
+├── checksums_case2.md5                          md5 checksums of the case study 2 files
 ├── case1/
 │   ├── causalccc_server_eaP9Br0llvzxN07zZZEC/   files of the authors' web server job
 │   ├── nichenet_seurat/seuratObj.rds            processed Medaglia data (Seurat object)
 │   └── geo_GSE104054/                           raw data (optional, --with-geo)
+├── case2/
+│   ├── causalccc_server_w0788tM1wzXGHLzNaKKa/   files of the authors' web server job
+│   ├── cellchat/data_humanSkin_CellChat.rda     CellChat example dataset (copied by hand, see below)
+│   └── preprocessing/                           raw reads (fastq/), kallisto|bustools output (kb_out/), write/, cache/ – see notebooks/case2/preprocessing/README.md
 └── nichenet_v2/                                 NicheNet v2 mouse prior-knowledge networks
 ```
 
@@ -69,11 +74,35 @@ no checksums: ours are recorded at first download.
 
 ## Sources – case study 2
 
-Fibroblasts, dendritic cells and T cells in atopic dermatitis skin (He *et al.*, *J Allergy Clin Immunol* 2020).
-L-R pairs inferred with CellChat. **Not downloaded yet.**
+Fibroblasts, dendritic cells and T cells in atopic dermatitis skin (He *et al.*, *J Allergy Clin Immunol* 2020,
+[doi:10.1016/j.jaci.2020.01.042](https://doi.org/10.1016/j.jaci.2020.01.042)). L-R pairs inferred with CellChat
+(Jin *et al.*, *Nat Commun* 2021). Figure 3 and Supplementary Figure S1 of Dupuis *et al.* 2025.
 
-- The authors' CausalCCC input files are on the web server (job `w0788tM1wzXGHLzNaKKa`).
-- The CellChat dataset link on figshare refused scripted downloads on 2026-10-05.
+| Folder                                         | Source                                                                                         | Content                                                                                                      | Size   |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------ |
+| `case2/causalccc_server_w0788tM1wzXGHLzNaKKa/` | CausalCCC web server job, linked as "CellChat CausalCCC input files" in the [tutorial](https://miic.curie.fr/tutorial_causalCCC.php#datasets) | Authors' input mosaic table, L-R pairs, state order, MIIC settings, run log and result network. Job run on 2025-01-21. | 5 MB   |
+
+### Main files of the authors' job
+
+| File                           | What it is                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `input.tsv` (from `input.zip`) | Mosaic table: 7,563 cells (4,734 fibroblasts, 2,200 T cells, 629 dendritic cells) × 238 variables (232 genes, raw counts, and 6 metadata) |
+| `clean_interact_edges.tsv`     | The 43 CellChat L-R pairs, in all six directions between the three cell types, no header, no score                              |
+| `clean_state_order.tsv`        | Type and group (ligand, receptor, genes of each cell type, metadata) of each variable                                            |
+| `script.sh`, `whole_run.log`   | Exact MIIC settings used by the server (as in case study 1, but `--n_threads 1`), and the log of the run (about 3 hours)        |
+| `edgesList.miic.summary.txt`   | Result network (715 retained links out of 8,458 pairs examined). Unlike case study 1, there is no `_save` version.               |
+
+### Notes and open questions
+
+- `input.tsv` is identical (same md5) to the copy found online at the start of the project (`../data/case_study2/input.tsv`
+  outside this repository).
+- The 7,563 cells are exactly the cells of CellChat's example dataset `data_humanSkin` (`data_humanSkin_CellChat.rda`,
+  figshare), which contains these three cell types from He *et al.* The figshare link refused scripted downloads on
+  2026-10-05, so it is not downloaded by the script: download it by hand from the
+  [CellChat tutorial](https://github.com/jinworks/CellChat) and put it in `data/case2/cellchat/`
+  (md5 of our copy: `9d31f4c88be64912b937b5d6a2cb6c2d`). Its matrix is log-normalised; notebook 05 recovers the raw
+  counts exactly and shows that they are the authors' counts.
+- 14 genes appear twice in the same cell type as identical columns (notebook 03, section 3).
 
 ## Other datasets (optional)
 

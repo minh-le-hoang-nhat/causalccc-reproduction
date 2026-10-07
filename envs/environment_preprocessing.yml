@@ -1,0 +1,11 @@
+# Python environment for notebooks/case2/preprocessing (scanpy). kb-python runs separately in WSL: pip install kb-python
+name: causalccc-preprocessing
+channels: [conda-forge]
+dependencies:
+  - python>=3.11
+  - scanpy
+  - pip
+  - pip:
+      - harmonypy==0.0.10   # 0.1+ returns a shape scanpy.external.pp.harmony_integrate rejects
+  - python-igraph
+  - jupyterlab

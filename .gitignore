@@ -18,3 +18,9 @@ __pycache__/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Case 2 preprocessing (raw reads and kallisto|bustools output live in data/, already ignored)
+*.fastq.gz
+*.bus
+kb_out/
+sandbox/

@@ -1,0 +1,398 @@
+---
+title: "07 – Why do our results differ from the authors'? (case study 2)"
+subtitle: "Testing the possible causes, one at a time"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebooks 05 and 06 left two differences with the authors:
+
+1. **gene selection**: our best protocol (B+, the wrapper's defaults) recovered 160 of the authors' 174 selected genes,
+   missed 14 and added 7;
+2. **orientations**: on the rebuilt input, the links of the network were mostly recovered, but many orientations and
+   genuine causations were not.
+
+Here we test the possible causes one at a time, each with a small experiment.
+
+**Inputs:** the MI tables and recovered counts of notebook 05 (`results/case2/05_rebuild_input/`), the network of
+notebook 06, the authors' files, and one extra MIIC run on the authors' input without its duplicated columns
+(`results/case2/07_differences/authors_dedup/`, made with `scripts/run_miic.R`, see section 5).
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(Seurat)
+library(miic)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+nb05_dir    <- file.path(root, "results", "case2", "05_rebuild_input")
+nb06_dir    <- file.path(root, "results", "case2", "06_rebuilt_network")
+results_dir <- file.path(root, "results", "case2", "07_differences")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+strip      <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+
+mi_tables <- readRDS(file.path(nb05_dir, "mi_tables.rds"))
+rebuilt   <- readRDS(file.path(nb05_dir, "rebuild_inputs.rds"))
+lr_roles  <- rebuilt$lr_roles
+
+mosaic   <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+lr_pairs <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                     col_names = c("ligand", "receptor"), show_col_types = FALSE)
+row_type <- case_when(!is.na(mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(mosaic, row_type)
+
+# The authors' selected genes per cell type (without L-R genes, metadata and suffixes), as in notebook 05
+authors_selected <- map(set_names(cell_types), \(t) {
+  genes <- unique(strip(names(mosaic)[col_type == t & !str_detect(names(mosaic), "^(labels|condition)_")]))
+  setdiff(genes, lr_roles$gene[lr_roles$cell_type == t])
+})
+```
+
+# Part 1 – Gene selection
+
+## 1. A different version of the code?
+
+The authors' server job ran on 21 January 2025. The CausalCCC functions (`causalCCC.utils.R`, `causalCCC.wrapper.R`)
+were added to the public repository `miicTeam/CausalCCC` on 6 December 2024, and the md5 checksums of both files are
+identical in all five later commits, up to `0aa8586` (23 January 2025), which only changes the README (checked with the
+GitHub API on 7 October 2026). And notebook 04 showed that `miic` itself gives exactly the authors' network.
+
+**Unless the authors used unpublished code, the code version is not the cause.**
+
+## 2. A different gene order?
+
+`causalCCC.MIselection()` computes MI in blocks of 100 genes, each block in one call to `miic`. If the result for a
+gene depended on the other genes of its block, a different gene order in the authors' Seurat object would change the
+MI values. We recompute the MI of two features of interest in dendritic cells after shuffling the gene order, and
+compare with notebook 05.
+
+```{r}
+#| label: gene-order
+
+order_file <- file.path(results_dir, "mi_shuffled_order.rds")
+
+if (file.exists(order_file)) {
+  mi_shuffled <- readRDS(order_file)
+} else {
+  MIselection <- causalCCC.MIselection   # with the Seurat 5 fix of notebook 05
+  body(MIselection) <- parse(text = gsub('slot = "counts"', 'layer = "counts"',
+                                         deparse(body(MIselection)), fixed = TRUE))[[1]]
+  set.seed(1)
+  shuffled <- sample(nrow(rebuilt$counts))
+  so <- CreateSeuratObject(counts = rebuilt$counts[shuffled, ], meta.data = rebuilt$meta)
+  invisible(capture.output(suppressMessages(
+    mi_shuffled <- MIselection(so, interact_ident = "cell_type", oneinteract = "DCs", goi = c("CD74", "CXCR4"),
+                               metadata_list = c("labels", "condition"), return_full = TRUE))))
+  mi_shuffled <- as_tibble(mi_shuffled) |> mutate(foi = as.character(foi))
+  saveRDS(mi_shuffled, order_file)
+}
+
+mi_shuffled |>
+  filter(foi %in% c("CD74", "CXCR4")) |>
+  inner_join(filter(mi_tables, cell_type == "DCs"), by = c("variables", "foi"), suffix = c("_shuffled", "_original")) |>
+  summarise(pairs = n(), largest_difference = max(abs(value_shuffled - value_original)))
+```
+
+The values are exactly the same: each MI value depends only on the two variables. Since our counts are the authors'
+counts (notebook 05, section 2), **our MI values are the authors'**. The differences can only come from the choices
+made when selecting genes from these values.
+
+## 3. Different selection settings?
+
+Three settings of the wrapper could have been changed:
+
+- the **number of genes** `n_genes` kept by `causalCCC.MIselection()` (default `max(15, min(4 × genes of interest,
+  100))`);
+- the **cap of 8** ligands or receptors used as features of interest in each run (in the wrapper,
+  `ligands[1:min(length(ligands), 8)]`);
+- the **metadata** used as features of interest, on the sender and receiver sides.
+
+`run_protocol()` generalises protocol B of notebook 05 (one run per sender → receiver direction) to these settings, and
+`score()` counts the authors' selected genes we miss and the genes we add.
+
+```{r}
+#| label: protocol-functions
+
+directions <- lr_pairs |>
+  transmute(sender = col_type[ligand], receiver = col_type[receptor],
+            ligand = strip(ligand), receptor = strip(receptor))
+
+mi_by_type <- split(mi_tables, mi_tables$cell_type)
+
+run_protocol <- function(meta_sender, meta_receiver, cap = 8, n_genes = default_n_genes) {
+  one_side <- function(t, goi, meta) {
+    goi <- head(unique(goi), cap)
+    select_genes(mi_by_type[[t]], foi = c(goi, meta), n_genes = n_genes(goi))
+  }
+  runs <- directions |>
+    group_by(sender, receiver) |>
+    summarise(sender_genes   = list(one_side(first(sender), ligand, meta_sender)),
+              receiver_genes = list(one_side(first(receiver), receptor, meta_receiver)),
+              .groups = "drop")
+  map(set_names(cell_types), \(t) {
+    unique(c(unlist(runs$sender_genes[runs$sender == t]), unlist(runs$receiver_genes[runs$receiver == t])))
+  })
+}
+
+score <- function(selected, protocol) {
+  map(cell_types, \(t) {
+    ours <- setdiff(selected[[t]], c(lr_roles$gene[lr_roles$cell_type == t], "labels", "condition"))
+    tibble(protocol, cell_type = t,
+           missing = length(setdiff(authors_selected[[t]], ours)),
+           extra   = length(setdiff(ours, authors_selected[[t]])))
+  }) |> list_rbind()
+}
+
+both_metadata <- c("labels", "condition")
+```
+
+**The number of genes.** With both metadata on both sides and the cap of 8, we vary `n_genes`, either as the default
+formula or as a fixed number:
+
+```{r}
+#| label: n-genes
+
+n_genes_tests <- c(list("default" = default_n_genes),
+                   map(set_names(paste("fixed", c(20, 24, 25, 26, 30))),
+                       \(name) { n <- as.integer(str_extract(name, "[0-9]+")); \(goi) n }))
+
+imap(n_genes_tests, \(f, name) score(run_protocol(both_metadata, both_metadata, cap = 8, n_genes = f), name)) |>
+  list_rbind() |>
+  group_by(protocol) |>
+  # detail first: inside summarise(), a new column hides the column of the same name for the next ones
+  summarise(detail = paste(cell_type, missing, extra, sep = ":", collapse = "  "),
+            missing = sum(missing), extra = sum(extra))
+```
+
+With **25 genes per run**, fibroblasts and T cells are reproduced exactly (0 missing, 0 extra). Below 25, genes are
+missing; above, genes are added. Only 5 dendritic cell genes are still missing.
+
+**The 5 missing dendritic cell genes.** For each, its rank among all genes by MI with each feature of interest of
+dendritic cells (rank 1 = highest MI):
+
+```{r}
+#| label: missing-dc
+
+still_missing <- setdiff(authors_selected$DCs,
+                         run_protocol(both_metadata, both_metadata, cap = 8, n_genes = \(goi) 25)$DCs)
+
+mi_by_type$DCs |>
+  group_by(foi) |>
+  mutate(rank = rank(-value, ties.method = "first")) |>
+  ungroup() |>
+  filter(variables %in% still_missing) |>
+  select(gene = variables, foi, rank) |>
+  pivot_wider(names_from = foi, values_from = rank) |>
+  select(gene, TMEM219, TNFRSF14, everything())
+```
+
+They are the top 3 genes of **TMEM219** (PFDN5, VAMP8, GRN) and the top 2 of **TNFRSF14** (ARL6IP5, NDUFS5), so the top-3
+rule of `causalCCC.MIselection()` selects them as soon as these two receptors are features of interest. But the cap of
+8 removes them: TMEM219 is the 10th receptor of the fibroblasts → dendritic cells direction and TNFRSF14 the 9th of the
+T cells → dendritic cells direction.
+
+```{r}
+#| label: receptor-order
+
+directions |>
+  filter(receiver == "DCs") |>
+  group_by(sender) |>
+  summarise(receptors = paste(seq_along(unique(receptor)), unique(receptor), sep = ".", collapse = " "))
+```
+
+**Without the cap**, with 25 genes per run, for all combinations of metadata:
+
+```{r}
+#| label: no-cap
+
+metadata_options <- list(none = NULL, labels = "labels", condition = "condition", both = both_metadata)
+
+expand_grid(sender = names(metadata_options), receiver = names(metadata_options), cap = c(8, Inf)) |>
+  pmap(\(sender, receiver, cap) {
+    score(run_protocol(metadata_options[[sender]], metadata_options[[receiver]], cap = cap, n_genes = \(goi) 25),
+          paste(sender, receiver, cap)) |>
+      summarise(sender_metadata = sender, receiver_metadata = receiver, cap = cap,
+                missing = sum(missing), extra = sum(extra))
+  }) |>
+  list_rbind() |>
+  arrange(missing + extra) |>
+  print(n = 12)
+```
+
+**The authors' selection is reproduced exactly** (0 missing, 0 extra in all three cell types) by: one wrapper run per
+sender → receiver direction, all the ligands or receptors of the direction as features of interest (no cap of 8), the
+subtype metadata (`labels`) as a feature of interest on both sides, and **25 genes** per run. Adding `condition` on one
+or both sides changes nothing.
+
+# Part 2 – Orientations
+
+## 4. Same input, same network
+
+Notebook 04 already ruled out the MIIC step itself: on the authors' input, our run gives exactly their links,
+orientations and genuine causations. So differences in orientations can only come from the input.
+
+## 5. The duplicated columns?
+
+Part 1 shows that our rebuilt input would contain exactly the authors' genes with the right settings. The authors'
+input **without its 14 duplicated columns** is therefore the input we would build ourselves. We ran MIIC on it with the
+server's settings (one thread, same seed), with `scripts/run_miic.R`:
+
+```{r}
+#| label: dedup-files
+
+dedup_dir <- file.path(results_dir, "authors_dedup")
+
+# How the input was made: the authors' files minus every column identical to an earlier column of the same cell type
+dropped <- unlist(map(cell_types, \(t) {
+  block <- mosaic[row_type == t, col_type == t]
+  names(block)[duplicated(as.list(block))]
+}))
+dropped
+
+dedup_result <- readRDS(file.path(dedup_dir, "miic_result.rds"))
+```
+
+```{r}
+#| label: networks
+
+lr_links_authors <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+
+edges_authors <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+edges_dedup   <- as_tibble(dedup_result$all.edges.summary) |>
+  filter(!(link_name(x, y) %in% lr_links_authors & Nxy_ai %in% 0))   # placeholder rows (notebook 02)
+edges_ours    <- read_tsv(file.path(nb06_dir, "edges.tsv"), show_col_types = FALSE)
+
+# Every variable identified as "<gene>_<cell type>", so that the three networks can be compared;
+# the two copies of a duplicated gene become one node
+key_of <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  mutate(key = if_else(str_detect(variable, "^(labels|condition)_"), variable,
+                       paste0(strip(variable), "_", cell_type))) |>
+  pull(key, name = variable)
+key_of_ours <- set_names(unique(c(edges_ours$x, edges_ours$y)))
+
+gene_links <- function(edge_list, keys) {
+  edge_list |>
+    filter(type == "P") |>
+    mutate(a = keys[x], b = keys[y]) |>
+    filter(a != b, !link_name(x, y) %in% c(lr_links_authors, link_name(keys[lr_pairs$ligand], keys[lr_pairs$receptor]))) |>
+    transmute(link = link_name(a, b),
+              orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt),
+              is_causal) |>
+    distinct(link, .keep_all = TRUE)
+}
+
+networks <- list(authors = gene_links(edges_authors, key_of),
+                 authors_without_duplicates = gene_links(edges_dedup, key_of),
+                 ours_notebook_06 = gene_links(edges_ours, key_of_ours))
+
+map(networks, \(n) tibble(links = nrow(n), oriented = sum(abs(n$orientation) == 2),
+                          bidirected = sum(n$orientation == 6), genuine_causation = sum(n$is_causal == "Y"))) |>
+  list_rbind(names_to = "network")
+```
+
+**Pairwise comparison.** For two networks: the Jaccard index of their gene–gene links, and, on the shared links, the
+fraction with the same orientation and the number of genuine causations found in both.
+
+```{r}
+#| label: pairwise
+
+compare_networks <- function(a, b) {
+  shared <- inner_join(networks[[a]], networks[[b]], by = "link", suffix = c("_a", "_b"))
+  tibble(comparison = paste(a, "vs", b),
+         jaccard = nrow(shared) / n_distinct(c(networks[[a]]$link, networks[[b]]$link)),
+         shared_links = nrow(shared),
+         same_orientation = mean(shared$orientation_a == shared$orientation_b),
+         opposite_orientation = sum(abs(shared$orientation_a) == 2 & shared$orientation_a == -shared$orientation_b),
+         causal_a = sum(shared$is_causal_a == "Y"), causal_b = sum(shared$is_causal_b == "Y"),
+         causal_both = sum(shared$is_causal_a == "Y" & shared$is_causal_b == "Y"))
+}
+
+bind_rows(compare_networks("authors", "authors_without_duplicates"),
+          compare_networks("authors_without_duplicates", "ours_notebook_06"),
+          compare_networks("authors", "ours_notebook_06")) |>
+  print(width = Inf)
+```
+
+**Figure 3** in the network without duplicates (distances in the authors' network: DCN 2, APOD 2, CFD 1; GPR183 2,
+NR4A3 1, VIM 2; FOS 2, JUNB 1):
+
+```{r}
+#| label: claims-dedup
+
+intracellular_dedup <- edges_dedup |> filter(type == "P", !link_name(x, y) %in% lr_links_authors)
+
+tribble(~centre,              ~gene,
+        "CXCL12_Fibroblasts", "DCN",  "CXCL12_Fibroblasts", "APOD", "CXCL12_Fibroblasts", "CFD",
+        "CXCR4_DCs", "GPR183", "CXCR4_DCs", "NR4A3", "CXCR4_DCs", "VIM_DCs_DCs",
+        "CXCR4_T_cell", "FOS", "CXCR4_T_cell", "JUNB") |>
+  mutate(distance = map2_dbl(centre, gene, \(c, g) unname(graph_distance(intracellular_dedup, c)[g])))
+
+neighbors_of("CXCL12_Fibroblasts", intracellular_dedup)
+```
+
+## What we learned
+
+**Gene selection: the cause is found.** The code version is not the cause (the public code did not change), and
+neither is the gene order (MI values are exactly the same whatever the order). Since our counts are the authors'
+counts, our MI values are the authors' too, and the difference lies only in the selection settings. The authors'
+selection is **reproduced exactly**, in all three cell types, by one wrapper run per sender → receiver direction with:
+
+- **25 genes per run** instead of the default `max(15, min(4 × genes of interest, 100))`;
+- **all** the ligands or receptors of the direction as features of interest, not only the first 8;
+- the subtype metadata (`labels`) as a feature of interest on both sides (`condition` changes nothing).
+
+The last 5 missing dendritic cell genes were the clue: they are the top genes of TMEM219 and TNFRSF14, the two
+receptors removed by the cap of 8. These settings are not those of the published wrapper, and the paper does not
+mention them: the authors probably changed the wrapper or called the selection function themselves.
+
+**Orientations: two effects.** On the authors' input without its 14 duplicated columns, which is exactly the input
+the settings above produce:
+
+- the **links are unchanged** (the same 525 gene–gene links, Jaccard index 1);
+- the **orientation status of 17 % of the links changes** (83 % agreement, none reversed), and the genuine causations
+  change too (30 in both networks, but only 23 shared).
+
+Between that input and our input of notebook 06 (default settings, about 7 % different genes), links differ more
+(Jaccard 0.82) but orientations agree on 94 % of shared links. So the **duplicated columns mainly change the
+orientations, and the gene selection mainly changes the links**. Figure 3 holds in the network without duplicates: the
+same distances for all the genes named in the paper, and CXCL12 → CFD is kept.
+
+**What this means.** Case study 2 can be rebuilt exactly from public data, provided the selection settings above are
+used. The duplicated columns are an artefact of the authors' preparation: removing them changes no link but about one
+orientation in six, which confirms that MIIC's orientations are much more sensitive to the input than its links.
+
+**Questions for the authors.** How were the six wrapper runs pooled (origin of the duplicated columns)? Why 25 genes
+and no cap of 8, and are these the settings to use? Were the published L-R link strengths meant to come from a
+duplicated gene?
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```
