@@ -2271,7 +2271,74 @@ vertical-align: -.125em;
 <li><strong>the genes</strong>: for each cell type, its ligands and receptors plus genes selected for their mutual information (MI) with them. CausalCCC does this with the function <code>causalCCC.MIselection()</code>, called by the wrapper <code>causalCCC.wrapper()</code>.</li>
 </ol>
 <p>We take the L-R pairs as given (recomputing CellChat is another project) and test points 1 and 3.</p>
-<p><strong>Inputs:</strong> CellChat’s example dataset <code>data_humanSkin_CellChat.rda</code> in <code>data/case2/cellchat/</code> and the authors’ files in <code>data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/</code> (read only). <strong>Outputs:</strong> <code>results/05_case2_rebuild_input/</code>: the MI tables (<code>mi_tables.rds</code>, about 30 minutes to compute the first time).</p>
+<p><strong>Inputs:</strong> CellChat’s example dataset <code>data_humanSkin_CellChat.rda</code> in <code>data/case2/cellchat/</code> and the authors’ files in <code>data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/</code> (read only). <strong>Outputs:</strong> <code>results/case2/05_rebuild_input/</code>: the MI tables (<code>mi_tables.rds</code>, about 30 minutes to compute the first time).</p>
+<section id="two-objects-the-same-cells" class="level3">
+<h3 class="anchored" data-anchor-id="two-objects-the-same-cells">Two objects, the same cells</h3>
+<p>Two objects are compared throughout this notebook: CellChat’s example dataset (our source) and the authors’ input table (our target). They describe the same 7,563 cells, but are very different:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>CellChat object</strong> (<code>data_humanSkin</code>)</th>
+<th><strong>Authors’ <code>input.tsv</code></strong> (mosaic table)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Content</strong></td>
+<td>list with <code>data</code> (matrix) and <code>meta</code> (cell metadata)</td>
+<td>a single table</td>
+</tr>
+<tr class="even">
+<td><strong>Values</strong></td>
+<td><strong>normalised</strong>: log(1 + 10,000 × count / total count of the cell)</td>
+<td><strong>raw counts</strong> (UMI)</td>
+</tr>
+<tr class="odd">
+<td><strong>Dimensions</strong></td>
+<td>17,328 genes × 7,563 cells</td>
+<td>7,563 cells × 238 variables (232 genes + 6 metadata)</td>
+</tr>
+<tr class="even">
+<td><strong>Genes</strong></td>
+<td>all genes kept by CellChat</td>
+<td>only the genes <strong>selected</strong> by <code>MIselection</code>, for each cell type</td>
+</tr>
+<tr class="odd">
+<td><strong>Orientation</strong></td>
+<td>genes in rows, cells in columns</td>
+<td>cells in rows, variables in columns</td>
+</tr>
+<tr class="even">
+<td><strong>Cells</strong></td>
+<td>the same 7,563 cells</td>
+<td>the same 7,563 cells (in random order)</td>
+</tr>
+<tr class="odd">
+<td><strong>Missing values</strong></td>
+<td>none</td>
+<td><code>NA</code> outside the genes of each cell type (“mosaic” format)</td>
+</tr>
+<tr class="even">
+<td><strong>Duplicates</strong></td>
+<td>none</td>
+<td>14 genes appear twice, under two names that differ by one suffix (notebook 03)</td>
+</tr>
+</tbody>
+</table>
+<p>The CellChat object is the <strong>source</strong> and the input table is the <strong>result</strong> of the CausalCCC preprocessing:</p>
+<ol type="1">
+<li>recover the raw counts by undoing the normalisation (section 1);</li>
+<li>build a Seurat object (section 3);</li>
+<li>select, for each cell type, the genes of interest by mutual information (<code>MIselection</code>, sections 4 to 8);</li>
+<li>assemble the mosaic: each cell type only has values for its own genes, <code>NA</code> elsewhere.</li>
+</ol>
+</section>
 </section>
 <section id="setup" class="level2">
 <h2 class="anchored" data-anchor-id="setup">Setup</h2>
@@ -2301,7 +2368,7 @@ loading &#39;miic&#39;</code></pre>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>job_dir     <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;causalccc_server_w0788tM1wzXGHLzNaKKa&quot;</span>)</span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>cellchat    <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;cellchat&quot;</span>, <span class="st">&quot;data_humanSkin_CellChat.rda&quot;</span>)</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;05_case2_rebuild_input&quot;</span>)</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;05_rebuild_input&quot;</span>)</span>
 <span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(cellchat)) <span class="fu">stop</span>(<span class="st">&quot;data_humanSkin_CellChat.rda not found: see data/README.md.&quot;</span>)</span>
 <span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(results_dir, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
@@ -2703,26 +2770,125 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>best_selection <span class="ot">&lt;-</span> protocols[[best<span class="sc">$</span>protocol[<span class="dv">1</span>]]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
+<p><strong>Summary of the four protocols.</strong> What each protocol does (left) and how close it gets to the authors’ selection (right, summed over the three cell types; Jaccard = mean over cell types).</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>protocol_design <span class="ot">&lt;-</span> <span class="fu">tribble</span>(</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>  <span class="sc">~</span>protocol, <span class="sc">~</span>selections,                              <span class="sc">~</span>features_of_interest,                                     <span class="sc">~</span>metadata_as_feature, <span class="sc">~</span>pooling,</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A&quot;</span>,       <span class="st">&quot;1 per cell type (3)&quot;</span>,                    <span class="st">&quot;all its ligands and receptors&quot;</span>,                           <span class="st">&quot;no&quot;</span>,                 <span class="st">&quot;none&quot;</span>,</span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A+&quot;</span>,      <span class="st">&quot;1 per cell type (3)&quot;</span>,                    <span class="st">&quot;all its ligands and receptors&quot;</span>,                           <span class="st">&quot;yes&quot;</span>,                <span class="st">&quot;none&quot;</span>,</span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;B&quot;</span>,       <span class="st">&quot;1 per sender → receiver direction (6)&quot;</span>, <span class="st">&quot;ligands (senders) or receptors (receivers) of the direction, first 8&quot;</span>, <span class="st">&quot;no&quot;</span>,   <span class="st">&quot;union over the directions of each cell type&quot;</span>,</span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;B+&quot;</span>,      <span class="st">&quot;1 per sender → receiver direction (6)&quot;</span>, <span class="st">&quot;ligands (senders) or receptors (receivers) of the direction, first 8&quot;</span>, <span class="st">&quot;yes&quot;</span>,  <span class="st">&quot;union over the directions of each cell type&quot;</span></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>protocol_results <span class="ot">&lt;-</span> comparison <span class="sc">|&gt;</span></span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(protocol) <span class="sc">|&gt;</span></span>
+<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">authors_genes =</span> <span class="fu">sum</span>(n_authors), <span class="at">recovered =</span> <span class="fu">sum</span>(shared), <span class="at">missing =</span> <span class="fu">sum</span>(missing), <span class="at">extra =</span> <span class="fu">sum</span>(extra),</span>
+<span id="cb49-12"><a href="#cb49-12" aria-hidden="true" tabindex="-1"></a>            <span class="at">jaccard =</span> <span class="fu">round</span>(<span class="fu">mean</span>(jaccard), <span class="dv">2</span>), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb49-13"><a href="#cb49-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">recovered =</span> <span class="fu">paste0</span>(recovered, <span class="st">&quot; / &quot;</span>, authors_genes)) <span class="sc">|&gt;</span></span>
+<span id="cb49-14"><a href="#cb49-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>authors_genes)</span>
+<span id="cb49-15"><a href="#cb49-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-16"><a href="#cb49-16" aria-hidden="true" tabindex="-1"></a>protocol_design <span class="sc">|&gt;</span></span>
+<span id="cb49-17"><a href="#cb49-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(protocol_results, <span class="at">by =</span> <span class="st">&quot;protocol&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb49-18"><a href="#cb49-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="st">`</span><span class="at">Protocol</span><span class="st">`</span> <span class="ot">=</span> protocol, <span class="st">`</span><span class="at">Gene selections</span><span class="st">`</span> <span class="ot">=</span> selections, <span class="st">`</span><span class="at">Features of interest</span><span class="st">`</span> <span class="ot">=</span> features_of_interest,</span>
+<span id="cb49-19"><a href="#cb49-19" aria-hidden="true" tabindex="-1"></a>         <span class="st">`</span><span class="at">Metadata (subtype, condition) as features</span><span class="st">`</span> <span class="ot">=</span> metadata_as_feature, <span class="st">`</span><span class="at">Pooling</span><span class="st">`</span> <span class="ot">=</span> pooling,</span>
+<span id="cb49-20"><a href="#cb49-20" aria-hidden="true" tabindex="-1"></a>         <span class="st">`</span><span class="at">Authors&#39; genes recovered</span><span class="st">`</span> <span class="ot">=</span> recovered, <span class="st">`</span><span class="at">Missing</span><span class="st">`</span> <span class="ot">=</span> missing, <span class="st">`</span><span class="at">Extra</span><span class="st">`</span> <span class="ot">=</span> extra, <span class="st">`</span><span class="at">Jaccard</span><span class="st">`</span> <span class="ot">=</span> jaccard) <span class="sc">|&gt;</span></span>
+<span id="cb49-21"><a href="#cb49-21" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 3%">
+<col style="width: 15%">
+<col style="width: 27%">
+<col style="width: 16%">
+<col style="width: 17%">
+<col style="width: 10%">
+<col style="width: 3%">
+<col style="width: 2%">
+<col style="width: 3%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Protocol</th>
+<th style="text-align: left;">Gene selections</th>
+<th style="text-align: left;">Features of interest</th>
+<th style="text-align: left;">Metadata (subtype, condition) as features</th>
+<th style="text-align: left;">Pooling</th>
+<th style="text-align: left;">Authors’ genes recovered</th>
+<th style="text-align: right;">Missing</th>
+<th style="text-align: right;">Extra</th>
+<th style="text-align: right;">Jaccard</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">A</td>
+<td style="text-align: left;">1 per cell type (3)</td>
+<td style="text-align: left;">all its ligands and receptors</td>
+<td style="text-align: left;">no</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">134 / 174</td>
+<td style="text-align: right;">40</td>
+<td style="text-align: right;">79</td>
+<td style="text-align: right;">0.52</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">A+</td>
+<td style="text-align: left;">1 per cell type (3)</td>
+<td style="text-align: left;">all its ligands and receptors</td>
+<td style="text-align: left;">yes</td>
+<td style="text-align: left;">none</td>
+<td style="text-align: left;">149 / 174</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">69</td>
+<td style="text-align: right;">0.61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">B</td>
+<td style="text-align: left;">1 per sender → receiver direction (6)</td>
+<td style="text-align: left;">ligands (senders) or receptors (receivers) of the direction, first 8</td>
+<td style="text-align: left;">no</td>
+<td style="text-align: left;">union over the directions of each cell type</td>
+<td style="text-align: left;">129 / 174</td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">0.67</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">B+</td>
+<td style="text-align: left;">1 per sender → receiver direction (6)</td>
+<td style="text-align: left;">ligands (senders) or receptors (receivers) of the direction, first 8</td>
+<td style="text-align: left;">yes</td>
+<td style="text-align: left;">union over the directions of each cell type</td>
+<td style="text-align: left;">160 / 174</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">0.89</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>All four protocols use the same MI tables and the same default number of genes, <code>max(15, min(4 × number of features, 100))</code>. Only the way the features of interest are grouped and the use of the metadata change.</p>
 </section>
 <section id="the-genes-we-do-not-recover" class="level2">
 <h2 class="anchored" data-anchor-id="the-genes-we-do-not-recover">9. The genes we do not recover</h2>
 <p>For the best protocol, the authors’ selected genes we miss, with their rank among all genes by their highest MI with a feature of interest (rank 1 = highest MI). A small rank means the gene was close to being selected.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>gene_rank <span class="ot">&lt;-</span> mi_tables <span class="sc">|&gt;</span></span>
-<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(cell_type, variables) <span class="sc">|&gt;</span></span>
-<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">best_mi =</span> <span class="fu">max</span>(value), <span class="at">best_foi =</span> foi[<span class="fu">which.max</span>(value)], <span class="at">.groups =</span> <span class="st">&quot;drop_last&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rank =</span> <span class="fu">rank</span>(<span class="sc">-</span>best_mi, <span class="at">ties.method =</span> <span class="st">&quot;first&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
-<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">gene =</span> variables)</span>
-<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>missing <span class="ot">&lt;-</span> <span class="fu">map</span>(cell_types, \(t) {</span>
-<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>  authors <span class="ot">&lt;-</span> authors_genes <span class="sc">|&gt;</span> <span class="fu">filter</span>(cell_type <span class="sc">==</span> t, role <span class="sc">==</span> <span class="st">&quot;selected&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">pull</span>(gene)</span>
-<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(authors, best_selection[[t]]))</span>
-<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>() <span class="sc">|&gt;</span></span>
-<span id="cb49-12"><a href="#cb49-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb49-13"><a href="#cb49-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(cell_type, rank)</span>
-<span id="cb49-14"><a href="#cb49-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb49-15"><a href="#cb49-15" aria-hidden="true" tabindex="-1"></a>missing <span class="sc">|&gt;</span> <span class="fu">group_by</span>(cell_type) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(), <span class="at">median_rank =</span> <span class="fu">median</span>(rank), <span class="at">worst_rank =</span> <span class="fu">max</span>(rank))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>gene_rank <span class="ot">&lt;-</span> mi_tables <span class="sc">|&gt;</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(cell_type, variables) <span class="sc">|&gt;</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">best_mi =</span> <span class="fu">max</span>(value), <span class="at">best_foi =</span> foi[<span class="fu">which.max</span>(value)], <span class="at">.groups =</span> <span class="st">&quot;drop_last&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rank =</span> <span class="fu">rank</span>(<span class="sc">-</span>best_mi, <span class="at">ties.method =</span> <span class="st">&quot;first&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">gene =</span> variables)</span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>missing <span class="ot">&lt;-</span> <span class="fu">map</span>(cell_types, \(t) {</span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>  authors <span class="ot">&lt;-</span> authors_genes <span class="sc">|&gt;</span> <span class="fu">filter</span>(cell_type <span class="sc">==</span> t, role <span class="sc">==</span> <span class="st">&quot;selected&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">pull</span>(gene)</span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(authors, best_selection[[t]]))</span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>() <span class="sc">|&gt;</span></span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(cell_type, rank)</span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a>missing <span class="sc">|&gt;</span> <span class="fu">group_by</span>(cell_type) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(), <span class="at">median_rank =</span> <span class="fu">median</span>(rank), <span class="at">worst_rank =</span> <span class="fu">max</span>(rank))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 3 × 4
   cell_type       n median_rank worst_rank
@@ -2731,7 +2897,7 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 2 Fibroblasts     4        55.5         70
 3 T_cell          2        25.5         26</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>missing <span class="sc">|&gt;</span> <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">30</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>missing <span class="sc">|&gt;</span> <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">30</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 14 × 5
    cell_type   gene    best_mi best_foi  rank
@@ -2754,13 +2920,13 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 </div>
 <p>And the genes we select but the authors do not:</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(cell_types, \(t) {</span>
-<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>  authors <span class="ot">&lt;-</span> authors_genes <span class="sc">|&gt;</span> <span class="fu">filter</span>(cell_type <span class="sc">==</span> t) <span class="sc">|&gt;</span> <span class="fu">pull</span>(gene)</span>
-<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(best_selection[[t]], <span class="fu">c</span>(lr_roles<span class="sc">$</span>gene[lr_roles<span class="sc">$</span>cell_type <span class="sc">==</span> t], metadata_foi, authors)))</span>
-<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>() <span class="sc">|&gt;</span></span>
-<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(cell_type, rank) <span class="sc">|&gt;</span></span>
-<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">30</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(cell_types, \(t) {</span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>  authors <span class="ot">&lt;-</span> authors_genes <span class="sc">|&gt;</span> <span class="fu">filter</span>(cell_type <span class="sc">==</span> t) <span class="sc">|&gt;</span> <span class="fu">pull</span>(gene)</span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(best_selection[[t]], <span class="fu">c</span>(lr_roles<span class="sc">$</span>gene[lr_roles<span class="sc">$</span>cell_type <span class="sc">==</span> t], metadata_foi, authors)))</span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>() <span class="sc">|&gt;</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(cell_type, rank) <span class="sc">|&gt;</span></span>
+<span id="cb54-7"><a href="#cb54-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">30</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 7 × 5
   cell_type   gene     best_mi best_foi  rank
@@ -2776,12 +2942,12 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 </div>
 <p><strong>The genes of Figure 3.</strong> Are the genes named in the paper among our selected genes?</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tribble</span>(<span class="sc">~</span>cell_type, <span class="sc">~</span>gene,</span>
-<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;DCN&quot;</span>, <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;APOD&quot;</span>, <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;CFD&quot;</span>,</span>
-<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;GPR183&quot;</span>, <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;NR4A3&quot;</span>, <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;VIM&quot;</span>,</span>
-<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;T_cell&quot;</span>, <span class="st">&quot;FOS&quot;</span>, <span class="st">&quot;T_cell&quot;</span>, <span class="st">&quot;JUNB&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">selected_by_us =</span> <span class="fu">map2_lgl</span>(cell_type, gene, \(t, g) g <span class="sc">%in%</span> best_selection[[t]])) <span class="sc">|&gt;</span></span>
-<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb56"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tribble</span>(<span class="sc">~</span>cell_type, <span class="sc">~</span>gene,</span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;DCN&quot;</span>, <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;APOD&quot;</span>, <span class="st">&quot;Fibroblasts&quot;</span>, <span class="st">&quot;CFD&quot;</span>,</span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;GPR183&quot;</span>, <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;NR4A3&quot;</span>, <span class="st">&quot;DCs&quot;</span>, <span class="st">&quot;VIM&quot;</span>,</span>
+<span id="cb56-4"><a href="#cb56-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;T_cell&quot;</span>, <span class="st">&quot;FOS&quot;</span>, <span class="st">&quot;T_cell&quot;</span>, <span class="st">&quot;JUNB&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb56-5"><a href="#cb56-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">selected_by_us =</span> <span class="fu">map2_lgl</span>(cell_type, gene, \(t, g) g <span class="sc">%in%</span> best_selection[[t]])) <span class="sc">|&gt;</span></span>
+<span id="cb56-6"><a href="#cb56-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(gene_rank, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 8 × 6
   cell_type   gene   selected_by_us best_mi best_foi  rank
@@ -2802,27 +2968,27 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <p>Notebook 03 found 14 genes present twice in the same cell type, as identical columns with different suffixes.</p>
 <p><strong>First idea:</strong> with protocol B+, a gene of a cell type can be selected in a run where that cell type sends (with its ligands) <strong>and</strong> in a run where it receives (with its receptors); pooling the runs might then list it twice.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a>runs_b <span class="ot">&lt;-</span> <span class="fu">attr</span>(protocols[[<span class="st">&quot;B+&quot;</span>]], <span class="st">&quot;runs&quot;</span>)</span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>sender_and_receiver <span class="ot">&lt;-</span> <span class="fu">map</span>(cell_types, \(t) {</span>
-<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>  as_sender   <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unlist</span>(runs_b<span class="sc">$</span>sender_genes[runs_b<span class="sc">$</span>sender <span class="sc">==</span> t]))</span>
-<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>  as_receiver <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unlist</span>(runs_b<span class="sc">$</span>receiver_genes[runs_b<span class="sc">$</span>receiver <span class="sc">==</span> t]))</span>
-<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(<span class="fu">intersect</span>(as_sender, as_receiver), metadata_foi))</span>
-<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>()</span>
-<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a><span class="co"># The 14 duplicated genes of the authors&#39; table (notebook 03)</span></span>
-<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a>duplicated_authors <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">variable =</span> <span class="fu">names</span>(mosaic), <span class="at">cell_type =</span> col_type) <span class="sc">|&gt;</span></span>
-<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">str_detect</span>(variable, <span class="st">&quot;^(labels|condition)_&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">gene =</span> <span class="fu">strip</span>(variable)) <span class="sc">|&gt;</span></span>
-<span id="cb57-13"><a href="#cb57-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(cell_type, gene) <span class="sc">|&gt;</span></span>
-<span id="cb57-14"><a href="#cb57-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">==</span> <span class="dv">2</span>) <span class="sc">|&gt;</span></span>
-<span id="cb57-15"><a href="#cb57-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>n)</span>
-<span id="cb57-16"><a href="#cb57-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-17"><a href="#cb57-17" aria-hidden="true" tabindex="-1"></a><span class="fu">full_join</span>(<span class="fu">mutate</span>(sender_and_receiver, <span class="at">selected_as_sender_and_receiver =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb57-18"><a href="#cb57-18" aria-hidden="true" tabindex="-1"></a>          <span class="fu">mutate</span>(duplicated_authors, <span class="at">duplicated_by_authors =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb57-19"><a href="#cb57-19" aria-hidden="true" tabindex="-1"></a>          <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb57-20"><a href="#cb57-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(selected_as_sender_and_receiver, duplicated_by_authors), \(v) <span class="fu">replace_na</span>(v, <span class="cn">FALSE</span>))) <span class="sc">|&gt;</span></span>
-<span id="cb57-21"><a href="#cb57-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(selected_as_sender_and_receiver, duplicated_by_authors)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb58"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>runs_b <span class="ot">&lt;-</span> <span class="fu">attr</span>(protocols[[<span class="st">&quot;B+&quot;</span>]], <span class="st">&quot;runs&quot;</span>)</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>sender_and_receiver <span class="ot">&lt;-</span> <span class="fu">map</span>(cell_types, \(t) {</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>  as_sender   <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unlist</span>(runs_b<span class="sc">$</span>sender_genes[runs_b<span class="sc">$</span>sender <span class="sc">==</span> t]))</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>  as_receiver <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unlist</span>(runs_b<span class="sc">$</span>receiver_genes[runs_b<span class="sc">$</span>receiver <span class="sc">==</span> t]))</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">cell_type =</span> t, <span class="at">gene =</span> <span class="fu">setdiff</span>(<span class="fu">intersect</span>(as_sender, as_receiver), metadata_foi))</span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a><span class="co"># The 14 duplicated genes of the authors&#39; table (notebook 03)</span></span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a>duplicated_authors <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">variable =</span> <span class="fu">names</span>(mosaic), <span class="at">cell_type =</span> col_type) <span class="sc">|&gt;</span></span>
+<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">str_detect</span>(variable, <span class="st">&quot;^(labels|condition)_&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb58-12"><a href="#cb58-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">gene =</span> <span class="fu">strip</span>(variable)) <span class="sc">|&gt;</span></span>
+<span id="cb58-13"><a href="#cb58-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(cell_type, gene) <span class="sc">|&gt;</span></span>
+<span id="cb58-14"><a href="#cb58-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">==</span> <span class="dv">2</span>) <span class="sc">|&gt;</span></span>
+<span id="cb58-15"><a href="#cb58-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>n)</span>
+<span id="cb58-16"><a href="#cb58-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-17"><a href="#cb58-17" aria-hidden="true" tabindex="-1"></a><span class="fu">full_join</span>(<span class="fu">mutate</span>(sender_and_receiver, <span class="at">selected_as_sender_and_receiver =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb58-18"><a href="#cb58-18" aria-hidden="true" tabindex="-1"></a>          <span class="fu">mutate</span>(duplicated_authors, <span class="at">duplicated_by_authors =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb58-19"><a href="#cb58-19" aria-hidden="true" tabindex="-1"></a>          <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb58-20"><a href="#cb58-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(selected_as_sender_and_receiver, duplicated_by_authors), \(v) <span class="fu">replace_na</span>(v, <span class="cn">FALSE</span>))) <span class="sc">|&gt;</span></span>
+<span id="cb58-21"><a href="#cb58-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(selected_as_sender_and_receiver, duplicated_by_authors)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 3 × 3
   selected_as_sender_and_receiver duplicated_by_authors     n
@@ -2835,32 +3001,32 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <p>Most genes selected on both sides are <strong>not</strong> duplicated: this is not the explanation.</p>
 <p><strong>Second idea: the names given by <code>causalCCC.mosaic()</code>.</strong> In one wrapper run, a gene present in both cell types of the run gets a suffix (<code>_senders</code> / <code>_receivers</code>, which the authors apparently replaced by the cell-type name), and keeps its plain name otherwise. A gene of a cell type can therefore be called <code>S100A6</code> in one run and <code>S100A6_Fibroblasts</code> in another. If the authors pooled the runs by column name, the two names make two identical columns. We predict, for each gene, whether it is suffixed in some runs and not in others. Each run’s gene lists include its ligands or receptors, as in the wrapper.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>lr_of <span class="ot">&lt;-</span> <span class="cf">function</span>(t, side, s, r) {</span>
-<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>  pairs <span class="ot">&lt;-</span> directions <span class="sc">|&gt;</span> <span class="fu">filter</span>(sender <span class="sc">==</span> s, receiver <span class="sc">==</span> r)</span>
-<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (side <span class="sc">==</span> <span class="st">&quot;sender&quot;</span>) <span class="fu">unique</span>(pairs<span class="sc">$</span>ligand) <span class="cf">else</span> <span class="fu">unique</span>(pairs<span class="sc">$</span>receptor)</span>
-<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>run_names <span class="ot">&lt;-</span> runs_b <span class="sc">|&gt;</span></span>
-<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pmap</span>(\(sender, receiver, sender_genes, receiver_genes) {</span>
-<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>    genes_s <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">unique</span>(<span class="fu">c</span>(<span class="fu">lr_of</span>(sender, <span class="st">&quot;sender&quot;</span>, sender, receiver), sender_genes)), metadata_foi)</span>
-<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>    genes_r <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">unique</span>(<span class="fu">c</span>(<span class="fu">lr_of</span>(receiver, <span class="st">&quot;receiver&quot;</span>, sender, receiver), receiver_genes)), metadata_foi)</span>
-<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>    both    <span class="ot">&lt;-</span> <span class="fu">intersect</span>(genes_s, genes_r)</span>
-<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_rows</span>(<span class="fu">tibble</span>(<span class="at">cell_type =</span> sender,   <span class="at">gene =</span> genes_s, <span class="at">suffixed =</span> genes_s <span class="sc">%in%</span> both),</span>
-<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>              <span class="fu">tibble</span>(<span class="at">cell_type =</span> receiver, <span class="at">gene =</span> genes_r, <span class="at">suffixed =</span> genes_r <span class="sc">%in%</span> both))</span>
-<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>()</span>
-<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>predicted_duplicates <span class="ot">&lt;-</span> run_names <span class="sc">|&gt;</span></span>
-<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(cell_type, gene) <span class="sc">|&gt;</span></span>
-<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">two_names =</span> <span class="fu">n_distinct</span>(suffixed) <span class="sc">==</span> <span class="dv">2</span>, <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(two_names)</span>
-<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a><span class="fu">full_join</span>(<span class="fu">mutate</span>(predicted_duplicates, <span class="at">predicted =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>          <span class="fu">mutate</span>(duplicated_authors, <span class="at">duplicated_by_authors =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a>          <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(predicted, duplicated_by_authors), \(v) <span class="fu">replace_na</span>(v, <span class="cn">FALSE</span>))) <span class="sc">|&gt;</span></span>
-<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(cell_type, gene, predicted, duplicated_by_authors) <span class="sc">|&gt;</span></span>
-<span id="cb59-25"><a href="#cb59-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(duplicated_by_authors), cell_type, gene) <span class="sc">|&gt;</span></span>
-<span id="cb59-26"><a href="#cb59-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">40</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>lr_of <span class="ot">&lt;-</span> <span class="cf">function</span>(t, side, s, r) {</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>  pairs <span class="ot">&lt;-</span> directions <span class="sc">|&gt;</span> <span class="fu">filter</span>(sender <span class="sc">==</span> s, receiver <span class="sc">==</span> r)</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (side <span class="sc">==</span> <span class="st">&quot;sender&quot;</span>) <span class="fu">unique</span>(pairs<span class="sc">$</span>ligand) <span class="cf">else</span> <span class="fu">unique</span>(pairs<span class="sc">$</span>receptor)</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>run_names <span class="ot">&lt;-</span> runs_b <span class="sc">|&gt;</span></span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pmap</span>(\(sender, receiver, sender_genes, receiver_genes) {</span>
+<span id="cb60-8"><a href="#cb60-8" aria-hidden="true" tabindex="-1"></a>    genes_s <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">unique</span>(<span class="fu">c</span>(<span class="fu">lr_of</span>(sender, <span class="st">&quot;sender&quot;</span>, sender, receiver), sender_genes)), metadata_foi)</span>
+<span id="cb60-9"><a href="#cb60-9" aria-hidden="true" tabindex="-1"></a>    genes_r <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(<span class="fu">unique</span>(<span class="fu">c</span>(<span class="fu">lr_of</span>(receiver, <span class="st">&quot;receiver&quot;</span>, sender, receiver), receiver_genes)), metadata_foi)</span>
+<span id="cb60-10"><a href="#cb60-10" aria-hidden="true" tabindex="-1"></a>    both    <span class="ot">&lt;-</span> <span class="fu">intersect</span>(genes_s, genes_r)</span>
+<span id="cb60-11"><a href="#cb60-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">bind_rows</span>(<span class="fu">tibble</span>(<span class="at">cell_type =</span> sender,   <span class="at">gene =</span> genes_s, <span class="at">suffixed =</span> genes_s <span class="sc">%in%</span> both),</span>
+<span id="cb60-12"><a href="#cb60-12" aria-hidden="true" tabindex="-1"></a>              <span class="fu">tibble</span>(<span class="at">cell_type =</span> receiver, <span class="at">gene =</span> genes_r, <span class="at">suffixed =</span> genes_r <span class="sc">%in%</span> both))</span>
+<span id="cb60-13"><a href="#cb60-13" aria-hidden="true" tabindex="-1"></a>  }) <span class="sc">|&gt;</span> <span class="fu">list_rbind</span>()</span>
+<span id="cb60-14"><a href="#cb60-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-15"><a href="#cb60-15" aria-hidden="true" tabindex="-1"></a>predicted_duplicates <span class="ot">&lt;-</span> run_names <span class="sc">|&gt;</span></span>
+<span id="cb60-16"><a href="#cb60-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(cell_type, gene) <span class="sc">|&gt;</span></span>
+<span id="cb60-17"><a href="#cb60-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">two_names =</span> <span class="fu">n_distinct</span>(suffixed) <span class="sc">==</span> <span class="dv">2</span>, <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb60-18"><a href="#cb60-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(two_names)</span>
+<span id="cb60-19"><a href="#cb60-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb60-20"><a href="#cb60-20" aria-hidden="true" tabindex="-1"></a><span class="fu">full_join</span>(<span class="fu">mutate</span>(predicted_duplicates, <span class="at">predicted =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb60-21"><a href="#cb60-21" aria-hidden="true" tabindex="-1"></a>          <span class="fu">mutate</span>(duplicated_authors, <span class="at">duplicated_by_authors =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb60-22"><a href="#cb60-22" aria-hidden="true" tabindex="-1"></a>          <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cell_type&quot;</span>, <span class="st">&quot;gene&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb60-23"><a href="#cb60-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(predicted, duplicated_by_authors), \(v) <span class="fu">replace_na</span>(v, <span class="cn">FALSE</span>))) <span class="sc">|&gt;</span></span>
+<span id="cb60-24"><a href="#cb60-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(cell_type, gene, predicted, duplicated_by_authors) <span class="sc">|&gt;</span></span>
+<span id="cb60-25"><a href="#cb60-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(duplicated_by_authors), cell_type, gene) <span class="sc">|&gt;</span></span>
+<span id="cb60-26"><a href="#cb60-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="at">n =</span> <span class="dv">40</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 38 × 4
    cell_type   gene     predicted duplicated_by_authors
@@ -2911,9 +3077,9 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <h2 class="anchored" data-anchor-id="save-what-notebook-06-needs">11. Save what notebook 06 needs</h2>
 <p>Notebook 06 builds a clean mosaic from our selection and reruns MIIC on it. We save the recovered counts, the cell metadata, the matching between the authors’ rows and the cells, and the selection of protocol B+.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(<span class="fu">list</span>(<span class="at">counts =</span> counts, <span class="at">meta =</span> meta, <span class="at">match_cells =</span> match_cells,</span>
-<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">selection =</span> protocols[[<span class="st">&quot;B+&quot;</span>]][cell_types], <span class="at">lr_roles =</span> lr_roles),</span>
-<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a>        <span class="fu">file.path</span>(results_dir, <span class="st">&quot;rebuild_inputs.rds&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(<span class="fu">list</span>(<span class="at">counts =</span> counts, <span class="at">meta =</span> meta, <span class="at">match_cells =</span> match_cells,</span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">selection =</span> protocols[[<span class="st">&quot;B+&quot;</span>]][cell_types], <span class="at">lr_roles =</span> lr_roles),</span>
+<span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a>        <span class="fu">file.path</span>(results_dir, <span class="st">&quot;rebuild_inputs.rds&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="what-we-learned" class="level2">
@@ -2921,6 +3087,7 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <p><strong>Cells and counts: reproduced exactly.</strong> The authors’ input was built from CellChat’s example dataset <code>data_humanSkin</code>. Its matrix is log-normalised, but the normalisation can be undone exactly (the smallest value of each cell is a count of 1), and every row of the authors’ table is then one cell of the dataset, with the same counts for all genes, the same subtype and the same condition. The cells are in a random order, as <code>causalCCC.mosaic()</code> produces.</p>
 <p><strong>The wrapper cannot be run as is.</strong> <code>causalCCC.wrapper()</code> (commit <code>0aa8586</code>) fails with Seurat 5 (<code>slot</code> argument removed), cannot find ligands and receptors when given a data frame (it searches the cell names), and handles one sender and one receiver only, whereas case study 2 has three cell types. We call the gene selection function directly, with a one-word fix (<code>slot</code> → <code>layer</code>).</p>
 <p><strong>Gene selection: mostly reproduced.</strong> The best match is protocol B+: one wrapper run per sender → receiver direction (6 runs), with the ligands or receptors of that direction and both metadata (subtype, condition) as features of interest, and the default number of genes. It recovers 160 of the authors’ 174 selected genes (49/51 in T cells, 56/60 in fibroblasts, 55/63 in dendritic cells) and adds only 7 others (Jaccard index 0.89). Without the metadata, or with a single selection per cell type, the agreement is much lower (0.52 to 0.67). So the authors most likely ran the wrapper once per direction, including the metadata, and pooled the results.</p>
+<p><strong>Update (notebook 07).</strong> Protocol B+ is only an approximation. Notebook 07 shows that the authors’ selection is reproduced <strong>exactly</strong> (0 missing, 0 extra) with one run per direction, <strong>25 genes per run</strong> instead of the default, <strong>all</strong> the ligands or receptors of the direction as features of interest (no cap of 8), and the subtype metadata. The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the published wrapper.</p>
 <p><strong>The remaining differences</strong> are mostly genes close to the selection cut-off: the genes we miss and the genes we add have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). Possible causes are a different gene order in the authors’ Seurat object (MI is computed in blocks of 100 genes, together with conditioning on the other genes of the block, so the block composition can shift values slightly), a different order of the L-R pairs (only the first 8 ligands or receptors of a run are used), or a different version of the code.</p>
 <p><strong>The genes named in the paper</strong> (DCN, APOD, CFD in fibroblasts; GPR183, NR4A3, VIM in dendritic cells; FOS, JUNB in T cells) are all selected by protocol B+.</p>
 <p><strong>Duplicated genes.</strong> Pooling the six runs explains how a gene can get two names, but we could not reproduce exactly which 14 genes were duplicated. Whatever the cause, removing duplicates should be part of building a clean input.</p>
@@ -2933,7 +3100,7 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <section id="session-information" class="level2">
 <h2 class="anchored" data-anchor-id="session-information">Session information</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb62"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>R version 4.6.1 (2026-06-24)
 Platform: x86_64-pc-linux-gnu

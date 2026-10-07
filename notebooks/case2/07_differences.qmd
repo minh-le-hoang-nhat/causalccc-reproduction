@@ -462,9 +462,36 @@ Between that input and our input of notebook 06 (default settings, about 7 % dif
 orientations, and the gene selection mainly changes the links**. Figure 3 holds in the network without duplicates: the
 same distances for all the genes named in the paper, and CXCL12 → CFD is kept.
 
+**Summary: what changes what.**
+
+| Change made to the input | Effect on the links | Effect on the orientations |
+| --- | --- | --- |
+| Remove the 14 duplicated columns (same genes otherwise) | none (same 525 links, Jaccard 1) | 17 % of the links change status (none reversed); only 23 of the 30 genuine causations are shared |
+| Default selection settings instead of the authors' (about 7 % different genes) | links differ more (Jaccard 0.82) | 94 % of the shared links keep their orientation |
+
+The duplicated columns therefore act mainly on the **orientations**, and the gene selection mainly on the **links**.
+
 **What this means.** Case study 2 can be rebuilt exactly from public data, provided the selection settings above are
 used. The duplicated columns are an artefact of the authors' preparation: removing them changes no link but about one
 orientation in six, which confirms that MIIC's orientations are much more sensitive to the input than its links.
+
+**What we did not test.** We showed what *removing* the duplicates does to the authors' input. We did not do the
+opposite experiment, which is the direct test of our hypothesis: *adding* the duplicated columns to the input we rebuild,
+and checking that MIIC then returns the authors' network exactly. Logically it should: notebook 04 shows that MIIC on the
+authors' input gives their network, and Part 1 shows that our selection gives their genes. But this is not verified, for
+two reasons. First, we cannot predict which 14 genes are duplicated (the naming rule of notebook 05 finds 11 of them
+but also 24 that the authors do not have), so the test would have to copy their 14 columns, which is partly circular.
+Second, we have not checked that the order of the columns, which does not change the MI values, has no effect on the
+orientations that MIIC finds.
+
+We will not run it, because of the cost (about 3 hours of MIIC on one thread, the server's settings), but it is the
+experiment to do to confirm the hypothesis:
+
+1. take our rebuilt input (authors' settings: 25 genes per run, no cap of 8, `labels` as feature of interest);
+2. add the 14 duplicated columns, copied from the authors' table, in the authors' column order;
+3. run MIIC with the server's settings (`scripts/run_miic.R`, one thread, same seed);
+4. compare with the authors' network (links, orientations, genuine causations): if the duplicates are the only
+   difference, the two networks should be identical.
 
 **Questions for the authors.** How were the six wrapper runs pooled (origin of the duplicated columns)? Why 25 genes
 and no cap of 8, and are these the settings to use? Were the published L-R link strengths meant to come from a

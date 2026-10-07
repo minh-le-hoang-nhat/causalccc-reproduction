@@ -32,6 +32,29 @@ in `data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/` (read only).
 **Outputs:** `results/case2/05_rebuild_input/`: the MI tables (`mi_tables.rds`, about 30 minutes to compute the first
 time).
 
+### Two objects, the same cells
+
+Two objects are compared throughout this notebook: CellChat's example dataset (our source) and the authors' input table
+(our target). They describe the same 7,563 cells, but are very different:
+
+| | **CellChat object** (`data_humanSkin`) | **Authors' `input.tsv`** (mosaic table) |
+| --- | --- | --- |
+| **Content** | list with `data` (matrix) and `meta` (cell metadata) | a single table |
+| **Values** | **normalised**: log(1 + 10,000 × count / total count of the cell) | **raw counts** (UMI) |
+| **Dimensions** | 17,328 genes × 7,563 cells | 7,563 cells × 238 variables (232 genes + 6 metadata) |
+| **Genes** | all genes kept by CellChat | only the genes **selected** by `MIselection`, for each cell type |
+| **Orientation** | genes in rows, cells in columns | cells in rows, variables in columns |
+| **Cells** | the same 7,563 cells | the same 7,563 cells (in random order) |
+| **Missing values** | none | `NA` outside the genes of each cell type ("mosaic" format) |
+| **Duplicates** | none | 14 genes appear twice, under two names that differ by one suffix (notebook 03) |
+
+The CellChat object is the **source** and the input table is the **result** of the CausalCCC preprocessing:
+
+1. recover the raw counts by undoing the normalisation (section 1);
+2. build a Seurat object (section 3);
+3. select, for each cell type, the genes of interest by mutual information (`MIselection`, sections 4 to 8);
+4. assemble the mosaic: each cell type only has values for its own genes, `NA` elsewhere.
+
 ## Setup
 
 ```{r}
@@ -426,6 +449,38 @@ best
 best_selection <- protocols[[best$protocol[1]]]
 ```
 
+**Summary of the four protocols.** What each protocol does (left) and how close it gets to the authors' selection
+(right, summed over the three cell types; Jaccard = mean over cell types).
+
+```{r}
+#| label: protocol-summary
+
+protocol_design <- tribble(
+  ~protocol, ~selections,                              ~features_of_interest,                                     ~metadata_as_feature, ~pooling,
+  "A",       "1 per cell type (3)",                    "all its ligands and receptors",                           "no",                 "none",
+  "A+",      "1 per cell type (3)",                    "all its ligands and receptors",                           "yes",                "none",
+  "B",       "1 per sender → receiver direction (6)", "ligands (senders) or receptors (receivers) of the direction, first 8", "no",   "union over the directions of each cell type",
+  "B+",      "1 per sender → receiver direction (6)", "ligands (senders) or receptors (receivers) of the direction, first 8", "yes",  "union over the directions of each cell type"
+)
+
+protocol_results <- comparison |>
+  group_by(protocol) |>
+  summarise(authors_genes = sum(n_authors), recovered = sum(shared), missing = sum(missing), extra = sum(extra),
+            jaccard = round(mean(jaccard), 2), .groups = "drop") |>
+  mutate(recovered = paste0(recovered, " / ", authors_genes)) |>
+  select(-authors_genes)
+
+protocol_design |>
+  left_join(protocol_results, by = "protocol") |>
+  rename(`Protocol` = protocol, `Gene selections` = selections, `Features of interest` = features_of_interest,
+         `Metadata (subtype, condition) as features` = metadata_as_feature, `Pooling` = pooling,
+         `Authors' genes recovered` = recovered, `Missing` = missing, `Extra` = extra, `Jaccard` = jaccard) |>
+  knitr::kable()
+```
+
+All four protocols use the same MI tables and the same default number of genes, `max(15, min(4 × number of features,
+100))`. Only the way the features of interest are grouped and the use of the metadata change.
+
 ## 9. The genes we do not recover
 
 For the best protocol, the authors' selected genes we miss, with their rank among all genes by their highest MI with a
@@ -587,6 +642,12 @@ interest, and the default number of genes. It recovers 160 of the authors' 174 s
 in fibroblasts, 55/63 in dendritic cells) and adds only 7 others (Jaccard index 0.89). Without the metadata, or with a
 single selection per cell type, the agreement is much lower (0.52 to 0.67). So the authors most likely ran the
 wrapper once per direction, including the metadata, and pooled the results.
+
+**Update (notebook 07).** Protocol B+ is only an approximation. Notebook 07 shows that the authors' selection is
+reproduced **exactly** (0 missing, 0 extra) with one run per direction, **25 genes per run** instead of the default,
+**all** the ligands or receptors of the direction as features of interest (no cap of 8), and the subtype metadata.
+The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the
+published wrapper.
 
 **The remaining differences** are mostly genes close to the selection cut-off: the genes we miss and the genes we add
 have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). Possible
