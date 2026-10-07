@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-06">
+<meta name="dcterms.date" content="2026-10-07">
 
 <title>04 – Rerun MIIC on the authors’ input (case study 2)</title>
 <style>
@@ -2245,7 +2245,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 6, 2026</p>
+      <p class="date">October 7, 2026</p>
     </div>
   </div>
   
@@ -2261,7 +2261,7 @@ vertical-align: -.125em;
 <h2 class="anchored" data-anchor-id="goal">Goal</h2>
 <p>Notebook 02 showed that running <code>miic</code> ourselves on the authors’ case study 1 files gives exactly the network of the web server. Here we do the same test for case study 2, which is larger (238 variables, 7,563 cells, three cell types) and contains discrete metadata variables.</p>
 <p>The same three sources of difference as in notebook 02 apply: code version (our <code>miic</code> commit is two days younger than the server run of 21 January 2025), randomness of the confidence filter, and number of threads. The server used <strong>one thread</strong> here, and so do we.</p>
-<p><strong>Inputs:</strong> the authors’ files in <code>data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/</code> (read only). <strong>Outputs:</strong> <code>results/04_case2_rerun_miic/</code>: the full MIIC result (<code>miic_result.rds</code>) and our edge list (<code>edges_rerun.tsv</code>).</p>
+<p><strong>Inputs:</strong> the authors’ files in <code>data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/</code> (read only). <strong>Outputs:</strong> <code>results/case2/04_rerun_miic/</code>: the full MIIC result (<code>miic_result.rds</code>) and our edge list (<code>edges_rerun.tsv</code>).</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -2272,7 +2272,7 @@ vertical-align: -.125em;
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The server needed about three hours. The notebook saves the result the first time and reloads it afterwards. To force a new run, delete <code>results/04_case2_rerun_miic/miic_result.rds</code>.</p>
+<p>The server needed about three hours. The notebook saves the result the first time and reloads it afterwards. To force a new run, delete <code>results/case2/04_rerun_miic/miic_result.rds</code>.</p>
 </div>
 </div>
 </section>
@@ -2301,9 +2301,9 @@ loading &#39;miic&#39;</code></pre>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">file.path</span>(root, <span class="st">&quot;scripts&quot;</span>, <span class="st">&quot;helpers.R&quot;</span>))</span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>job_dir     <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;causalccc_server_w0788tM1wzXGHLzNaKKa&quot;</span>)</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;04_case2_rerun_miic&quot;</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;04_rerun_miic&quot;</span>)</span>
 <span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/download_case2.sh first.&quot;</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/case2/download_case2.sh first.&quot;</span>)</span>
 <span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(results_dir, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="fu">packageVersion</span>(<span class="st">&quot;miic&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -2388,7 +2388,7 @@ loading &#39;miic&#39;</code></pre>
 <span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(miic_result, result_file)</span>
 <span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>Loaded the saved result from /mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction/results/04_case2_rerun_miic/miic_result.rds</code></pre>
+<pre><code>Loaded the saved result from /mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction/results/case2/04_rerun_miic/miic_result.rds</code></pre>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">attr</span>(miic_result, <span class="st">&quot;run_time&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
@@ -2692,8 +2692,13 @@ $largest_gene_gene_link
 <li>confidence ratios slightly different (random shuffles with another seed, largest difference 0.008), with no effect on any decision.</li>
 </ul>
 <p>Our run took 2.8 hours on one thread, close to the server’s 3 hours.</p>
-<p><strong>L-R links.</strong> Unlike case study 1, the authors’ file was not edited afterwards: every L-R link has the strength of the strongest gene–gene link (11,579), in both files. That link joins two identical copies of S100A6 in fibroblasts (notebook 03, section 7), so with clean input the L-R links would get a different strength.</p>
-<p><strong>Bookkeeping.</strong> As in notebook 02, our version of <code>miic</code> lists each L-R pair twice (86 rows instead of 43). We remove the placeholder rows.</p>
+<p><strong>L-R links.</strong> Unlike case study 1, the authors’ file was not edited afterwards: every L-R link has the strength of the strongest gene–gene link (11,579), in both files. That strongest link is an artefact: it joins two identical copies of S100A6 in fibroblasts (notebook 03, section 7). Two identical columns share the maximum possible information, so MIIC links them as strongly as it can. Since the L-R links take the strength of the strongest link of the network, this artefact sets their value. With clean input (one column per gene), the artefact link would disappear, the maximum would be lower, and the L-R links would get a different strength.</p>
+<p><strong>Bookkeeping.</strong> As in notebook 02, our version of <code>miic</code> lists each L-R pair twice (86 rows instead of 43 pairs):</p>
+<ul>
+<li>a <em>placeholder</em> row written by the C++ core of <code>miic</code>, which only forces the pair into the network (strength 0, computed on 0 cells, no orientation);</li>
+<li>the <em>real</em> row added at the end by the <code>causalccc</code> branch (strength set to the network maximum, oriented ligand → receptor).</li>
+</ul>
+<p>The authors’ file contains only the real rows, so the code that ran on the server did not keep the placeholders. They carry no information: we remove them, which leaves 43 rows as in the authors’ file. Otherwise every L-R link would be counted twice, once with strength 0.</p>
 <p><strong>Paper’s statements.</strong> All the checks of notebook 03 give the same distances in our network.</p>
 <p><strong>What this means for the project.</strong> For both case studies, the MIIC step is reproducible from the authors’ files. Any difference between the published networks and a rebuilt analysis can only come from how the input files were prepared, which notebook 05 examines for case study 2.</p>
 </section>

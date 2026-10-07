@@ -371,11 +371,22 @@ edges_authors |>
 Our run took 2.8 hours on one thread, close to the server's 3 hours.
 
 **L-R links.** Unlike case study 1, the authors' file was not edited afterwards: every L-R link has the strength of the
-strongest gene–gene link (11,579), in both files. That link joins two identical copies of S100A6 in fibroblasts
-(notebook 03, section 7), so with clean input the L-R links would get a different strength.
+strongest gene–gene link (11,579), in both files. That strongest link is an artefact: it joins two identical copies of
+S100A6 in fibroblasts (notebook 03, section 7). Two identical columns share the maximum possible information, so MIIC
+links them as strongly as it can. Since the L-R links take the strength of the strongest link of the network, this
+artefact sets their value. With clean input (one column per gene), the artefact link would disappear, the maximum
+would be lower, and the L-R links would get a different strength.
 
-**Bookkeeping.** As in notebook 02, our version of `miic` lists each L-R pair twice (86 rows instead of 43). We remove
-the placeholder rows.
+**Bookkeeping.** As in notebook 02, our version of `miic` lists each L-R pair twice (86 rows instead of 43 pairs):
+
+- a *placeholder* row written by the C++ core of `miic`, which only forces the pair into the network (strength 0,
+  computed on 0 cells, no orientation);
+- the *real* row added at the end by the `causalccc` branch (strength set to the network maximum, oriented
+  ligand → receptor).
+
+The authors' file contains only the real rows, so the code that ran on the server did not keep the placeholders. They
+carry no information: we remove them, which leaves 43 rows as in the authors' file. Otherwise every L-R link would be
+counted twice, once with strength 0.
 
 **Paper's statements.** All the checks of notebook 03 give the same distances in our network.
 
