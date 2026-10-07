@@ -425,26 +425,53 @@ intracellular links away from CXCL12 in fibroblasts or from CXCR4 in dendritic c
 authors' network and for ours with `plot_neighbourhood()` (in `scripts/helpers.R`).
 
 How to read the drawings: diamonds are CXCL12 and the two CXCR4; colours are cell types; dashed lines are the given L-R
-links; an arrowhead is an orientation found by MIIC, and a green link a genuine causation; thicker links are stronger.
-The drawings are interactive: hover over a node or a link for details, click a node to highlight its neighbours, drag
-to rearrange, scroll to zoom.
+links (drawn thin, since their strength is set artificially); an arrowhead is an orientation found by MIIC, and a green
+link a genuine causation; thicker links are stronger. A star marks the duplicated columns of the authors' table
+(notebook 03), and "subtype" is the metadata `labels`. The drawings are interactive: hover over a node or a link for
+details, click a node to highlight its neighbours, drag to rearrange, scroll to zoom.
+
+```{r}
+#| label: drawing-inputs
+
+centres          <- c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell")
+lr_links_authors <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+copies_authors   <- duplicated_columns(mosaic_authors, row_type, column_cell_type(mosaic_authors, row_type))
+type_of_authors  <- set_names(type_of_key(key_of_authors), names(key_of_authors))
+type_of_ours     <- set_names(type_of_key(names(mosaic)), names(mosaic))
+label_authors    <- \(v) gene_label(v, copies_authors)
+```
 
 ```{r}
 #| label: fig-3c-authors
 
-centres <- c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell")
-
-plot_neighbourhood(edges_authors, link_name(lr_pairs$ligand, lr_pairs$receptor), centres,
-                   cell_type_of = set_names(type_of_key(key_of_authors), names(key_of_authors)),
-                   label_of = strip, title = "Authors' network")
+plot_neighbourhood(edges_authors, lr_links_authors, centres, type_of_authors, label_authors,
+                   title = "Authors' network")
 ```
 
 ```{r}
 #| label: fig-3c-ours
 
-plot_neighbourhood(edges_ours, lr_links, centres,
-                   cell_type_of = set_names(type_of_key(names(mosaic)), names(mosaic)),
-                   label_of = strip, title = "Our network (rebuilt input)")
+plot_neighbourhood(edges_ours, lr_links, centres, type_of_ours, gene_label,
+                   title = "Our network (rebuilt input)")
+```
+
+## 8. The full networks, drawn
+
+All retained links of each network, with the same conventions. With more than 200 variables the drawings are dense:
+zoom in, or click a gene to highlight its neighbours.
+
+```{r}
+#| label: full-authors
+
+network_data(edges_authors, lr_links_authors, type_of_authors, label_authors) |>
+  plot_network_interactive(title = "Authors' network (all links)", height = "800px")
+```
+
+```{r}
+#| label: full-ours
+
+network_data(edges_ours, lr_links, type_of_ours, gene_label) |>
+  plot_network_interactive(title = "Our network (all links)", height = "800px")
 ```
 
 ## What we learned

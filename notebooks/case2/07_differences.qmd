@@ -354,6 +354,87 @@ tribble(~centre,              ~gene,
 neighbors_of("CXCL12_Fibroblasts", intracellular_dedup)
 ```
 
+## 6. The Figure 3C neighbourhood in the three networks
+
+The same drawing as in notebook 06 (section 7, where the conventions are explained), for the three networks side by
+side: the authors', the authors' without duplicated columns, and ours from notebook 06. A star marks the duplicated
+columns of the authors' table.
+
+```{r}
+#| label: drawing-inputs
+
+centres         <- c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell")
+type_of_authors <- set_names(str_extract(key_of, "(Fibroblasts|T_cell|DCs)$"), names(key_of))
+type_of_ours    <- set_names(str_extract(names(key_of_ours), "(Fibroblasts|T_cell|DCs)$"), names(key_of_ours))
+lr_links_ours   <- lr_links_authors   # our L-R variables have the same names as the authors' (notebook 06, section 3)
+
+drawings <- list(
+  authors = network_data(edges_authors, lr_links_authors, type_of_authors, \(v) gene_label(v, dropped), centres),
+  authors_without_duplicates = network_data(edges_dedup, lr_links_authors, type_of_authors, gene_label, centres),
+  ours = network_data(edges_ours, lr_links_ours, type_of_ours, gene_label, centres)
+)
+titles <- c(authors = "Authors' network", authors_without_duplicates = "Authors' input without duplicated columns",
+            ours = "Our rebuilt input (notebook 06)")
+
+map_int(drawings, \(d) nrow(d$nodes))
+```
+
+```{r}
+#| label: fig-3c-authors
+plot_network_interactive(drawings$authors, title = titles[["authors"]])
+```
+
+```{r}
+#| label: fig-3c-dedup
+plot_network_interactive(drawings$authors_without_duplicates, title = titles[["authors_without_duplicates"]])
+```
+
+```{r}
+#| label: fig-3c-ours
+plot_network_interactive(drawings$ours, title = titles[["ours"]])
+```
+
+## 7. Figures for the slides
+
+Interactive drawings cannot go into slides, so we also draw the networks as PNG files (same conventions, fixed layout)
+in `results/figures/case2/`: the Figure 3C neighbourhood of the three networks, and the full networks.
+
+```{r}
+#| label: png-figures
+#| fig-width: 9
+#| fig-height: 8
+
+figures_dir <- file.path(root, "results", "figures", "case2")
+dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
+
+for (name in names(drawings)) {
+  figure <- plot_network_static(drawings[[name]], title = paste("Figure 3C neighbourhood –", titles[[name]]))
+  ggsave(file.path(figures_dir, paste0("fig3c_", name, ".png")), figure, width = 9, height = 8, dpi = 300)
+  print(figure)
+}
+```
+
+```{r}
+#| label: png-full-networks
+#| fig-width: 14
+#| fig-height: 13
+
+full_networks <- list(
+  authors = network_data(edges_authors, lr_links_authors, type_of_authors, \(v) gene_label(v, dropped)),
+  authors_without_duplicates = network_data(edges_dedup, lr_links_authors, type_of_authors, gene_label),
+  ours = network_data(edges_ours, lr_links_ours, type_of_ours, gene_label)
+)
+
+for (name in names(full_networks)) {
+  figure <- plot_network_static(full_networks[[name]], title = paste("Full network –", titles[[name]]),
+                                label_size = 1.6)
+  ggsave(file.path(figures_dir, paste0("full_network_", name, ".png")), figure, width = 14, height = 13, dpi = 300)
+}
+print(figure)   # the last one (ours), as an example
+
+list.files(figures_dir)
+```
+
 ## What we learned
 
 **Gene selection: the cause is found.** The code version is not the cause (the public code did not change), and

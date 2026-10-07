@@ -96,49 +96,148 @@ select_genes <- function(mi, foi, n_genes, bit_threshold = 0.001) {
 # Default number of genes of causalCCC.MIselection()
 default_n_genes <- function(goi) max(15, min(length(goi) * 4, 100))
 
-# Interactive drawing of the neighbourhood of some nodes, like Figure 3C of the paper (requires visNetwork).
+# ---- Drawing networks -------------------------------------------------------------------------------------------
+# Three functions: network_data() chooses the nodes and links to draw; plot_network_interactive() draws them with
+# visNetwork (in the HTML notebooks); plot_network_static() draws them with ggplot2 (PNG files for slides).
+# Conventions in both drawings: colour = cell type; diamonds = centres; dashed = given L-R link; arrowhead =
+# orientation found by MIIC (infOrt); green = genuine causation; thicker = stronger link (info_shifted).
+
+cell_type_colours <- c(Fibroblasts = "#b5d99c", T_cell = "#f2c57c", DCs = "#9cc3e6")
+
+# Label of a variable in the drawings: gene without cell-type suffixes, "subtype" for the labels metadata,
+# and a star for the variables listed in `copies` (e.g. the duplicated columns of the authors' table)
+gene_label <- function(v, copies = character()) {
+  label <- str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+  label <- if_else(label == "labels", "subtype", label)
+  if_else(v %in% copies, paste0(label, "*"), label)
+}
+
+# Columns of a mosaic table identical to an earlier column of the same cell type (notebook 03, section 3)
+duplicated_columns <- function(mosaic, row_type, col_type) {
+  unlist(map(unique(col_type), \(t) {
+    block <- mosaic[row_type == t, col_type == t]
+    names(block)[duplicated(as.list(block))]
+  }))
+}
+cell_type_borders <- c(Fibroblasts = "#4f7a28", T_cell = "#a8742a", DCs = "#2f6491")
+
 # edges: MIIC edge list (x, y, type, infOrt, is_causal, info_shifted); lr_links: link_name() of the L-R pairs;
-# centres: the nodes around which to draw; cell_type_of: named vector giving the cell type of each variable;
-# label_of: function turning a variable name into the label shown.
-# Nodes: all variables within max_distance intracellular links of a centre (diamonds = centres), coloured by cell type.
-# Links: all retained links among these nodes, plus the L-R links between centres (dashed). Arrowheads follow MIIC's
-# orientation (infOrt); genuine causations in green; width grows with the strength of the link (info_shifted).
-plot_neighbourhood <- function(edges, lr_links, centres, cell_type_of, label_of = identity,
-                               max_distance = 2, title = NULL, seed = 1) {
-  retained      <- edges |> filter(type == "P")
-  intracellular <- retained |> filter(!link_name(x, y) %in% lr_links)
-  keep <- unique(unlist(map(centres, \(centre) {
-    d <- graph_distance(intracellular, centre)
-    names(d)[d <= max_distance]
-  })))
+# cell_type_of: named vector giving the cell type of each variable; label_of: function turning a variable name into
+# its label. With centres = NULL: the whole network. Otherwise: the variables within max_distance intracellular links
+# of a centre, the retained links among them, and the L-R links between centres (like Figure 3C of the paper).
+network_data <- function(edges, lr_links, cell_type_of, label_of = identity, centres = NULL, max_distance = 2) {
+  retained <- edges |>
+    filter(type == "P") |>
+    mutate(is_lr = link_name(x, y) %in% lr_links)
 
-  links <- retained |>
-    filter(x %in% keep, y %in% keep) |>
-    mutate(is_lr = link_name(x, y) %in% lr_links) |>
-    filter(!is_lr | (x %in% centres & y %in% centres))
+  if (is.null(centres)) {
+    keep  <- unique(c(retained$x, retained$y))
+    links <- retained
+  } else {
+    intracellular <- retained |> filter(!is_lr)
+    keep <- unique(unlist(map(centres, \(centre) {
+      d <- graph_distance(intracellular, centre)
+      names(d)[d <= max_distance]
+    })))
+    links <- retained |>
+      filter(x %in% keep, y %in% keep) |>
+      filter(!is_lr | (x %in% centres & y %in% centres))
+  }
+
   strongest <- max(links$info_shifted[!links$is_lr])
+  list(
+    nodes = tibble(id = keep, label = label_of(keep), cell_type = unname(cell_type_of[keep]),
+                   is_centre = keep %in% centres),
+    links = links |>
+      transmute(from = x, to = y, infOrt, is_causal, is_lr, info_shifted,
+                # 0 to 1; L-R links drawn thin, since their strength is set artificially (notebook 04, section 6)
+                strength = if_else(is_lr, 0.15, pmin(info_shifted / strongest, 1)))
+  )
+}
 
-  nodes <- tibble(id = keep) |>
-    mutate(label = label_of(id),
-           group = unname(cell_type_of[id]),
-           shape = if_else(id %in% centres, "diamond", "dot"),
-           size  = if_else(id %in% centres, 25, 12),
-           title = id)
-
-  vis_edges <- links |>
-    transmute(from = x, to = y,
+plot_network_interactive <- function(net, title = NULL, seed = 1, height = "600px") {
+  nodes <- net$nodes |>
+    transmute(id, label, group = cell_type, title = id,
+              shape = if_else(is_centre, "diamond", "dot"),
+              size  = if_else(is_centre, 25, 12))
+  edges <- net$links |>
+    transmute(from, to,
               arrows = case_when(infOrt == 2 ~ "to", infOrt == -2 ~ "from", infOrt == 6 ~ "to;from", .default = ""),
               dashes = is_lr,
               color  = if_else(is_causal == "Y", "#2e7d32", "#9e9e9e"),
-              width  = 1 + 5 * pmin(info_shifted / strongest, 1),
-              title  = paste0(x, " — ", y, "<br>strength (info_shifted): ", round(info_shifted),
+              width  = 1 + 5 * strength,
+              title  = paste0(from, " — ", to, "<br>strength (info_shifted): ", round(info_shifted),
                               "<br>orientation (infOrt): ", infOrt, "<br>genuine causation: ", is_causal))
 
-  visNetwork::visNetwork(nodes, vis_edges, main = title, width = "100%", height = "600px") |>
-    visNetwork::visGroups(groupname = "Fibroblasts", color = list(background = "#b5d99c", border = "#4f7a28")) |>
-    visNetwork::visGroups(groupname = "T_cell", color = list(background = "#f2c57c", border = "#a8742a")) |>
-    visNetwork::visGroups(groupname = "DCs", color = list(background = "#9cc3e6", border = "#2f6491")) |>
+  plot <- visNetwork::visNetwork(nodes, edges, main = title, width = "100%", height = height)
+  for (t in names(cell_type_colours)) {
+    plot <- visNetwork::visGroups(plot, groupname = t,
+                                  color = list(background = cell_type_colours[[t]], border = cell_type_borders[[t]]))
+  }
+  plot <- plot |>
     visNetwork::visLegend(position = "right", main = "cell type") |>
-    visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1)) |>
-    visNetwork::visLayout(randomSeed = seed)
+    visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1))
+  # Large networks: a precomputed layout (igraph) instead of the slow physics simulation of the browser
+  if (nrow(nodes) > 80) {
+    visNetwork::visIgraphLayout(plot, layout = "layout_with_fr", randomSeed = seed)
+  } else {
+    visNetwork::visLayout(plot, randomSeed = seed)
+  }
+}
+
+plot_network_static <- function(net, title = NULL, seed = 1, label_size = 3) {
+  graph <- igraph::graph_from_data_frame(select(net$links, from, to), directed = FALSE,
+                                         vertices = select(net$nodes, id))
+  set.seed(seed)
+  xy <- igraph::layout_with_fr(graph)
+  xy <- (xy - min(xy)) / (max(xy) - min(xy))   # scale to 0-1
+  pos <- tibble(id = igraph::V(graph)$name, px = xy[, 1], py = xy[, 2])
+
+  # Segments shortened at both ends so that arrowheads stop at the edge of the nodes;
+  # every oriented link is drawn from its tail to its head
+  gap <- 0.012
+  segments <- net$links |>
+    left_join(rename(pos, from = id, x0 = px, y0 = py), by = "from") |>
+    left_join(rename(pos, to = id, x1 = px, y1 = py), by = "to") |>
+    mutate(swap = infOrt == -2,
+           xa = if_else(swap, x1, x0), ya = if_else(swap, y1, y0),
+           xb = if_else(swap, x0, x1), yb = if_else(swap, y0, y1),
+           len = sqrt((xb - xa)^2 + (yb - ya)^2), ux = (xb - xa) / len, uy = (yb - ya) / len,
+           xa = xa + gap * ux, ya = ya + gap * uy, xb = xb - gap * ux, yb = yb - gap * uy,
+           kind = case_when(abs(infOrt) == 2 ~ "oriented", infOrt == 6 ~ "bidirected", .default = "none"),
+           colour = if_else(is_causal == "Y", "genuine causation", "other"),
+           linetype = if_else(is_lr, "L-R link (given)", "learnt link"))
+
+  nodes <- net$nodes |> left_join(pos, by = "id")
+  head_one  <- grid::arrow(length = grid::unit(1.6, "mm"), type = "closed")
+  head_both <- grid::arrow(length = grid::unit(1.6, "mm"), type = "closed", ends = "both")
+  segment_aes <- aes(x = xa, y = ya, xend = xb, yend = yb, colour = colour, linetype = linetype, linewidth = strength)
+
+  ggplot() +
+    geom_segment(data = filter(segments, kind == "none"), segment_aes, alpha = 0.7) +
+    geom_segment(data = filter(segments, kind == "oriented"), segment_aes, arrow = head_one) +
+    geom_segment(data = filter(segments, kind == "bidirected"), segment_aes, arrow = head_both) +
+    geom_point(data = nodes, aes(x = px, y = py, fill = cell_type, shape = is_centre, size = is_centre),
+               colour = "grey20", stroke = 0.4) +
+    ggrepel::geom_text_repel(data = nodes, aes(x = px, y = py, label = label), size = label_size,
+                             max.overlaps = Inf, segment.colour = "grey70", segment.size = 0.2, seed = seed) +
+    scale_fill_manual(values = cell_type_colours, name = "cell type") +
+    scale_shape_manual(values = c("FALSE" = 21, "TRUE" = 23), guide = "none") +
+    scale_size_manual(values = c("FALSE" = 2.5, "TRUE" = 5), guide = "none") +
+    scale_colour_manual(values = c("genuine causation" = "#2e7d32", "other" = "grey60"), name = NULL) +
+    scale_linetype_manual(values = c("L-R link (given)" = "dashed", "learnt link" = "solid"), name = NULL) +
+    scale_linewidth(range = c(0.2, 1.2), guide = "none") +
+    guides(fill = guide_legend(override.aes = list(shape = 21, size = 4))) +
+    coord_equal(clip = "off") +
+    labs(title = title) +
+    theme_void() +
+    theme(plot.background = element_rect(fill = "white", colour = NA), legend.position = "bottom",
+          plot.title = element_text(face = "bold"))
+}
+
+# Shortcut kept for notebook 06: interactive drawing of the neighbourhood of `centres`
+plot_neighbourhood <- function(edges, lr_links, centres, cell_type_of, label_of = identity,
+                               max_distance = 2, title = NULL, seed = 1) {
+  network_data(edges, lr_links, cell_type_of, label_of, centres, max_distance) |>
+    plot_network_interactive(title = title, seed = seed)
 }
