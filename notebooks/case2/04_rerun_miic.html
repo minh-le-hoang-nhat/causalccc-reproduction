@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-07">
+<meta name="dcterms.date" content="2026-10-08">
 
 <title>04 – Rerun MIIC on the authors’ input (case study 2)</title>
 <style>
@@ -2245,7 +2245,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 7, 2026</p>
+      <p class="date">October 8, 2026</p>
     </div>
   </div>
   
@@ -2359,6 +2359,110 @@ loading &#39;miic&#39;</code></pre>
 <section id="run-miic-or-reload-the-saved-result" class="level2">
 <h2 class="anchored" data-anchor-id="run-miic-or-reload-the-saved-result">3. Run MIIC (or reload the saved result)</h2>
 <p>The same call as in notebook 02, except <code>n_threads = 1</code> to match the server.</p>
+<p>The settings are those of the CausalCCC web server (file <code>script.sh</code> of the job), <strong>not</strong> the defaults of <code>miic()</code>. The table lists all of them next to the defaults of the <code>miic</code> version we use (2.0.3). Most are the same; the three in bold are the ones that differ.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Server option (<code>script.sh</code>)</th>
+<th><code>miic()</code> argument</th>
+<th>Server value</th>
+<th><code>miic()</code> default</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>--complexity</code></td>
+<td><code>cplx</code></td>
+<td><code>nml</code></td>
+<td><code>nml</code></td>
+</tr>
+<tr class="even">
+<td><code>--orientation</code></td>
+<td><code>orientation</code></td>
+<td><code>TRUE</code></td>
+<td><code>TRUE</code></td>
+</tr>
+<tr class="odd">
+<td><code>--latent_variables</code></td>
+<td><code>latent</code></td>
+<td><code>orientation</code></td>
+<td><code>orientation</code></td>
+</tr>
+<tr class="even">
+<td><code>--test_MAR</code></td>
+<td><code>test_mar</code></td>
+<td><code>TRUE</code></td>
+<td><code>TRUE</code></td>
+</tr>
+<tr class="odd">
+<td><code>--consistency</code></td>
+<td><code>consistent</code></td>
+<td><code>no</code></td>
+<td><code>no</code></td>
+</tr>
+<tr class="even">
+<td><code>--eff_n</code></td>
+<td><code>n_eff</code></td>
+<td><code>-1</code></td>
+<td><code>-1</code></td>
+</tr>
+<tr class="odd">
+<td><code>--negative_info</code></td>
+<td><code>negative_info</code></td>
+<td><code>no</code></td>
+<td><code>FALSE</code></td>
+</tr>
+<tr class="even">
+<td><code>--consensus_threshold</code></td>
+<td><code>consensus_threshold</code></td>
+<td><code>0.8</code></td>
+<td><code>0.8</code></td>
+</tr>
+<tr class="odd">
+<td><code>--max_iteration</code></td>
+<td><code>max_iteration</code></td>
+<td><code>100</code></td>
+<td><code>100</code></td>
+</tr>
+<tr class="even">
+<td><code>--n_threads</code></td>
+<td><code>n_threads</code></td>
+<td><code>1</code></td>
+<td><code>1</code></td>
+</tr>
+<tr class="odd">
+<td><strong><code>--orient_probab_ratio</code></strong></td>
+<td><strong><code>ori_proba_ratio</code></strong></td>
+<td><strong><code>0.01</code></strong></td>
+<td><strong><code>1</code></strong></td>
+</tr>
+<tr class="even">
+<td><strong><code>--conf_shuffle</code></strong></td>
+<td><strong><code>n_shuffles</code></strong></td>
+<td><strong><code>100</code></strong></td>
+<td><strong><code>0</code></strong></td>
+</tr>
+<tr class="odd">
+<td><strong><code>--conf_ratio</code></strong></td>
+<td><strong><code>conf_threshold</code></strong></td>
+<td><strong><code>0.01</code></strong></td>
+<td><strong><code>0</code></strong></td>
+</tr>
+</tbody>
+</table>
+<p>The three differences:</p>
+<ul>
+<li><strong><code>n_shuffles = 100</code></strong>: the server computes a <em>confidence ratio</em> for each link by shuffling the data 100 times; <code>miic</code> does not by default.</li>
+<li><strong><code>conf_threshold = 0.01</code></strong>: links whose confidence ratio is above 0.01 are discarded; by default no link is filtered this way.</li>
+<li><strong><code>ori_proba_ratio = 0.01</code></strong>: the threshold on the orientation probabilities is much lower than the default.</li>
+</ul>
+<p>These three settings change which links are kept and how they are oriented, so they must be copied to reproduce the authors’ network. In addition, the 43 L-R pairs are given as <code>interact_edges</code> (links imposed in the network). The script sets no random seed: we use <code>set.seed(2026)</code>, which only affects the shuffles.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>result_file <span class="ot">&lt;-</span> <span class="fu">file.path</span>(results_dir, <span class="st">&quot;miic_result.rds&quot;</span>)</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>

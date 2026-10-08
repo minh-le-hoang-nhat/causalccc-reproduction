@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-06">
+<meta name="dcterms.date" content="2026-10-08">
 
 <title>03 – Explore the CausalCCC authors’ files (case study 2)</title>
 <style>
@@ -2245,7 +2245,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 6, 2026</p>
+      <p class="date">October 8, 2026</p>
     </div>
   </div>
   
@@ -2259,7 +2259,7 @@ vertical-align: -.125em;
 
 <section id="goal" class="level2">
 <h2 class="anchored" data-anchor-id="goal">Goal</h2>
-<p>This notebook does for case study 2 (Figure 3 and Supplementary Figure S1 of the paper) what notebook 01 did for case study 1. The files were downloaded by <code>scripts/download_case2.sh</code> from the web server job <code>w0788tM1wzXGHLzNaKKa</code> (sources in <code>data/README.md</code>). We want to understand:</p>
+<p>This notebook does for case study 2 (Figure 3 and Supplementary Figure S1 of the paper) what notebook 01 did for case study 1. The files were downloaded by <code>scripts/case2/download_case2.sh</code> from the web server job <code>w0788tM1wzXGHLzNaKKa</code> (sources in <code>data/README.md</code>). We want to understand:</p>
 <ol type="1">
 <li>what the authors gave CausalCCC: the mosaic table, the variable list, the L-R pairs, the settings;</li>
 <li>what CausalCCC returned;</li>
@@ -2283,7 +2283,7 @@ vertical-align: -.125em;
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">file.path</span>(root, <span class="st">&quot;scripts&quot;</span>, <span class="st">&quot;helpers.R&quot;</span>))</span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>job_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case2&quot;</span>, <span class="st">&quot;causalccc_server_w0788tM1wzXGHLzNaKKa&quot;</span>)</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/download_case2.sh first.&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/case2/download_case2.sh first.&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="read-the-files" class="level2">
@@ -2694,6 +2694,39 @@ vertical-align: -.125em;
 </div>
 </div>
 <p>Links within a cell type are learnt from the cells of that type only; the 43 L-R links are given, not learnt (<code>Nxy_ai</code> is <code>NA</code>).</p>
+<p><strong>What MIIC reports for each link.</strong> Three levels of evidence, from weakest to strongest, should not be confused:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Level</th>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Link present</strong></td>
+<td><code>type = P</code></td>
+<td>the two genes are dependent, even after conditioning on the other genes</td>
+</tr>
+<tr class="even">
+<td><strong>Oriented</strong></td>
+<td><code>infOrt = 2</code> or <code>-2</code></td>
+<td>MIIC found a likely direction (x → y or y → x)</td>
+</tr>
+<tr class="odd">
+<td><strong>Genuine causation</strong></td>
+<td><code>is_causal = Y</code></td>
+<td>MIIC considers the edge a genuine cause–effect relation; the paper draws it with a green arrowhead</td>
+</tr>
+</tbody>
+</table>
+<p>Two other values of <code>infOrt</code>: <code>1</code> = not oriented, <code>6</code> = bidirected (a possible sign of a hidden common cause). A link can be oriented without being a genuine causation: this is the case of CXCL12 → CFD below. Most links are not oriented, and only a minority are genuine causations.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>network <span class="sc">|&gt;</span></span>
 <span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">orientation =</span> <span class="fu">case_when</span>(infOrt <span class="sc">==</span>  <span class="dv">1</span> <span class="sc">~</span> <span class="st">&quot;not oriented&quot;</span>,</span>

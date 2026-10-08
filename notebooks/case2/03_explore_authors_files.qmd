@@ -327,6 +327,18 @@ count(network, category, cells_used = Nxy_ai)
 Links within a cell type are learnt from the cells of that type only; the 43 L-R links are given, not learnt
 (`Nxy_ai` is `NA`).
 
+**What MIIC reports for each link.** Three levels of evidence, from weakest to strongest, should not be confused:
+
+| Level | Column | Meaning |
+| --- | --- | --- |
+| **Link present** | `type = P` | the two genes are dependent, even after conditioning on the other genes |
+| **Oriented** | `infOrt = 2` or `-2` | MIIC found a likely direction (x → y or y → x) |
+| **Genuine causation** | `is_causal = Y` | MIIC considers the edge a genuine cause–effect relation; the paper draws it with a green arrowhead |
+
+Two other values of `infOrt`: `1` = not oriented, `6` = bidirected (a possible sign of a hidden common cause). A link can
+be oriented without being a genuine causation: this is the case of CXCL12 → CFD below. Most links are not oriented, and
+only a minority are genuine causations.
+
 ```{r}
 #| label: orientation
 

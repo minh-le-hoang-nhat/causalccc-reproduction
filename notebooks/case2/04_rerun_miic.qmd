@@ -108,6 +108,38 @@ sort(distinct_with_na[state_order$var_names[state_order$var_type == 1]]) |> head
 
 The same call as in notebook 02, except `n_threads = 1` to match the server.
 
+The settings are those of the CausalCCC web server (file `script.sh` of the job), **not** the defaults of `miic()`.
+The table lists all of them next to the defaults of the `miic` version we use (2.0.3). Most are the same; the three
+in bold are the ones that differ.
+
+| Server option (`script.sh`) | `miic()` argument | Server value | `miic()` default |
+| --- | --- | --- | --- |
+| `--complexity` | `cplx` | `nml` | `nml` |
+| `--orientation` | `orientation` | `TRUE` | `TRUE` |
+| `--latent_variables` | `latent` | `orientation` | `orientation` |
+| `--test_MAR` | `test_mar` | `TRUE` | `TRUE` |
+| `--consistency` | `consistent` | `no` | `no` |
+| `--eff_n` | `n_eff` | `-1` | `-1` |
+| `--negative_info` | `negative_info` | `no` | `FALSE` |
+| `--consensus_threshold` | `consensus_threshold` | `0.8` | `0.8` |
+| `--max_iteration` | `max_iteration` | `100` | `100` |
+| `--n_threads` | `n_threads` | `1` | `1` |
+| **`--orient_probab_ratio`** | **`ori_proba_ratio`** | **`0.01`** | **`1`** |
+| **`--conf_shuffle`** | **`n_shuffles`** | **`100`** | **`0`** |
+| **`--conf_ratio`** | **`conf_threshold`** | **`0.01`** | **`0`** |
+
+The three differences:
+
+- **`n_shuffles = 100`**: the server computes a *confidence ratio* for each link by shuffling the data 100 times; `miic`
+  does not by default.
+- **`conf_threshold = 0.01`**: links whose confidence ratio is above 0.01 are discarded; by default no link is filtered
+  this way.
+- **`ori_proba_ratio = 0.01`**: the threshold on the orientation probabilities is much lower than the default.
+
+These three settings change which links are kept and how they are oriented, so they must be copied to reproduce the
+authors' network. In addition, the 43 L-R pairs are given as `interact_edges` (links imposed in the network). The
+script sets no random seed: we use `set.seed(2026)`, which only affects the shuffles.
+
 ```{r}
 #| label: run-miic
 
