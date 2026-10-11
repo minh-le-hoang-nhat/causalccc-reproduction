@@ -1,0 +1,113 @@
+var_names	var_type	levels_increasing_order	is_contextual	group	group_color
+H2-D1	1		0	ligands	73C1B9
+H2-K1	1		0	ligands	73C1B9
+H2-M3	1		0	ligands	73C1B9
+H2-Q4	1		0	ligands	73C1B9
+H2-Q6	1		0	ligands	73C1B9
+H2-Q7	1		0	ligands	73C1B9
+Tgfb1	0		0	ligands	73C1B9
+Sell	1		0	ligands	73C1B9
+Cxcl10	1		0	ligands	73C1B9
+Cd86	1		0	ligands	73C1B9
+B2m_senders	1		0	senders genes	DFE6D0
+Irf7	1		0	senders genes	DFE6D0
+Ifi27l2b_senders	1		0	senders genes	DFE6D0
+Shisa5	1		0	senders genes	DFE6D0
+Pigs	1		0	senders genes	DFE6D0
+Gbp2	1		0	senders genes	DFE6D0
+Trim30c	1		0	senders genes	DFE6D0
+Gm15200	1		0	senders genes	DFE6D0
+Pxn	1		0	senders genes	DFE6D0
+Ly6c2_senders	1		0	senders genes	DFE6D0
+Flna	1		0	senders genes	DFE6D0
+Tubb4	0		0	senders genes	DFE6D0
+Gm10269	1		0	senders genes	DFE6D0
+Pyhin1	1		0	senders genes	DFE6D0
+Samhd1	1		0	senders genes	DFE6D0
+Ifit1	1		0	senders genes	DFE6D0
+Isg20	1		0	senders genes	DFE6D0
+Ly6a_senders	1		0	senders genes	DFE6D0
+Stat1	1		0	senders genes	DFE6D0
+Bst2	1		0	senders genes	DFE6D0
+Ifi27l2a	1		0	senders genes	DFE6D0
+Rps20_senders	1		0	senders genes	DFE6D0
+Rps15a_senders	1		0	senders genes	DFE6D0
+Rps24_senders	1		0	senders genes	DFE6D0
+Ly6e	1		0	senders genes	DFE6D0
+Rplp1_senders	1		0	senders genes	DFE6D0
+Rps14_senders	1		0	senders genes	DFE6D0
+Rps5	1		0	senders genes	DFE6D0
+Rpl18a	1		0	senders genes	DFE6D0
+mmu-mir-703	1		0	senders genes	DFE6D0
+Rnf213	1		0	senders genes	DFE6D0
+Gm13048_senders	1		0	senders genes	DFE6D0
+Rpl34	1		0	senders genes	DFE6D0
+Gm5244_senders	1		0	senders genes	DFE6D0
+H2-T23_senders	1		0	senders genes	DFE6D0
+Ifit3	1		0	senders genes	DFE6D0
+Hspa8	1		0	senders genes	DFE6D0
+Ms4a4b	1		0	senders genes	DFE6D0
+Psmb8	1		0	senders genes	DFE6D0
+Isg15	1		0	senders genes	DFE6D0
+Gm13456	1		0	senders genes	DFE6D0
+Rplp0_senders	1		0	senders genes	DFE6D0
+Slfn1	1		0	senders genes	DFE6D0
+Rps11	1		0	senders genes	DFE6D0
+Eef1a1	1		0	senders genes	DFE6D0
+Rpl32_senders	1		0	senders genes	DFE6D0
+H2-T22	1		0	senders genes	DFE6D0
+Gm11361_senders	1		0	senders genes	DFE6D0
+Ly6c1	1		0	senders genes	DFE6D0
+Gm16238	1		0	senders genes	DFE6D0
+Cd8a	1		0	receptors	EAAE9F
+Tgfbr2	1		0	receptors	EAAE9F
+Selplg	1		0	receptors	EAAE9F
+Cxcr3	1		0	receptors	EAAE9F
+Cd28	1		0	receptors	EAAE9F
+Klrd1	1		0	receptors	EAAE9F
+Itgb1	1		0	receptors	EAAE9F
+Dpp4	1		0	receptors	EAAE9F
+Rps18	1		0	receivers genes	F3E0BF
+Rps20_receivers	1		0	receivers genes	F3E0BF
+Rplp0_receivers	1		0	receivers genes	F3E0BF
+Rps12	1		0	receivers genes	F3E0BF
+Arhgap11a	0		0	receivers genes	F3E0BF
+Gm15773	0		0	receivers genes	F3E0BF
+Rpl13a	1		0	receivers genes	F3E0BF
+Actb	1		0	receivers genes	F3E0BF
+Rplp2	1		0	receivers genes	F3E0BF
+Rpsa	1		0	receivers genes	F3E0BF
+Ccl5	1		0	receivers genes	F3E0BF
+Tmsb4x	1		0	receivers genes	F3E0BF
+Actr3	1		0	receivers genes	F3E0BF
+Cd3g	1		0	receivers genes	F3E0BF
+Rps15a_receivers	1		0	receivers genes	F3E0BF
+Gm13048_receivers	1		0	receivers genes	F3E0BF
+Rplp1_receivers	1		0	receivers genes	F3E0BF
+Nudt9	1		0	receivers genes	F3E0BF
+C1qtnf6	0		0	receivers genes	F3E0BF
+Ly6a_receivers	1		0	receivers genes	F3E0BF
+Ifi27l2b_receivers	1		0	receivers genes	F3E0BF
+H2-T23_receivers	1		0	receivers genes	F3E0BF
+Gm10076	1		0	receivers genes	F3E0BF
+Rps14_receivers	1		0	receivers genes	F3E0BF
+Rps21	1		0	receivers genes	F3E0BF
+Rps9	1		0	receivers genes	F3E0BF
+Rpl37a	1		0	receivers genes	F3E0BF
+Gm11361_receivers	1		0	receivers genes	F3E0BF
+B2m_receivers	1		0	receivers genes	F3E0BF
+Rpl26	1		0	receivers genes	F3E0BF
+Rplp2-ps1	1		0	receivers genes	F3E0BF
+Cd52	1		0	receivers genes	F3E0BF
+Gm11942	1		0	receivers genes	F3E0BF
+Gm11263	1		0	receivers genes	F3E0BF
+Rps3	1		0	receivers genes	F3E0BF
+Rpl32_receivers	1		0	receivers genes	F3E0BF
+Rps19	1		0	receivers genes	F3E0BF
+Rps26	1		0	receivers genes	F3E0BF
+Gm5244_receivers	1		0	receivers genes	F3E0BF
+Ly6c2_receivers	1		0	receivers genes	F3E0BF
+Rps10	1		0	receivers genes	F3E0BF
+Gm15772	1		0	receivers genes	F3E0BF
+Rpl13	1		0	receivers genes	F3E0BF
+Rps24_receivers	1		0	receivers genes	F3E0BF
