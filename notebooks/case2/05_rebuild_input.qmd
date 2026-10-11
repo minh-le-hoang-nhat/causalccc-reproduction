@@ -1,0 +1,676 @@
+---
+title: "05 – Rebuild the CausalCCC input from the public data (case study 2)"
+subtitle: "From CellChat's data_humanSkin to the mosaic table: do we select the same genes as the authors?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 04 reran MIIC on the authors' input files. Here we go one step upstream: starting from public data, can we
+rebuild that input, and in particular **select the same genes**?
+
+The authors' input is a table of 7,563 cells × 238 variables. Three things went into it:
+
+1. **the cells and their counts**: which cells, which raw counts;
+2. **the L-R pairs**: 43 pairs from CellChat;
+3. **the genes**: for each cell type, its ligands and receptors plus genes selected for their mutual information (MI)
+   with them. CausalCCC does this with the function `causalCCC.MIselection()`, called by the wrapper
+   `causalCCC.wrapper()`.
+
+We take the L-R pairs as given (recomputing CellChat is another project) and test points 1 and 3.
+
+**Inputs:** CellChat's example dataset `data_humanSkin_CellChat.rda` in `data/case2/cellchat/` and the authors' files
+in `data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/` (read only).
+**Outputs:** `results/case2/05_rebuild_input/`: the MI tables (`mi_tables.rds`, about 30 minutes to compute the first
+time).
+
+### Two objects, the same cells
+
+Two objects are compared throughout this notebook: CellChat's example dataset (our source) and the authors' input table
+(our target). They describe the same 7,563 cells, but are very different:
+
+| | **CellChat object** (`data_humanSkin`) | **Authors' `input.tsv`** (mosaic table) |
+| --- | --- | --- |
+| **Content** | list with `data` (matrix) and `meta` (cell metadata) | a single table |
+| **Values** | **normalised**: log(1 + 10,000 × count / total count of the cell) | **raw counts** (UMI) |
+| **Dimensions** | 17,328 genes × 7,563 cells | 7,563 cells × 238 variables (232 genes + 6 metadata) |
+| **Genes** | all genes kept by CellChat | only the genes **selected** by `MIselection`, for each cell type |
+| **Orientation** | genes in rows, cells in columns | cells in rows, variables in columns |
+| **Cells** | the same 7,563 cells | the same 7,563 cells (in random order) |
+| **Missing values** | none | `NA` outside the genes of each cell type ("mosaic" format) |
+| **Duplicates** | none | 14 genes appear twice, under two names that differ by one suffix (notebook 03) |
+
+The CellChat object is the **source** and the input table is the **result** of the CausalCCC preprocessing:
+
+1. recover the raw counts by undoing the normalisation (section 1);
+2. build a Seurat object (section 3);
+3. select, for each cell type, the genes of interest by mutual information (`MIselection`, sections 4 to 8);
+4. assemble the mosaic: each cell type only has values for its own genes, `NA` elsewhere.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(miic)   # must be attached: causalCCC.MIselection() calls miic() without loading it
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+cellchat    <- file.path(root, "data", "case2", "cellchat", "data_humanSkin_CellChat.rda")
+results_dir <- file.path(root, "results", "case2", "05_rebuild_input")
+
+if (!file.exists(cellchat)) stop("data_humanSkin_CellChat.rda not found: see data/README.md.")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+strip      <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")   # remove cell-type suffixes
+```
+
+## 1. Raw counts from CellChat's example dataset
+
+`data_humanSkin` is the dataset of the CellChat tutorial: 7,563 cells from the skin of atopic dermatitis patients (He
+*et al.* 2020), annotated in 12 subtypes of fibroblasts, T cells and dendritic cells. It is a list with a gene × cell
+matrix (`data`) and a table of cell metadata (`meta`).
+
+```{r}
+#| label: load-cellchat
+
+load(cellchat)   # creates the object data_humanSkin
+norm <- data_humanSkin$data
+meta <- data_humanSkin$meta
+
+dim(norm)
+head(meta)
+summary(norm@x)   # the non-zero values
+```
+
+The values are not counts: they are **normalised** values, log(1 + 10,000 × count / total count of the cell), the
+standard normalisation of Seurat and CellChat. CausalCCC needs raw counts. Can we undo the normalisation?
+
+For each cell, two unknowns remain: the counts and the total count of the cell (its "library size"). But the smallest
+non-zero value in a cell almost surely corresponds to a count of 1. From it we get the library size, then every count:
+
+count = (exp(value) − 1) × library size / 10,000, with library size = 10,000 / (exp(smallest value) − 1).
+
+In a sparse matrix (`dgCMatrix`), the non-zero values are stored column after column in `@x`, and `@p` tells where each
+column starts; `rep(..., diff(norm@p))` gives the column (cell) of each stored value.
+
+```{r}
+#| label: raw-counts
+
+cell_of_value <- rep(seq_len(ncol(norm)), diff(norm@p))
+library_size  <- as.numeric(10000 / expm1(tapply(norm@x, cell_of_value, min)))
+
+counts   <- norm
+counts@x <- expm1(norm@x) * library_size[cell_of_value] / 10000
+
+# If the reasoning is right, every value is now a whole number
+max(abs(counts@x - round(counts@x)))
+
+counts@x <- round(counts@x)
+
+# Consistency: the counts of each cell should add up to its library size
+all.equal(colSums(counts), library_size, check.attributes = FALSE)
+summary(library_size)
+```
+
+The values become whole numbers to within 10⁻¹¹ (rounding noise), so the normalisation is exactly undone. The counts
+of each cell also add up to its library size: the 17,328 genes kept in `data_humanSkin` are all the genes used for
+normalisation.
+
+## 2. Are these the authors' cells and counts?
+
+We group the 12 subtypes into the three cell types of the paper.
+
+```{r}
+#| label: cell-types
+
+type_of_subtype <- c("APOE+ FIB" = "Fibroblasts", "FBN1+ FIB" = "Fibroblasts", "COL11A1+ FIB" = "Fibroblasts",
+                     "Inflam. FIB" = "Fibroblasts", "TC" = "T_cell", "Inflam. TC" = "T_cell", "CD40LG+ TC" = "T_cell",
+                     "NKT" = "T_cell", "cDC1" = "DCs", "cDC2" = "DCs", "LC" = "DCs", "Inflam. DC" = "DCs")
+
+meta <- meta |>
+  mutate(cell_type = type_of_subtype[as.character(labels)],
+         labels    = as.character(labels))
+
+count(meta, cell_type)
+```
+
+The same numbers of cells as in the authors' input. To check that they are the **same cells with the same counts**, we
+give each cell a fingerprint: its counts for all the genes of its cell type in the authors' table, pasted into one text.
+Then we look for each fingerprint of the authors' table among ours. `match()` returns, for each authors' row, the
+position of the identical fingerprint in our cells.
+
+```{r}
+#| label: match-cells
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+
+row_type <- case_when(!is.na(mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(mosaic, row_type)
+
+match_cells <- map(cell_types, \(t) {
+  rows      <- which(row_type == t)
+  gene_cols <- names(mosaic)[col_type == t & !str_detect(names(mosaic), "^(labels|condition)_")]
+  our_cells <- which(meta$cell_type == t)
+
+  fingerprint_authors <- do.call(paste, c(as.list(mosaic[rows, gene_cols]), sep = "|"))
+  fingerprint_ours    <- do.call(paste, c(lapply(strip(gene_cols), \(g) counts[g, our_cells]), sep = "|"))
+  matched             <- our_cells[match(fingerprint_authors, fingerprint_ours)]
+
+  tibble(cell_type = t, row = rows, cell = matched,
+         label_authors = mosaic[[paste0("labels_", t)]][rows],
+         condition_authors = mosaic[[paste0("condition_", t)]][rows])
+}) |> list_rbind()
+
+match_cells |>
+  group_by(cell_type) |>
+  summarise(rows             = n(),
+            matched          = sum(!is.na(cell)),
+            distinct_cells   = n_distinct(cell),
+            same_label       = all(label_authors == meta$labels[cell]),
+            same_condition   = all(condition_authors == meta$condition[cell]))
+```
+
+Every row of the authors' table is one cell of `data_humanSkin`, each cell is used once, and the subtype and condition
+agree. **The authors' input was built from this dataset**, with the raw counts we just recovered.
+
+In what order are the cells? The `causalCCC.mosaic()` function shuffles the cells of each type (`sample()`). If the
+authors used it, the cells should appear in a random order:
+
+```{r}
+#| label: cell-order
+
+match_cells |>
+  group_by(cell_type) |>
+  summarise(correlation_with_original_order = cor(row, cell, method = "spearman"))
+```
+
+No correlation: the order is random, as expected from `causalCCC.mosaic()`.
+
+## 3. A Seurat object, and two problems with the wrapper
+
+The CausalCCC functions take a Seurat object (or a data frame). We build one with the raw counts and the metadata.
+
+```{r}
+#| label: seurat
+
+so <- CreateSeuratObject(counts = counts, meta.data = meta)
+so
+```
+
+Running `causalCCC.wrapper()` on it fails, for two reasons found by reading its code (`causalCCC` commit `0aa8586`):
+
+- **Seurat 5.** The wrapper reads counts with `GetAssayData(..., slot = "counts")`. The `slot` argument was removed
+  from SeuratObject 5 (it must now be `layer`), so the call stops with an error.
+- **Data frames.** The wrapper also accepts a data frame, but then looks for the ligands and receptors among
+  `row.names(data_input)`, which are cell names, so it finds none.
+
+In addition, the wrapper handles **one sender and one receiver**, while the authors' table has three cell types, each
+both sender and receiver, with suffixes (`_Fibroblasts`, `_T_cell`, `_DCs`) that the wrapper never writes (it writes
+`_senders`, `_receivers`). The authors therefore did not obtain this table with a single wrapper call.
+
+We use the gene selection function `causalCCC.MIselection()` directly, after replacing `slot = "counts"` by
+`layer = "counts"` in its code. Nothing else changes. (The `miic` package of the `causalccc` branch contains an
+identical copy of all `causalCCC.*` functions.)
+
+```{r}
+#| label: patch
+
+MIselection <- causalCCC.MIselection
+body(MIselection) <- parse(text = gsub('slot = "counts"', 'layer = "counts"',
+                                       deparse(body(MIselection)), fixed = TRUE))[[1]]
+```
+
+## 4. How `causalCCC.MIselection()` chooses genes
+
+For one cell type, the function takes a list of **features of interest** (genes of interest such as ligands or
+receptors, and metadata) and:
+
+1. computes, in the cells of that type, the MI between each feature of interest and **every** gene (with `miic`,
+   in blocks of 100 genes);
+2. keeps the **3 genes with the highest MI** with each feature of interest;
+3. adds the **`n_genes` genes with the highest MI** with any feature of interest, where by default
+   `n_genes = max(15, min(4 × number of genes of interest, 100))`;
+4. keeps only genes with MI above 0.001.
+
+The wrapper calls it twice per sender–receiver pair: in the senders with the ligands (at most the first 8) as genes of
+interest, in the receivers with the receptors (at most 8). The final gene list of a cell type is its ligands or
+receptors plus the selected genes.
+
+Step 1 is the slow one, and each feature of interest is treated separately. So we compute the full MI table once for
+every possible feature of interest of each cell type (all its ligands and receptors, and the two metadata), then apply
+steps 2–4 ourselves for each protocol we want to test. `select_genes()` reproduces the end of
+`causalCCC.MIselection()` line by line. It is defined in `scripts/helpers.R` (loaded in the setup chunk), because
+notebook 07 uses it too; printing a function shows its code:
+
+```{r}
+#| label: select-genes
+
+select_genes
+default_n_genes
+```
+
+## 5. Features of interest of each cell type
+
+From the 43 L-R pairs, the ligands and receptors of each cell type, without suffixes:
+
+```{r}
+#| label: lr-roles
+
+lr_roles <- bind_rows(
+  tibble(variable = lr_pairs$ligand,   role = "ligand"),
+  tibble(variable = lr_pairs$receptor, role = "receptor")) |>
+  distinct() |>
+  mutate(cell_type = col_type[variable], gene = strip(variable))
+
+lr_roles |>
+  group_by(cell_type, role) |>
+  summarise(n = n(), genes = paste(gene, collapse = ", "), .groups = "drop")
+```
+
+## 6. Compute the MI tables (or reload them)
+
+For each cell type, MI between its ligands, its receptors and the two metadata (`labels`, `condition`) and every gene.
+About 30 minutes the first time, then reloaded from `mi_tables.rds`.
+
+```{r}
+#| label: mi-tables
+
+mi_file <- file.path(results_dir, "mi_tables.rds")
+
+if (file.exists(mi_file)) {
+  mi_tables <- readRDS(mi_file)
+} else {
+  start <- Sys.time()
+  mi_tables <- map(cell_types, \(t) {
+    goi <- lr_roles |> filter(cell_type == t) |> pull(gene) |> unique()
+    # capture.output() and suppressMessages() hide the progress lines printed for every block of genes
+    invisible(capture.output(suppressMessages(
+      mi <- MIselection(so, interact_ident = "cell_type", oneinteract = t, goi = goi,
+                        metadata_list = c("labels", "condition"), return_full = TRUE))))
+    mi |>
+      as_tibble() |>
+      mutate(foi = as.character(foi), cell_type = t)
+  }) |> list_rbind()
+  attr(mi_tables, "run_time") <- Sys.time() - start
+  saveRDS(mi_tables, mi_file)
+}
+
+attr(mi_tables, "run_time")
+count(mi_tables, cell_type, foi) |> count(cell_type, name = "features_of_interest")
+```
+
+**Check of `select_genes()`.** We run the original selection on one small case (dendritic cells, CXCR4 and CCR7 as
+genes of interest, both metadata) and compare.
+
+```{r}
+#| label: check-select
+
+invisible(capture.output(suppressMessages(
+  check_package <- MIselection(so, interact_ident = "cell_type", oneinteract = "DCs",
+                               goi = c("CXCR4", "CCR7"), metadata_list = c("labels", "condition")))))
+check_ours    <- select_genes(filter(mi_tables, cell_type == "DCs"),
+                              foi = c("CXCR4", "CCR7", "labels", "condition"),
+                              n_genes = default_n_genes(c("CXCR4", "CCR7")))
+identical(check_package, check_ours)
+```
+
+## 7. The authors' gene lists
+
+For each cell type, the genes of the authors' table, without suffixes and without the duplicates found in notebook 03,
+split into L-R genes and other ("selected") genes.
+
+```{r}
+#| label: authors-genes
+
+authors_genes <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  filter(!str_detect(variable, "^(labels|condition)_")) |>
+  mutate(gene = strip(variable)) |>
+  distinct(cell_type, gene) |>
+  left_join(distinct(lr_roles, cell_type, gene, role), by = c("cell_type", "gene")) |>
+  mutate(role = replace_na(role, "selected"))
+
+count(authors_genes, cell_type, role) |> pivot_wider(names_from = role, values_from = n)
+```
+
+## 8. Which protocol reproduces the authors' selection?
+
+We compare the selected genes of each protocol with the authors' "selected" genes, per cell type. A protocol that
+reproduces the authors exactly gives 0 missing and 0 extra genes.
+
+```{r}
+#| label: compare-fn
+
+compare_selection <- function(selected, protocol) {
+  map(cell_types, \(t) {
+    ours_genes    <- setdiff(selected[[t]], c(lr_roles$gene[lr_roles$cell_type == t], "labels", "condition"))
+    authors_sel   <- authors_genes |> filter(cell_type == t, role == "selected") |> pull(gene)
+    # column names differ from the vectors: inside tibble(), a new column hides an object of the same name
+    tibble(protocol, cell_type = t,
+           n_authors = length(authors_sel), n_ours = length(ours_genes),
+           shared  = length(intersect(ours_genes, authors_sel)),
+           missing = length(setdiff(authors_sel, ours_genes)),
+           extra   = length(setdiff(ours_genes, authors_sel)),
+           jaccard = shared / length(union(ours_genes, authors_sel)))
+  }) |> list_rbind()
+}
+```
+
+**Protocol A: one selection per cell type**, with all its ligands and receptors (and, in variant A+, both metadata)
+as features of interest, and the default `n_genes`. This is what a three-population version of the wrapper would most
+naturally do.
+
+```{r}
+#| label: protocol-a
+
+metadata_foi <- c("labels", "condition")
+
+run_protocol_a <- function(use_metadata) {
+  map(set_names(cell_types), \(t) {
+    goi <- lr_roles |> filter(cell_type == t) |> pull(gene) |> unique()
+    select_genes(filter(mi_tables, cell_type == t), foi = c(goi, if (use_metadata) metadata_foi),
+                 n_genes = default_n_genes(goi))
+  })
+}
+protocols <- list("A" = run_protocol_a(FALSE), "A+" = run_protocol_a(TRUE))
+```
+
+**Protocol B: the wrapper, once per sender → receiver direction.** For each of the six directions, the senders select
+genes with the ligands of that direction (first 8) and the metadata, the receivers with the receptors (first 8) and
+the metadata; then the genes of each cell type are pooled over all the directions in which it takes part.
+
+```{r}
+#| label: protocol-b
+
+directions <- lr_pairs |>
+  transmute(sender = col_type[ligand], receiver = col_type[receptor],
+            ligand = strip(ligand), receptor = strip(receptor))
+
+run_protocol_b <- function(use_metadata) {
+  one_side <- function(t, goi) {
+    goi <- head(unique(goi), 8)
+    select_genes(filter(mi_tables, cell_type == t), foi = c(goi, if (use_metadata) metadata_foi),
+                 n_genes = default_n_genes(goi))
+  }
+  runs <- directions |>
+    group_by(sender, receiver) |>
+    summarise(sender_genes   = list(one_side(first(sender), ligand)),
+              receiver_genes = list(one_side(first(receiver), receptor)),
+              .groups = "drop")
+  selected <- map(set_names(cell_types), \(t) {
+    unique(c(unlist(runs$sender_genes[runs$sender == t]),
+             unlist(runs$receiver_genes[runs$receiver == t])))
+  })
+  attr(selected, "runs") <- runs   # keep the individual runs for section 10
+  selected
+}
+protocols[["B"]]  <- run_protocol_b(FALSE)
+protocols[["B+"]] <- run_protocol_b(TRUE)
+```
+
+All four protocols side by side (`+` = with metadata as features of interest):
+
+```{r}
+#| label: best-protocol
+
+comparison <- imap(protocols, compare_selection) |> list_rbind()
+comparison
+
+best <- comparison |>
+  group_by(protocol) |>
+  summarise(missing = sum(missing), extra = sum(extra), jaccard = mean(jaccard)) |>
+  arrange(desc(jaccard))
+best
+
+best_selection <- protocols[[best$protocol[1]]]
+```
+
+**Summary of the four protocols.** What each protocol does (left) and how close it gets to the authors' selection
+(right, summed over the three cell types; Jaccard = mean over cell types).
+
+```{r}
+#| label: protocol-summary
+
+protocol_design <- tribble(
+  ~protocol, ~selections,                              ~features_of_interest,                                     ~metadata_as_feature, ~pooling,
+  "A",       "1 per cell type (3)",                    "all its ligands and receptors",                           "no",                 "none",
+  "A+",      "1 per cell type (3)",                    "all its ligands and receptors",                           "yes",                "none",
+  "B",       "1 per sender → receiver direction (6)", "ligands (senders) or receptors (receivers) of the direction, first 8", "no",   "union over the directions of each cell type",
+  "B+",      "1 per sender → receiver direction (6)", "ligands (senders) or receptors (receivers) of the direction, first 8", "yes",  "union over the directions of each cell type"
+)
+
+protocol_results <- comparison |>
+  group_by(protocol) |>
+  summarise(authors_genes = sum(n_authors), recovered = sum(shared), missing = sum(missing), extra = sum(extra),
+            jaccard = round(mean(jaccard), 2), .groups = "drop") |>
+  mutate(recovered = paste0(recovered, " / ", authors_genes)) |>
+  select(-authors_genes)
+
+protocol_design |>
+  left_join(protocol_results, by = "protocol") |>
+  rename(`Protocol` = protocol, `Gene selections` = selections, `Features of interest` = features_of_interest,
+         `Metadata (subtype, condition) as features` = metadata_as_feature, `Pooling` = pooling,
+         `Authors' genes recovered` = recovered, `Missing` = missing, `Extra` = extra, `Jaccard` = jaccard) |>
+  knitr::kable()
+```
+
+All four protocols use the same MI tables and the same default number of genes, `max(15, min(4 × number of features,
+100))`. Only the way the features of interest are grouped and the use of the metadata change.
+
+## 9. The genes we do not recover
+
+For the best protocol, the authors' selected genes we miss, with their rank among all genes by their highest MI with a
+feature of interest (rank 1 = highest MI). A small rank means the gene was close to being selected.
+
+```{r}
+#| label: missing-genes
+
+gene_rank <- mi_tables |>
+  group_by(cell_type, variables) |>
+  summarise(best_mi = max(value), best_foi = foi[which.max(value)], .groups = "drop_last") |>
+  mutate(rank = rank(-best_mi, ties.method = "first")) |>
+  ungroup() |>
+  rename(gene = variables)
+
+missing <- map(cell_types, \(t) {
+  authors <- authors_genes |> filter(cell_type == t, role == "selected") |> pull(gene)
+  tibble(cell_type = t, gene = setdiff(authors, best_selection[[t]]))
+}) |> list_rbind() |>
+  left_join(gene_rank, by = c("cell_type", "gene")) |>
+  arrange(cell_type, rank)
+
+missing |> group_by(cell_type) |> summarise(n = n(), median_rank = median(rank), worst_rank = max(rank))
+missing |> print(n = 30)
+```
+
+And the genes we select but the authors do not:
+
+```{r}
+#| label: extra-genes
+
+map(cell_types, \(t) {
+  authors <- authors_genes |> filter(cell_type == t) |> pull(gene)
+  tibble(cell_type = t, gene = setdiff(best_selection[[t]], c(lr_roles$gene[lr_roles$cell_type == t], metadata_foi, authors)))
+}) |> list_rbind() |>
+  left_join(gene_rank, by = c("cell_type", "gene")) |>
+  arrange(cell_type, rank) |>
+  print(n = 30)
+```
+
+**The genes of Figure 3.** Are the genes named in the paper among our selected genes?
+
+```{r}
+#| label: figure-genes
+
+tribble(~cell_type, ~gene,
+        "Fibroblasts", "DCN", "Fibroblasts", "APOD", "Fibroblasts", "CFD",
+        "DCs", "GPR183", "DCs", "NR4A3", "DCs", "VIM",
+        "T_cell", "FOS", "T_cell", "JUNB") |>
+  mutate(selected_by_us = map2_lgl(cell_type, gene, \(t, g) g %in% best_selection[[t]])) |>
+  left_join(gene_rank, by = c("cell_type", "gene"))
+```
+
+## 10. Where do the duplicated genes come from?
+
+Notebook 03 found 14 genes present twice in the same cell type, as identical columns with different suffixes.
+
+**First idea:** with protocol B+, a gene of a cell type can be selected in a run where that cell type sends (with its
+ligands) **and** in a run where it receives (with its receptors); pooling the runs might then list it twice.
+
+```{r}
+#| label: duplicates-origin
+
+runs_b <- attr(protocols[["B+"]], "runs")
+
+sender_and_receiver <- map(cell_types, \(t) {
+  as_sender   <- unique(unlist(runs_b$sender_genes[runs_b$sender == t]))
+  as_receiver <- unique(unlist(runs_b$receiver_genes[runs_b$receiver == t]))
+  tibble(cell_type = t, gene = setdiff(intersect(as_sender, as_receiver), metadata_foi))
+}) |> list_rbind()
+
+# The 14 duplicated genes of the authors' table (notebook 03)
+duplicated_authors <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  filter(!str_detect(variable, "^(labels|condition)_")) |>
+  mutate(gene = strip(variable)) |>
+  count(cell_type, gene) |>
+  filter(n == 2) |>
+  select(-n)
+
+full_join(mutate(sender_and_receiver, selected_as_sender_and_receiver = TRUE),
+          mutate(duplicated_authors, duplicated_by_authors = TRUE),
+          by = c("cell_type", "gene")) |>
+  mutate(across(c(selected_as_sender_and_receiver, duplicated_by_authors), \(v) replace_na(v, FALSE))) |>
+  count(selected_as_sender_and_receiver, duplicated_by_authors)
+```
+
+Most genes selected on both sides are **not** duplicated: this is not the explanation.
+
+**Second idea: the names given by `causalCCC.mosaic()`.** In one wrapper run, a gene present in both cell types of the
+run gets a suffix (`_senders` / `_receivers`, which the authors apparently replaced by the cell-type name), and keeps
+its plain name otherwise. A gene of a cell type can therefore be called `S100A6` in one run and `S100A6_Fibroblasts` in
+another. If the authors pooled the runs by column name, the two names make two identical columns. We predict, for each
+gene, whether it is suffixed in some runs and not in others. Each run's gene lists include its ligands or receptors,
+as in the wrapper.
+
+```{r}
+#| label: duplicates-naming
+
+lr_of <- function(t, side, s, r) {
+  pairs <- directions |> filter(sender == s, receiver == r)
+  if (side == "sender") unique(pairs$ligand) else unique(pairs$receptor)
+}
+
+run_names <- runs_b |>
+  pmap(\(sender, receiver, sender_genes, receiver_genes) {
+    genes_s <- setdiff(unique(c(lr_of(sender, "sender", sender, receiver), sender_genes)), metadata_foi)
+    genes_r <- setdiff(unique(c(lr_of(receiver, "receiver", sender, receiver), receiver_genes)), metadata_foi)
+    both    <- intersect(genes_s, genes_r)
+    bind_rows(tibble(cell_type = sender,   gene = genes_s, suffixed = genes_s %in% both),
+              tibble(cell_type = receiver, gene = genes_r, suffixed = genes_r %in% both))
+  }) |> list_rbind()
+
+predicted_duplicates <- run_names |>
+  group_by(cell_type, gene) |>
+  summarise(two_names = n_distinct(suffixed) == 2, .groups = "drop") |>
+  filter(two_names)
+
+full_join(mutate(predicted_duplicates, predicted = TRUE),
+          mutate(duplicated_authors, duplicated_by_authors = TRUE),
+          by = c("cell_type", "gene")) |>
+  mutate(across(c(predicted, duplicated_by_authors), \(v) replace_na(v, FALSE))) |>
+  select(cell_type, gene, predicted, duplicated_by_authors) |>
+  arrange(desc(duplicated_by_authors), cell_type, gene) |>
+  print(n = 40)
+```
+
+This rule predicts 11 of the 14 duplicates, but also 24 duplicates that the authors' table does not have. The naming
+of `causalCCC.mosaic()` is a plausible ingredient, but the exact way the authors pooled their runs cannot be recovered
+from the files.
+
+## 11. Save what notebook 06 needs
+
+Notebook 06 builds a clean mosaic from our selection and reruns MIIC on it. We save the recovered counts, the cell
+metadata, the matching between the authors' rows and the cells, and the selection of protocol B+.
+
+```{r}
+#| label: save
+
+saveRDS(list(counts = counts, meta = meta, match_cells = match_cells,
+             selection = protocols[["B+"]][cell_types], lr_roles = lr_roles),
+        file.path(results_dir, "rebuild_inputs.rds"))
+```
+
+## What we learned
+
+**Cells and counts: reproduced exactly.** The authors' input was built from CellChat's example dataset
+`data_humanSkin`. Its matrix is log-normalised, but the normalisation can be undone exactly (the smallest value of each
+cell is a count of 1), and every row of the authors' table is then one cell of the dataset, with the same counts for
+all genes, the same subtype and the same condition. The cells are in a random order, as `causalCCC.mosaic()` produces.
+
+**The wrapper cannot be run as is.** `causalCCC.wrapper()` (commit `0aa8586`) fails with Seurat 5 (`slot` argument
+removed), cannot find ligands and receptors when given a data frame (it searches the cell names), and handles one
+sender and one receiver only, whereas case study 2 has three cell types. We call the gene selection function
+directly, with a one-word fix (`slot` → `layer`).
+
+**Gene selection: mostly reproduced.** The best match is protocol B+: one wrapper run per sender → receiver direction
+(6 runs), with the ligands or receptors of that direction and both metadata (subtype, condition) as features of
+interest, and the default number of genes. It recovers 160 of the authors' 174 selected genes (49/51 in T cells, 56/60
+in fibroblasts, 55/63 in dendritic cells) and adds only 7 others (Jaccard index 0.89). Without the metadata, or with a
+single selection per cell type, the agreement is much lower (0.52 to 0.67). So the authors most likely ran the
+wrapper once per direction, including the metadata, and pooled the results.
+
+**Update (notebook 07).** Protocol B+ is only an approximation. Notebook 07 shows that the authors' selection is
+reproduced **exactly** (0 missing, 0 extra) with one run per direction, **25 genes per run** instead of the default,
+**all** the ligands or receptors of the direction as features of interest (no cap of 8), and the subtype metadata.
+The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the
+published wrapper.
+
+**The remaining differences** are mostly genes close to the selection cut-off: the genes we miss and the genes we add
+have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). Possible
+causes are a different gene order in the authors' Seurat object (MI is computed in blocks of 100 genes, together with
+conditioning on the other genes of the block, so the block composition can shift values slightly), a different order of
+the L-R pairs (only the first 8 ligands or receptors of a run are used), or a different version of the code.
+
+**The genes named in the paper** (DCN, APOD, CFD in fibroblasts; GPR183, NR4A3, VIM in dendritic cells; FOS, JUNB in T
+cells) are all selected by protocol B+.
+
+**Duplicated genes.** Pooling the six runs explains how a gene can get two names, but we could not reproduce exactly
+which 14 genes were duplicated. Whatever the cause, removing duplicates should be part of building a clean input.
+
+**Next steps.**
+
+- Build the full mosaic from our selection (protocol B+, without duplicates) and rerun MIIC on it, to see how much the
+  network and the Figure 3 claims depend on these preprocessing details (notebook 06).
+- Ask the authors for the script used to pool the runs, and for the gene order of their Seurat object.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

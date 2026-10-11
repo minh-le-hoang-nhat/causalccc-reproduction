@@ -1,0 +1,511 @@
+---
+title: "06 – MIIC on our rebuilt input (case study 2)"
+subtitle: "A clean mosaic from our gene selection: how much do the network and Figure 3 change?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 05 rebuilt the ingredients of the authors' input from public data: the same cells and counts exactly, and a
+gene selection that recovers 89 % of theirs (protocol B+). Here we assemble these ingredients into a mosaic table, run
+MIIC with the authors' settings, and compare the resulting network with the published one.
+
+Our mosaic differs from the authors' in two ways only:
+
+1. **the selected genes**: about 160 of the authors' 174 selected genes, plus 7 others (notebook 05, section 8);
+2. **no duplicated columns**: each gene appears once per cell type, always named `<gene>_<cell type>`.
+
+Everything else is kept identical, so that differences can be attributed to these two points: same cells, in the same
+row order as the authors' table; same metadata; same 43 L-R pairs; same MIIC settings and the same rule for declaring a
+variable discrete.
+
+**Inputs:** `results/case2/05_rebuild_input/rebuild_inputs.rds` (written by notebook 05) and the authors' files in
+`data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/`.
+**Outputs:** `results/case2/06_rebuilt_network/`: our input files (`input.tsv`, `state_order.tsv`,
+`interact_edges.tsv`), the MIIC result (`miic_result.rds`) and our edge list (`edges.tsv`).
+
+::: {.callout-note}
+## Running time
+The MIIC run takes about three hours (notebook 04: 2.8 hours on one thread). The result is saved the first time and reloaded
+afterwards. To force a new run, delete `results/case2/06_rebuilt_network/miic_result.rds`.
+:::
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(miic)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+inputs_file <- file.path(root, "results", "case2", "05_rebuild_input", "rebuild_inputs.rds")
+results_dir <- file.path(root, "results", "case2", "06_rebuilt_network")
+
+if (!file.exists(inputs_file)) stop("Run notebook 05 first: it writes ", inputs_file)
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+strip      <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+```
+
+## 1. Ingredients
+
+```{r}
+#| label: ingredients
+
+rebuilt     <- readRDS(inputs_file)
+counts      <- rebuilt$counts
+meta        <- rebuilt$meta
+match_cells <- rebuilt$match_cells   # one row per row of the authors' table, with the matching cell
+lr_roles    <- rebuilt$lr_roles      # ligands and receptors of each cell type
+
+# The authors' files, for the metadata levels, the L-R pairs and the comparison
+mosaic_authors <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_authors  <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs       <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                           col_names = c("ligand", "receptor"), show_col_types = FALSE)
+edges_authors  <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+```
+
+The genes of each cell type: its ligands and receptors, plus the genes selected by protocol B+ (without the metadata,
+which are added separately).
+
+```{r}
+#| label: genes
+
+genes <- map(set_names(cell_types), \(t) {
+  unique(c(lr_roles$gene[lr_roles$cell_type == t],
+           setdiff(rebuilt$selection[[t]], c("labels", "condition"))))
+})
+
+lengths(genes)
+```
+
+## 2. Build the mosaic table
+
+Rows: the cells, in the order of the authors' table (`match_cells` is sorted by authors' row). Columns: for each cell
+type, its genes named `<gene>_<cell type>` and its two metadata `labels_<cell type>` and `condition_<cell type>`. Each
+cell has values only in the columns of its type, `NA` elsewhere.
+
+```{r}
+#| label: mosaic
+
+match_cells <- arrange(match_cells, row)
+
+blocks <- map(cell_types, \(t) {
+  in_type <- match_cells$cell_type == t
+  cells   <- match_cells$cell[in_type]
+
+  values <- as.matrix(counts[genes[[t]], cells, drop = FALSE]) |> t() |> as_tibble()
+  names(values) <- paste0(genes[[t]], "_", t)
+  values[[paste0("labels_", t)]]    <- meta$labels[cells]
+  values[[paste0("condition_", t)]] <- meta$condition[cells]
+
+  # place the block in the rows of its cell type, NA in the other rows
+  full <- values[rep(NA_integer_, nrow(match_cells)), ]
+  full[in_type, ] <- values
+  full
+})
+
+mosaic <- bind_cols(blocks)
+dim(mosaic)
+
+# Same structure checks as in notebook 03: each block complete, everything else empty
+row_type <- match_cells$cell_type
+col_type <- column_cell_type(mosaic, row_type)
+map(cell_types, \(t) tibble(cell_type = t,
+                           own_block_complete = !anyNA(mosaic[row_type == t, col_type == t]),
+                           elsewhere_empty    = all(is.na(mosaic[row_type == t, col_type != t])))) |>
+  list_rbind()
+
+# No duplicated column in any cell type
+map_int(cell_types, \(t) sum(duplicated(as.list(mosaic[row_type == t, col_type == t]))))
+```
+
+For the genes that the authors also used, are our values the authors' values? We compare, for each such variable, the
+authors' column with ours (the rows are in the same order).
+
+```{r}
+#| label: same-values
+
+authors_vars <- tibble(variable_authors = names(mosaic_authors),
+                       cell_type = column_cell_type(mosaic_authors, row_type)) |>
+  mutate(variable = if_else(str_detect(variable_authors, "^(labels|condition)_"),
+                            variable_authors, paste0(strip(variable_authors), "_", cell_type))) |>
+  filter(variable %in% names(mosaic))
+
+authors_vars |>
+  mutate(identical = map2_lgl(variable_authors, variable, \(a, o) identical(as.character(mosaic_authors[[a]]),
+                                                                            as.character(mosaic[[o]])))) |>
+  count(identical)
+```
+
+## 3. State order and L-R pairs
+
+The same rules as the authors' files: metadata discrete with the authors' order of levels; a gene discrete if it has
+5 or fewer distinct values counting `NA` (the rule of `causalCCC.state_order()`, notebook 02), continuous otherwise;
+groups `ligands`, `receptors`, `<cell type> genes` and `metadata`, with the authors' colours.
+
+```{r}
+#| label: state-order
+
+role_of <- lr_roles |> transmute(variable = paste0(gene, "_", cell_type), role)
+
+group_colours <- state_authors |> distinct(group, group_color)
+
+state_order <- tibble(var_names = names(mosaic), cell_type = col_type) |>
+  left_join(role_of, by = c("var_names" = "variable")) |>
+  mutate(is_metadata = str_detect(var_names, "^(labels|condition)_"),
+         group = case_when(is_metadata    ~ "metadata",
+                           role == "ligand"   ~ "ligands",
+                           role == "receptor" ~ "receptors",
+                           .default = paste(cell_type, "genes")),
+         var_type = if_else(map_lgl(mosaic, is.character) | map_int(mosaic, n_distinct) <= 5, 0, 1),
+         is_contextual = 0) |>
+  left_join(select(state_authors, var_names, levels_increasing_order), by = "var_names") |>
+  left_join(group_colours, by = "group") |>
+  select(var_names, var_type, levels_increasing_order, is_contextual, group, group_color)
+
+count(state_order, group, var_type)
+
+# The 43 L-R pairs, with our variable names (identical to the authors' names for these genes)
+interact_edges <- lr_pairs |>
+  mutate(cell_l = column_cell_type(mosaic_authors, row_type)[ligand],
+         cell_r = column_cell_type(mosaic_authors, row_type)[receptor],
+         ligand   = paste0(strip(ligand), "_", cell_l),
+         receptor = paste0(strip(receptor), "_", cell_r)) |>
+  select(ligand, receptor)
+
+all(c(interact_edges$ligand, interact_edges$receptor) %in% names(mosaic))
+```
+
+We save the three input files, in the format of the CausalCCC server, so that the same run can be repeated elsewhere
+(for example on a computing cluster, or uploaded to the web server).
+
+```{r}
+#| label: write-inputs
+
+write_tsv(mosaic, file.path(results_dir, "input.tsv"), na = "NA")
+write_tsv(state_order, file.path(results_dir, "state_order.tsv"), na = "NA")
+write_tsv(interact_edges, file.path(results_dir, "interact_edges.tsv"), col_names = FALSE)
+```
+
+## 4. Run MIIC (or reload the saved result)
+
+The same call as in notebook 04, on one thread like the server. (A first attempt with 4 threads crashed at the start
+of the run with C stack errors: the multithreading of this `miic` branch is not reliable.)
+
+```{r}
+#| label: run-miic
+#| results: hide
+
+result_file <- file.path(results_dir, "miic_result.rds")
+
+if (file.exists(result_file)) {
+  miic_result <- readRDS(result_file)
+  message("Loaded the saved result from ", result_file)
+} else {
+  set.seed(2026)
+  start <- Sys.time()
+  miic_result <- miic(
+    input_data      = as.data.frame(mosaic),
+    state_order     = as.data.frame(state_order),
+    interact_edges  = as.data.frame(interact_edges),
+    cplx            = "nml",
+    orientation     = TRUE,
+    latent          = "orientation",
+    ori_proba_ratio = 0.01,
+    n_shuffles      = 100,
+    conf_threshold  = 0.01,
+    test_mar        = TRUE,
+    consistent      = "no",
+    n_eff           = -1,
+    mode            = "S",
+    n_threads       = 1
+  )
+  attr(miic_result, "run_time") <- Sys.time() - start
+  saveRDS(miic_result, result_file)
+}
+
+lr_links <- link_name(interact_edges$ligand, interact_edges$receptor)
+
+edges_ours <- as_tibble(miic_result$all.edges.summary) |>
+  filter(!(link_name(x, y) %in% lr_links & Nxy_ai %in% 0))   # remove the L-R placeholder rows (notebook 02)
+
+write_tsv(edges_ours, file.path(results_dir, "edges.tsv"))
+```
+
+```{r}
+#| label: run-time
+
+attr(miic_result, "run_time")
+```
+
+## 5. Compare with the authors' network
+
+To compare the two networks, each variable is identified by its gene and its cell type (`gene | cell type`). In the
+authors' network, the two copies of a duplicated gene become the same node, and the link between them disappears.
+
+```{r}
+#| label: node-keys
+
+key_of_authors <- tibble(variable = names(mosaic_authors),
+                         cell_type = column_cell_type(mosaic_authors, row_type)) |>
+  mutate(key = if_else(str_detect(variable, "^(labels|condition)_"), variable,
+                       paste0(strip(variable), "_", cell_type))) |>
+  pull(key, name = variable)
+
+type_of_key <- function(k) str_extract(k, "(Fibroblasts|T_cell|DCs)$")
+
+as_links <- function(edge_list, key_of) {
+  edge_list |>
+    filter(type == "P") |>
+    mutate(a = key_of[x], b = key_of[y]) |>
+    filter(a != b) |>
+    transmute(link = link_name(a, b), a, b,
+              cell_type = if_else(type_of_key(a) == type_of_key(b), type_of_key(a), "L-R")) |>
+    distinct(link, .keep_all = TRUE)
+}
+
+key_of_ours <- set_names(names(mosaic))   # our names are already keys
+
+links_authors <- as_links(edges_authors, key_of_authors)
+links_ours    <- as_links(edges_ours, key_of_ours)
+
+tibble(network = c("authors", "ours"),
+       variables = c(n_distinct(key_of_authors), ncol(mosaic)),
+       links = c(nrow(links_authors), nrow(links_ours)))
+```
+
+A link can only be found in both networks if both its genes are in both inputs. We therefore compare the links among
+the variables shared by the two inputs.
+
+```{r}
+#| label: compare-links
+
+shared_vars <- intersect(unique(key_of_authors), names(mosaic))
+length(shared_vars)
+
+comparison <- full_join(
+  links_authors |> filter(a %in% shared_vars, b %in% shared_vars) |> mutate(authors = TRUE),
+  links_ours    |> filter(a %in% shared_vars, b %in% shared_vars) |> mutate(ours = TRUE),
+  by = c("link", "a", "b", "cell_type")) |>
+  mutate(found_in = case_when(!is.na(authors) & !is.na(ours) ~ "both",
+                              !is.na(authors)                ~ "authors only",
+                              .default                       = "ours only"))
+
+comparison |>
+  count(cell_type, found_in) |>
+  pivot_wider(names_from = found_in, values_from = n, values_fill = 0) |>
+  mutate(jaccard = both / (both + `authors only` + `ours only`))
+```
+
+**Orientations.** How many retained links are oriented, bidirected, or genuine causations, in each network (L-R links
+excluded, since they are oriented by construction)?
+
+```{r}
+#| label: orientations
+
+orientation_summary <- function(edge_list, lr, network) {
+  edge_list |>
+    filter(type == "P", !link_name(x, y) %in% lr) |>
+    summarise(network = network, links = n(),
+              not_oriented = sum(infOrt == 1), oriented = sum(abs(infOrt) == 2), bidirected = sum(infOrt == 6),
+              genuine_causation = sum(is_causal == "Y"))
+}
+
+bind_rows(orientation_summary(edges_authors, link_name(lr_pairs$ligand, lr_pairs$receptor), "authors"),
+          orientation_summary(edges_ours, lr_links, "ours"))
+```
+
+The authors' counts include the links of duplicated genes (each neighbour linked to both copies). For a fair
+comparison, we look at the orientation of the gene–gene links found in **both** networks, written from the first to the
+second gene of the link name (2 = first → second, −2 = second → first, 1 = not oriented, 6 = bidirected).
+
+```{r}
+#| label: shared-orientations
+
+oriented_links <- function(edge_list, key_of, lr) {
+  edge_list |>
+    filter(type == "P", !link_name(x, y) %in% lr) |>
+    mutate(a = key_of[x], b = key_of[y]) |>
+    filter(a != b) |>
+    transmute(link = link_name(a, b),
+              orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt),
+              is_causal) |>
+    distinct(link, .keep_all = TRUE)
+}
+
+shared_orientation <- inner_join(
+  oriented_links(edges_authors, key_of_authors, link_name(lr_pairs$ligand, lr_pairs$receptor)),
+  oriented_links(edges_ours, key_of_ours, lr_links),
+  by = "link", suffix = c("_authors", "_ours"))
+
+nrow(shared_orientation)
+table(authors = shared_orientation$orientation_authors, ours = shared_orientation$orientation_ours)
+table(authors = shared_orientation$is_causal_authors, ours = shared_orientation$is_causal_ours)
+```
+
+**Strength of the L-R links**, which the `causalccc` branch sets to the strongest link of the network:
+
+```{r}
+#| label: lr-strength
+
+c(authors = max(edges_authors$info_shifted[edges_authors$type == "P"]),
+  ours    = max(edges_ours$info_shifted[edges_ours$type == "P"]))
+
+edges_ours |> filter(type == "P", !link_name(x, y) %in% lr_links) |> slice_max(info_shifted, n = 3) |>
+  select(x, y, info_shifted)
+```
+
+## 6. Do the paper's statements hold in our network?
+
+The checks of notebook 03 (section 6), with our variable names.
+
+```{r}
+#| label: claims
+
+intracellular_ours <- edges_ours |> filter(type == "P", !link_name(x, y) %in% lr_links)
+
+claims <- tribble(
+  ~centre,              ~gene,
+  "CXCL12_Fibroblasts", "DCN_Fibroblasts",
+  "CXCL12_Fibroblasts", "APOD_Fibroblasts",
+  "CXCL12_Fibroblasts", "CFD_Fibroblasts",
+  "CXCR4_DCs",          "GPR183_DCs",
+  "CXCR4_DCs",          "NR4A3_DCs",
+  "CXCR4_DCs",          "VIM_DCs",
+  "CXCR4_T_cell",       "FOS_T_cell",
+  "CXCR4_T_cell",       "JUNB_T_cell"
+)
+
+claims |>
+  mutate(in_our_input = gene %in% names(mosaic),
+         distance_ours = map2_dbl(centre, gene, \(c, g) unname(graph_distance(intracellular_ours, c)[g])))
+```
+
+For comparison, the distances in the authors' network (notebook 03): DCN 2, APOD 2, CFD 1; GPR183 2, NR4A3 1, VIM 2;
+FOS 2, JUNB 1.
+
+**Direct neighbours** of CXCL12 and CXCR4 in both networks:
+
+```{r}
+#| label: neighbours
+
+intracellular_authors <- edges_authors |> filter(type == "P", !link_name(x, y) %in% link_name(lr_pairs$ligand, lr_pairs$receptor))
+
+map(c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell"), \(c) {
+  tibble(centre  = c,
+         authors = paste(sort(key_of_authors[neighbors_of(c, intracellular_authors)$neighbor]), collapse = ", "),
+         ours    = paste(sort(neighbors_of(c, intracellular_ours)$neighbor), collapse = ", "))
+}) |> list_rbind()
+```
+
+## 7. The Figure 3C neighbourhood, drawn
+
+Figure 3C of the paper shows the second-degree neighbourhood of the CXCL12–CXCR4 links: all genes at most two
+intracellular links away from CXCL12 in fibroblasts or from CXCR4 in dendritic cells and T cells. We draw it for the
+authors' network and for ours with `plot_neighbourhood()` (in `scripts/helpers.R`).
+
+How to read the drawings: diamonds are CXCL12 and the two CXCR4; colours are cell types; dashed lines are the given L-R
+links (drawn thin, since their strength is set artificially); an arrowhead is an orientation found by MIIC, and a green
+link a genuine causation; thicker links are stronger. A star marks the duplicated columns of the authors' table
+(notebook 03), and "subtype" is the metadata `labels`. The drawings are interactive: hover over a node or a link for
+details, click a node to highlight its neighbours, drag to rearrange, scroll to zoom.
+
+```{r}
+#| label: drawing-inputs
+
+centres          <- c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell")
+lr_links_authors <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+copies_authors   <- duplicated_columns(mosaic_authors, row_type, column_cell_type(mosaic_authors, row_type))
+type_of_authors  <- set_names(type_of_key(key_of_authors), names(key_of_authors))
+type_of_ours     <- set_names(type_of_key(names(mosaic)), names(mosaic))
+label_authors    <- \(v) gene_label(v, copies_authors)
+```
+
+```{r}
+#| label: fig-3c-authors
+
+plot_neighbourhood(edges_authors, lr_links_authors, centres, type_of_authors, label_authors,
+                   title = "Authors' network")
+```
+
+```{r}
+#| label: fig-3c-ours
+
+plot_neighbourhood(edges_ours, lr_links, centres, type_of_ours, gene_label,
+                   title = "Our network (rebuilt input)")
+```
+
+## 8. The full networks, drawn
+
+All retained links of each network, with the same conventions. With more than 200 variables the drawings are dense:
+zoom in, or click a gene to highlight its neighbours.
+
+```{r}
+#| label: full-authors
+
+network_data(edges_authors, lr_links_authors, type_of_authors, label_authors) |>
+  plot_network_interactive(title = "Authors' network (all links)", height = "800px")
+```
+
+```{r}
+#| label: full-ours
+
+network_data(edges_ours, lr_links, type_of_ours, gene_label) |>
+  plot_network_interactive(title = "Our network (all links)", height = "800px")
+```
+
+## What we learned
+
+**The skeleton of the network is robust.** Our input has 217 variables instead of the authors' 238 (224 once their
+duplicates are merged), and 210 variables are shared. Among them, most links are found by both runs: Jaccard index
+0.92 within T cells, 0.89 within fibroblasts and 0.85 within dendritic cells. Our run took 1.1 hours (2.8 hours for the
+authors' input): fewer variables, and no duplicated columns.
+
+**Figure 3 is reproduced.** The direct neighbours of CXCL12 in fibroblasts (APOE, C3, CFD, CFH, CXCL14) and of CXCR4
+in dendritic cells (NR4A3, RGS1, UBC) and in T cells (JUNB, ZFP36) are exactly the same, and every gene named in the
+paper is at the same distance as in the authors' network (CFD, NR4A3, JUNB direct; DCN, APOD, GPR183, VIM, FOS at two
+links).
+
+**Orientations are less robust.** On the 461 gene–gene links found in both networks, 79 % have the same orientation
+status and only 2 are oriented in opposite directions. But many links oriented in the authors' network are not
+oriented in ours (68), and genuine causations fall from 30 to 19, only 9 shared (the table above gives 49 for the
+authors because it lists the links of duplicated genes twice; 30 counts each link once). The CXCL12 → CFD orientation of
+the authors' network, for example, is not found. Removing the duplicated columns and changing about 7 % of the genes is
+enough to change many orientations: orientations, and the "upstream"/"downstream" reading they support, should be
+interpreted with more caution than the presence of links. Notebook 07 separates the two effects.
+
+**L-R link strength.** Without duplicates, the strongest link of the network is S100A10–S100A6 in fibroblasts (3,050
+instead of 11,579 for the two copies of S100A6). Since the `causalccc` branch gives every L-R link the strength of the
+strongest link, the L-R strengths of the published network were set by a duplicated gene.
+
+**Overall, for case study 2.** The input can be rebuilt from public data with the authors' own tools, apart from a
+handful of genes near the selection cut-off and the duplicated columns. The links of the published network, and the
+Figure 3 neighbourhoods, are reproduced; the orientations are only partly reproduced.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

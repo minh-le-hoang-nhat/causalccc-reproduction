@@ -1,0 +1,565 @@
+---
+title: "03 – Explore the CausalCCC authors' files (case study 2)"
+subtitle: "Fibroblasts, dendritic cells and T cells in atopic dermatitis skin, CellChat L-R pairs"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+This notebook does for case study 2 (Figure 3 and Supplementary Figure S1 of the paper) what notebook 01 did for case
+study 1. The files were downloaded by `scripts/case2/download_case2.sh` from the web server job `w0788tM1wzXGHLzNaKKa`
+(sources in `data/README.md`). We want to understand:
+
+1. what the authors gave CausalCCC: the mosaic table, the variable list, the L-R pairs, the settings;
+2. what CausalCCC returned;
+3. whether the network supports what the paper says about Figure 3.
+
+The new feature of this case study is that there are **three cell types**, and each one is both a sender and a
+receiver. The table also contains **metadata** (cell subtype and skin condition) as extra variables.
+
+This notebook only **reads** files: nothing in `data/` is modified and nothing is written.
+
+## Setup
+
+The helper functions used in notebooks 01 and 02 (`find_repo_root()`, `neighbors_of()`, `graph_distance()`, ...) are now
+in `scripts/helpers.R`, so that every notebook uses the same version. We load them with `source()`.
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+# find_repo_root() is needed before we know where helpers.R is, so this short loop is repeated here
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/case2/download_case2.sh first.")
+```
+
+## 1. Read the files
+
+The same files as in case study 1. `guess_max = Inf` tells `read_tsv()` to look at every row before deciding the type of
+a column: the metadata columns are empty (`NA`) for thousands of rows before their first value, and without this option
+they would be read as logical columns.
+
+```{r}
+#| label: read-files
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+edges       <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+run_log     <- read_lines(file.path(job_dir, "whole_run.log"))
+
+tibble(
+  table   = c("mosaic", "state_order", "lr_pairs", "edges"),
+  rows    = c(nrow(mosaic), nrow(state_order), nrow(lr_pairs), nrow(edges)),
+  columns = c(ncol(mosaic), ncol(state_order), ncol(lr_pairs), ncol(edges))
+)
+```
+
+The mosaic table is byte-for-byte identical to `data/case_study2/input.tsv`, the copy found online at the start of
+the project (same md5 checksum, checked when downloading).
+
+## 2. How the server ran
+
+```{r}
+#| label: run-command
+
+run_log |>
+  str_subset("^Rscript") |>
+  str_replace_all(" (--?[a-z])", "\n  \\1") |>
+  cat()
+```
+
+The settings are those of case study 1 (see notebook 02, section 2, for the meaning of each option), with one
+exception: `--n_threads 1` instead of 2. The time stamps of the log give the running time on the server:
+
+```{r}
+#| label: run-time
+
+run_log |>
+  str_subset("START miic|Search for conditional|confidence cut|Done!") |>
+  str_trunc(110) |>
+  cat(sep = "\n")
+```
+
+About three hours, most of it spent searching for conditional independences. The confidence filter removed 72 links.
+
+## 3. The mosaic table
+
+Each row is a cell of one of the three types. The metadata columns `labels_<type>` (cell subtype) are filled only for
+the cells of that type, so they tell us the type of each row. Then, as in notebook 01, the type of a column is the type
+of the rows where it has values.
+
+```{r}
+#| label: rows-and-columns
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+
+row_type <- case_when(!is.na(mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic$labels_DCs)         ~ "DCs")
+
+col_type <- column_cell_type(mosaic, row_type)
+
+tibble(cell_type = cell_types,
+       cells     = map_int(cell_types, \(t) sum(row_type == t, na.rm = TRUE)),
+       variables = map_int(cell_types, \(t) sum(col_type == t)))
+
+# Every row has a type, and every column belongs to exactly one type?
+c(rows_without_type = sum(is.na(row_type)), columns_shared = sum(!col_type %in% cell_types))
+```
+
+Is the mosaic exactly made of three filled blocks? For each cell type we check that its rows are complete in its own
+columns and empty everywhere else.
+
+```{r}
+#| label: check-blocks
+
+map(cell_types, \(t) {
+  own_rows <- row_type == t
+  own_cols <- col_type == t
+  tibble(cell_type          = t,
+         own_block_complete = !anyNA(mosaic[own_rows, own_cols]),
+         elsewhere_empty    = all(is.na(mosaic[own_rows, !own_cols])))
+}) |> list_rbind()
+
+rle(row_type)
+```
+
+Rows are grouped by cell type: dendritic cells, then T cells, then fibroblasts.
+
+```{r}
+#| label: plot-mosaic
+#| fig-width: 8
+#| fig-height: 5
+
+col_order <- names(mosaic)[order(match(col_type, cell_types))]
+
+mosaic |>
+  mutate(across(everything(), \(v) !is.na(v)), cell = row_number()) |>
+  pivot_longer(-cell, names_to = "variable", values_to = "has_value") |>
+  mutate(variable = factor(variable, levels = col_order)) |>
+  ggplot(aes(x = variable, y = cell, fill = has_value)) +
+  geom_raster() +
+  scale_y_reverse() +
+  scale_fill_manual(values = c(`TRUE` = "steelblue", `FALSE` = "grey90"),
+                    labels = c(`TRUE` = "value", `FALSE` = "NA")) +
+  labs(x = "variables (fibroblasts | T cells | dendritic cells)", y = "cells (rows of input.tsv)", fill = NULL,
+       title = "The mosaic table uploaded to CausalCCC (case study 2)") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), panel.grid = element_blank())
+```
+
+### Variable names
+
+In case study 1, a suffix (`_senders`, `_receivers`) was added only to genes measured on both sides. Here the rule
+looks similar but has gone wrong in places: some names carry the suffix twice. We split each name into its gene and
+its suffixes.
+
+```{r}
+#| label: names
+
+names_tbl <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  mutate(suffixes = str_count(variable, paste0("_(", paste(cell_types, collapse = "|"), ")")),
+         gene     = str_remove_all(variable, paste0("_(", paste(cell_types, collapse = "|"), ")")))
+
+count(names_tbl, cell_type, suffixes)
+
+names_tbl |> filter(suffixes == 2) |> pull(variable)
+```
+
+Once the suffixes are removed, does a gene appear twice in the same cell type? If so, we compare the two columns on the
+cells of that type.
+
+```{r}
+#| label: duplicated-columns
+
+duplicates <- names_tbl |>
+  group_by(cell_type, gene) |>
+  filter(n() == 2) |>
+  summarise(copy_1 = first(variable), copy_2 = last(variable), .groups = "drop") |>
+  mutate(identical = pmap_lgl(list(cell_type, copy_1, copy_2), \(t, a, b) {
+    identical(mosaic[[a]][row_type == t], mosaic[[b]][row_type == t])
+  }))
+
+duplicates
+
+# Any gene present more than twice in a cell type?
+names_tbl |> count(cell_type, gene) |> filter(n > 2)
+```
+
+`r nrow(duplicates)` genes appear **twice in the same cell type, as two identical columns**. For example
+`S100A6_Fibroblasts` and `S100A6_Fibroblasts_Fibroblasts` hold the same numbers, and so do `ACTB` and `ACTB_T_cell`. One
+copy has one suffix more than the other. The table was probably assembled from several sender–receiver runs, in which
+the same gene got different names (notebook 05, section 10). Section 7 shows what this does to the network.
+
+### Variable types and groups
+
+```{r}
+#| label: state-order
+
+count(state_order, group)
+
+setequal(names(mosaic), state_order$var_names)
+
+state_order |> filter(var_type == 0) |> select(var_names, levels_increasing_order)
+```
+
+The six discrete variables are the metadata: the cell subtype (`labels_*`, four subtypes per cell type, from the
+CellChat annotation) and the skin condition (`condition_*`: `LS` lesional or `NL` non-lesional skin of atopic
+dermatitis patients). Every gene is continuous.
+
+```{r}
+#| label: metadata
+
+mosaic |>
+  mutate(cell_type = row_type,
+         subtype   = coalesce(labels_Fibroblasts, labels_T_cell, labels_DCs),
+         condition = coalesce(condition_Fibroblasts, condition_T_cell, condition_DCs)) |>
+  count(cell_type, condition) |>
+  pivot_wider(names_from = condition, values_from = n)
+```
+
+Most dendritic cells and T cells come from lesional skin, while fibroblasts are more balanced.
+
+### Raw counts?
+
+```{r}
+#| label: raw-counts
+
+gene_cols <- state_order$var_names[state_order$var_type == 1]
+values    <- unlist(mosaic[gene_cols], use.names = FALSE)
+values    <- values[!is.na(values)]
+
+tibble(minimum = min(values), maximum = max(values),
+       all_integers = all(values == round(values)), fraction_zero = mean(values == 0))
+```
+
+## 4. The ligand–receptor pairs
+
+The L-R pairs come from the CellChat analysis of this dataset (Jin *et al.*, *Nat Commun* 2021). Each ligand and
+receptor name carries the cell type that expresses it, so we can read off the direction of each pair.
+
+```{r}
+#| label: lr-pairs
+
+lr_pairs <- lr_pairs |>
+  mutate(sender   = col_type[ligand],
+         receiver = col_type[receptor])
+
+count(lr_pairs, sender, receiver)
+
+# Every ligand declared a ligand, every receptor a receptor?
+lr_pairs |>
+  summarise(all_ligands_ok   = all(ligand %in% state_order$var_names[state_order$group == "ligands"]),
+            all_receptors_ok = all(receptor %in% state_order$var_names[state_order$group == "receptors"]))
+
+lr_pairs |> filter(str_detect(ligand, "CXCL12"))
+```
+
+The pairs cover all six directions between two different cell types; there is no autocrine pair (ligand and receptor
+in the same cell type). The pairs of Figure 3 (CXCL12 from fibroblasts to CXCR4 on dendritic cells and on T cells) are there.
+
+How often is each ligand and receptor detected in its own cell type?
+
+```{r}
+#| label: lr-expression
+#| fig-width: 7
+#| fig-height: 7
+
+lr_genes <- unique(c(lr_pairs$ligand, lr_pairs$receptor))
+
+lr_expression <- mosaic[lr_genes] |>
+  pivot_longer(everything(), names_to = "variable", values_to = "count") |>
+  filter(!is.na(count)) |>
+  group_by(variable) |>
+  summarise(fraction_detected = mean(count > 0)) |>
+  mutate(role = if_else(variable %in% lr_pairs$ligand, "ligand", "receptor"))
+
+ggplot(lr_expression, aes(x = fraction_detected, y = reorder(variable, fraction_detected), fill = role)) +
+  geom_col() +
+  scale_x_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = "cells of its own type where the gene is detected", y = NULL, fill = NULL,
+       title = "Detection of ligands and receptors") +
+  theme_minimal()
+
+lr_expression |> filter(fraction_detected < 0.1) |> arrange(fraction_detected)
+```
+
+## 5. The published network
+
+We sort the retained links into categories using the cell type of each variable.
+
+```{r}
+#| label: network
+
+count(edges, type)
+
+network <- edges |>
+  filter(type == "P") |>
+  mutate(type_x   = col_type[x],
+         type_y   = col_type[y],
+         category = if_else(type_x == type_y, paste("within", type_x), "ligand-receptor"))
+
+count(network, category)
+
+# Number of cells used to learn each kind of link
+count(network, category, cells_used = Nxy_ai)
+```
+
+Links within a cell type are learnt from the cells of that type only; the 43 L-R links are given, not learnt
+(`Nxy_ai` is `NA`).
+
+**What MIIC reports for each link.** Three levels of evidence, from weakest to strongest, should not be confused:
+
+| Level | Column | Meaning |
+| --- | --- | --- |
+| **Link present** | `type = P` | the two genes are dependent, even after conditioning on the other genes |
+| **Oriented** | `infOrt = 2` or `-2` | MIIC found a likely direction (x → y or y → x) |
+| **Genuine causation** | `is_causal = Y` | MIIC considers the edge a genuine cause–effect relation; the paper draws it with a green arrowhead |
+
+Two other values of `infOrt`: `1` = not oriented, `6` = bidirected (a possible sign of a hidden common cause). A link can
+be oriented without being a genuine causation: this is the case of CXCL12 → CFD below. Most links are not oriented, and
+only a minority are genuine causations.
+
+```{r}
+#| label: orientation
+
+network |>
+  mutate(orientation = case_when(infOrt ==  1 ~ "not oriented",
+                                 infOrt %in% c(2, -2) ~ "oriented",
+                                 infOrt ==  6 ~ "bidirected")) |>
+  count(category, orientation) |>
+  pivot_wider(names_from = orientation, values_from = n, values_fill = 0)
+
+count(network, is_causal)
+```
+
+**Hubs.**
+
+```{r}
+#| label: hubs
+
+bind_rows(select(network, gene = x), select(network, gene = y)) |>
+  count(gene, name = "links", sort = TRUE) |>
+  head(10)
+```
+
+**The metadata variables** are part of the network. Their neighbours show which genes differ between subtypes or
+between lesional and non-lesional skin.
+
+```{r}
+#| label: metadata-links
+
+metadata_vars <- state_order$var_names[state_order$group == "metadata"]
+
+map(metadata_vars, \(m) neighbors_of(m, network)) |>
+  list_rbind() |>
+  group_by(node) |>
+  summarise(links = n(), neighbors = paste(head(neighbor, 8), collapse = ", "))
+```
+
+## 6. Does the network support the paper's description of Figure 3?
+
+Figure 3C shows the "second-degree neighbourhood" of the two CXCL12–CXCR4 links: the genes at most two links away from
+CXCL12 in fibroblasts and from CXCR4 in dendritic cells and in T cells. The text names specific genes in that
+neighbourhood. We look for them in the network **within each cell type**, that is, without the L-R links, which
+would otherwise connect everything through the receptors.
+
+```{r}
+#| label: intracellular
+
+intracellular <- network |> filter(category != "ligand-receptor")
+```
+
+**Statement 1.** CXCL12, secreted by fibroblasts, is linked to CXCR4 on dendritic cells and on T cells.
+
+```{r}
+#| label: claim-1
+
+network |>
+  filter(str_detect(x, "^CXCL12") | str_detect(y, "^CXCL12")) |>
+  filter(category == "ligand-receptor") |>
+  select(x, y, infOrt, proba)
+```
+
+**Statement 2.** Upstream of CXCL12 in fibroblasts: the fibroblast marker DCN and the adipose-related genes APOD and CFD.
+
+```{r}
+#| label: claim-2
+
+neighbors_of("CXCL12_Fibroblasts", intracellular)
+
+distance_cxcl12 <- graph_distance(intracellular, "CXCL12_Fibroblasts")
+tibble(gene = c("DCN", "APOD", "CFD"), distance_from_CXCL12 = distance_cxcl12[gene])
+```
+
+**Statement 3.** Downstream of CXCR4 in dendritic cells: GPR183 (migration), NR4A3 and VIM. In the table VIM of
+dendritic cells is called `VIM_DCs_DCs` (double suffix, section 3).
+
+```{r}
+#| label: claim-3
+
+neighbors_of("CXCR4_DCs", intracellular)
+
+distance_cxcr4_dc <- graph_distance(intracellular, "CXCR4_DCs")
+tibble(gene = c("GPR183", "NR4A3", "VIM_DCs_DCs"), distance_from_CXCR4 = distance_cxcr4_dc[gene])
+```
+
+**Statement 4.** Downstream of CXCR4 in T cells: the AP-1 genes FOS and JUNB.
+
+```{r}
+#| label: claim-4
+
+neighbors_of("CXCR4_T_cell", intracellular)
+
+distance_cxcr4_t <- graph_distance(intracellular, "CXCR4_T_cell")
+tibble(gene = c("FOS", "JUNB"), distance_from_CXCR4 = distance_cxcr4_t[gene])
+```
+
+**The whole second-degree neighbourhood** (to compare by eye with Figure 3C):
+
+```{r}
+#| label: neighbourhood
+
+second_degree <- function(from) {
+  d <- graph_distance(intracellular, from)
+  d <- d[d <= 2]
+  tibble(centre = from, gene = names(d), distance = d)
+}
+
+map(c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell"), second_degree) |>
+  list_rbind() |>
+  filter(distance > 0) |>
+  group_by(centre, distance) |>
+  summarise(genes = paste(sort(gene), collapse = ", "), .groups = "drop")
+```
+
+**Figure 3B** shows CXCL12 and CXCR4 expression in lesional skin. We draw the equivalent from the raw counts of the
+mosaic (on a `log1p` scale, i.e. log(1 + count)), separating lesional and non-lesional cells.
+
+```{r}
+#| label: fig-3b
+#| fig-width: 7
+#| fig-height: 4
+
+tibble(cell_type = row_type,
+       condition = coalesce(mosaic$condition_Fibroblasts, mosaic$condition_T_cell, mosaic$condition_DCs),
+       CXCL12    = mosaic$CXCL12_Fibroblasts,
+       CXCR4     = coalesce(mosaic$CXCR4_DCs, mosaic$CXCR4_T_cell)) |>
+  pivot_longer(c(CXCL12, CXCR4), names_to = "gene", values_to = "count") |>
+  filter(!is.na(count)) |>
+  ggplot(aes(x = cell_type, y = log1p(count), fill = condition)) +
+  geom_violin(scale = "width") +
+  facet_wrap(~gene, scales = "free_x") +
+  labs(x = NULL, y = "log(1 + raw count)", fill = "skin",
+       title = "CXCL12 in fibroblasts, CXCR4 in dendritic cells and T cells") +
+  theme_minimal()
+```
+
+## 7. What do the duplicated columns do to the network?
+
+Two identical columns carry the same information, so MIIC finds the strongest possible link between them.
+
+```{r}
+#| label: duplicate-links
+
+duplicate_links <- link_name(duplicates$copy_1, duplicates$copy_2)
+
+# Are the two copies of each duplicated gene linked to each other?
+edges |>
+  filter(link_name(x, y) %in% duplicate_links) |>
+  count(type)
+
+network |>
+  filter(link_name(x, y) %in% duplicate_links) |>
+  select(x, y, info_shifted, partial_correlation)
+
+# Rank of the strongest links among gene-gene links
+network |>
+  filter(category != "ligand-receptor") |>
+  arrange(desc(info_shifted)) |>
+  select(x, y, info_shifted) |>
+  head(8)
+```
+
+The 14 links between copies are the 14 strongest gene–gene links of their cell types, with a partial correlation of
+exactly 1. Since the L-R links are given the strength of the strongest link of the network, a duplicate also sets the
+strength of every L-R link.
+
+Do the two copies of a gene have the same neighbours (apart from each other)?
+
+```{r}
+#| label: duplicate-neighbours
+
+intracellular_all <- network |> filter(category != "ligand-receptor")
+
+duplicates |>
+  mutate(neighbours = map2(copy_1, copy_2, \(a, b) {
+    n_a <- setdiff(neighbors_of(a, intracellular_all)$neighbor, b)
+    n_b <- setdiff(neighbors_of(b, intracellular_all)$neighbor, a)
+    tibble(links_copy_1 = length(n_a), links_copy_2 = length(n_b), shared = length(intersect(n_a, n_b)))
+  })) |>
+  unnest(neighbours) |>
+  select(cell_type, gene, links_copy_1, links_copy_2, shared)
+```
+
+Each duplicated gene thus enters the network twice, with each neighbour linked to both copies: its links are counted
+twice, which inflates its importance as a hub. The two copies also count as two variables when MIIC looks for
+separating sets and for orientations. For the Figure 3 claims this matters little (none of the genes named in the text
+is duplicated), but it should be fixed when we rebuild the input.
+
+## What we learned
+
+**Inputs.** The mosaic has 7,563 cells (4,734 fibroblasts, 2,200 T cells, 629 dendritic cells): the full CellChat
+`data_humanSkin` dataset, i.e. all cells of these three types from He *et al.* 2020. It has 238 variables: 232 genes
+(raw integer counts) and 6 discrete metadata (cell subtype and lesional/non-lesional skin, for each cell type). The
+43 CellChat L-R pairs connect the three cell types in both directions.
+
+**Network.** 715 links were kept out of 8,458 examined. The server needed about three hours, single-threaded.
+
+**Paper's statements (Figure 3C).** All supported, within the second-degree neighbourhood that the figure draws:
+
+- CXCL12 in fibroblasts is linked to CXCR4 in dendritic cells and in T cells (given L-R links).
+- CFD is a direct neighbour of CXCL12; DCN and APOD are two links away. Note that MIIC orients the link CXCL12 → CFD
+  (not a genuine causation): CFD is on the fibroblast side, but the network does not put it upstream of CXCL12.
+- NR4A3 is a direct neighbour of CXCR4 in dendritic cells; GPR183 and VIM are two links away.
+- JUNB is a direct neighbour of CXCR4 in T cells; FOS is two links away.
+
+The paper speaks of "upstream" and "downstream" genes. None of the links around CXCR4 is oriented, and the only
+oriented links of CXCL12 point away from it, so these words describe the position relative to the L-R link (sender side,
+receiver side) rather than a causal direction found by MIIC.
+
+**Points for the preprocessing assessment.**
+
+- 14 genes appear twice in the same cell type as identical columns, under two names that differ by one suffix
+  (`S100A6_Fibroblasts` / `S100A6_Fibroblasts_Fibroblasts`, `ACTB` / `ACTB_T_cell`, ...). The link between two copies
+  is the strongest of its cell type, and the gene's links are counted twice (section 7).
+- Two L-R genes are detected in fewer than 10 % of the cells of their type: CCL19 (6 % of fibroblasts) and CD74 in
+  fibroblasts (8 %).
+- Dendritic cells are few (629) and mostly from lesional skin: links within dendritic cells are learnt from fewer cells.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```
