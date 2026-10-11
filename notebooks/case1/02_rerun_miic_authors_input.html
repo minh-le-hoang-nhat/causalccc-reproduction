@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-06">
+<meta name="dcterms.date" content="2026-10-11">
 
 <title>02 – Rerun MIIC on the authors’ input (case study 1)</title>
 <style>
@@ -3114,7 +3114,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 6, 2026</p>
+      <p class="date">October 11, 2026</p>
     </div>
   </div>
   
@@ -3135,7 +3135,7 @@ vertical-align: -.125em;
 <li><strong>Randomness.</strong> The confidence filter compares each link with 100 randomly shuffled versions of the data. Different random shuffles give slightly different confidence values, so links close to the threshold can be kept in one run and removed in another. We fix the random seed so that <em>our</em> run is repeatable, but we cannot know the server’s seed.</li>
 <li><strong>Number of threads.</strong> The server used 2. This should not change the result, but we keep 2 to stay close.</li>
 </ol>
-<p><strong>Inputs:</strong> the authors’ files in <code>data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/</code> (read only). <strong>Outputs:</strong> <code>results/02_rerun_miic/</code>: the full MIIC result (<code>miic_result.rds</code>) and our edge list (<code>edges_rerun.tsv</code>).</p>
+<p><strong>Inputs:</strong> the authors’ files in <code>data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/</code> (read only). <strong>Outputs:</strong> <code>results/case1/02_rerun_miic/</code>: the full MIIC result (<code>miic_result.rds</code>) and our edge list (<code>edges_rerun.tsv</code>).</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -3146,7 +3146,7 @@ Running time
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The MIIC run takes roughly 15 to 30 minutes. The notebook saves its result the first time and simply reloads it afterwards. To force a new run, delete <code>results/02_rerun_miic/miic_result.rds</code>.</p>
+<p>The MIIC run takes roughly 15 to 30 minutes. The notebook saves its result the first time and simply reloads it afterwards. To force a new run, delete <code>results/case1/02_rerun_miic/miic_result.rds</code>.</p>
 </div>
 </div>
 </section>
@@ -3180,9 +3180,9 @@ loading &#39;miic&#39;</code></pre>
 <span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>root        <span class="ot">&lt;-</span> <span class="fu">find_repo_root</span>()</span>
 <span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>job_dir     <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case1&quot;</span>, <span class="st">&quot;causalccc_server_eaP9Br0llvzxN07zZZEC&quot;</span>)</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;02_rerun_miic&quot;</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>results_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;results&quot;</span>, <span class="st">&quot;case1&quot;</span>, <span class="st">&quot;02_rerun_miic&quot;</span>)</span>
 <span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/download_case1.sh first.&quot;</span>)</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/case1/download_case1.sh first.&quot;</span>)</span>
 <span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(results_dir, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Which miic are we using? It should be the causalccc branch, version 2.0.x.</span></span>
@@ -3339,33 +3339,8 @@ loading &#39;miic&#39;</code></pre>
 <span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">attr</span>(miic_result, <span class="st">&quot;run_time&quot;</span>) <span class="ot">&lt;-</span> <span class="fu">Sys.time</span>() <span class="sc">-</span> start   <span class="co"># keep the running time with the result</span></span>
 <span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(miic_result, result_file)</span>
 <span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] &quot;the interactEdges file is detected in miic.R&quot;
-[1] &quot;the optional weight column in interactEdges file is not a problem in miic.reconstruct.R&quot;
-Search all pairs for unconditional independence relations...
-Did not remove 1---95edge in initializeEdges() because status is 1
-Did not remove 0---89edge in initializeEdges() because status is 1
-Did not remove 0---90edge in initializeEdges() because status is 1
-Did not remove 0---91edge in initializeEdges() because status is 1
-Did not remove 0---92edge in initializeEdges() because status is 1
-Did not remove 0---93edge in initializeEdges() because status is 1
-Did not remove 0---94edge in initializeEdges() because status is 1
-Did not remove 2---96edge in initializeEdges() because status is 1
-Did not remove 3---97edge in initializeEdges() because status is 1
-Did not remove 4---98edge in initializeEdges() because status is 1
-Did not remove 5---89edge in initializeEdges() because status is 1
-Did not remove 5---90edge in initializeEdges() because status is 1
-Did not remove 5---91edge in initializeEdges() because status is 1
-Did not remove 5---92edge in initializeEdges() because status is 1
-Did not remove 5---93edge in initializeEdges() because status is 1
-Did not remove 5---94edge in initializeEdges() because status is 1
-Did not remove 6---95edge in initializeEdges() because status is 1
-Did not remove 7---97edge in initializeEdges() because status is 1
-Search for candidate separating nodes...
-Search for conditional independence relations...
-Compute confidence cut with permutations...51 edges cut.
-Search for edge directions...
-Number of edges: 346</code></pre>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loaded the saved result from /home/minhle/projects/csbc-causalccc/causalccc-reproduction/results/case1/02_rerun_miic/miic_result.rds</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">attr</span>(miic_result, <span class="st">&quot;run_time&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -3808,17 +3783,16 @@ loaded via a namespace (and not attached):
  [76] KernSmooth_2.23-26     plotly_4.12.1          generics_0.1.4        
  [79] vroom_1.7.1            RcppHNSW_0.7.0         sp_2.2-3              
  [82] hms_1.1.4              scales_1.4.0           globals_0.19.1        
- [85] xtable_1.8-8           glue_1.8.1             ppcor_1.1             
- [88] tools_4.6.1            data.table_1.18.6.1    RSpectra_0.16-2       
- [91] RANN_2.6.3             dotCall64_1.2          cowplot_1.2.0         
- [94] grid_4.6.1             nlme_3.1-169           patchwork_1.3.2       
- [97] cli_3.6.6              spatstat.sparse_3.2-0  spam_2.11-4           
-[100] viridisLite_0.4.3      uwot_0.2.5             gtable_0.3.6          
-[103] digest_0.6.39          progressr_1.0.0        ggrepel_0.9.8         
-[106] rjson_0.2.23           htmlwidgets_1.6.4      SeuratObject_5.4.0    
-[109] farver_2.1.2           htmltools_0.5.9        lifecycle_1.0.5       
-[112] httr_1.4.9             mime_0.13              bit64_4.8.6           
-[115] MASS_7.3-65           </code></pre>
+ [85] xtable_1.8-8           glue_1.8.1             tools_4.6.1           
+ [88] data.table_1.18.6.1    RSpectra_0.16-2        RANN_2.6.3            
+ [91] dotCall64_1.2          cowplot_1.2.0          grid_4.6.1            
+ [94] nlme_3.1-169           patchwork_1.3.2        cli_3.6.6             
+ [97] spatstat.sparse_3.2-0  spam_2.11-4            viridisLite_0.4.3     
+[100] uwot_0.2.5             gtable_0.3.6           digest_0.6.39         
+[103] progressr_1.0.0        ggrepel_0.9.8          rjson_0.2.23          
+[106] htmlwidgets_1.6.4      SeuratObject_5.4.0     farver_2.1.2          
+[109] htmltools_0.5.9        lifecycle_1.0.5        httr_1.4.9            
+[112] mime_0.13              bit64_4.8.6            MASS_7.3-65           </code></pre>
 </div>
 </div>
 </section>

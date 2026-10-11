@@ -7,11 +7,11 @@ and how to obtain it, so that `data/` can be rebuilt from scratch.
 
 ## Rebuilding this folder
 
-| Dataset      | Command                                     | Size                                     |
-| ------------ | ------------------------------------------- | ---------------------------------------- |
-| Case study 1 | `bash scripts/download_case1.sh`            | about 770 MB                             |
-|              | `bash scripts/download_case1.sh --with-geo` | also GEO raw data, about 860 MB in total |
-| Case study 2 | `bash scripts/case2/download_case2.sh`      | about 5 MB                               |
+| Dataset      | Command                                           | Size                                     |
+| ------------ | ------------------------------------------------- | ---------------------------------------- |
+| Case study 1 | `bash scripts/case1/download_case1.sh`            | about 770 MB                             |
+|              | `bash scripts/case1/download_case1.sh --with-geo` | also GEO raw data, about 860 MB in total |
+| Case study 2 | `bash scripts/case2/download_case2.sh`            | about 5 MB                               |
 
 Run the scripts from the root of the repository. They can be run again at any time: complete files are skipped,
 interrupted downloads resume, and files that were modified since the last run are reported. Each download is recorded
@@ -28,6 +28,7 @@ data/
 ├── checksums_case2.md5                          md5 checksums of the case study 2 files
 ├── case1/
 │   ├── causalccc_server_eaP9Br0llvzxN07zZZEC/   files of the authors' web server job
+│   ├── causalccc_server_ours_*_params/          our own server jobs (not needed, see below)
 │   ├── nichenet_seurat/seuratObj.rds            processed Medaglia data (Seurat object)
 │   └── geo_GSE104054/                           raw data (optional, --with-geo)
 ├── case2/
@@ -67,10 +68,15 @@ no checksums: ours are recorded at first download.
 ### Notes and open questions
 
 - The tutorial's "NicheNet dataset" link points to the NicheNet v1 model files (Zenodo 3260758, human), not to the
-  expression data. That `seuratObj.rds` is the origin of the authors' input, the counts are identical (four genes have been suspected to change to current symbols, verify when needed).
+  expression data. `seuratObj.rds` is the origin of the authors' input: their counts are identical to ours for all 144
+  variables, and four genes carry a newer name in their table (Mir703, Rack1, Ifi209, Tpt1-ps3; notebook 03, section 1).
 - The mosaic has no condition column, although the paper mentions steady state and infection: both are probably pooled.
 - The NicheNet version and parameters used to obtain the 18 L-R pairs are not stated, though, it is likely we won't need NicheNet v2 networks for now.
 - The CausalCCC server is not an archive: these files could disappear, hence the local copy and its checksums.
+- `case1/causalccc_server_ours_default_params/` and `…_updated_params/`: networks returned by the web server on
+  2026-10-08 for our inputs of notebooks 03 and 04, uploaded by hand (no download script). The server ran with its
+  default settings, not those of the authors' job (no confidence filter, `confidence` is `NA`), so the notebooks run MIIC
+  locally with the authors' settings instead. Not needed to run the notebooks; kept for reference.
 
 ## Sources – case study 2
 

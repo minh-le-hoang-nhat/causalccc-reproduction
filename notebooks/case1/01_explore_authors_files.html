@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-06">
+<meta name="dcterms.date" content="2026-10-11">
 
 <title>01 – Explore the CausalCCC authors’ files (case study 1)</title>
 <style>
@@ -3114,7 +3114,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 6, 2026</p>
+      <p class="date">October 11, 2026</p>
     </div>
   </div>
   
@@ -3128,7 +3128,7 @@ vertical-align: -.125em;
 
 <section id="goal" class="level2">
 <h2 class="anchored" data-anchor-id="goal">Goal</h2>
-<p>Before rebuilding anything ourselves, we look closely at the files the CausalCCC authors used to produce Figure 2 of the paper. They were downloaded by <code>scripts/download_case1.sh</code> from the web server job <code>eaP9Br0llvzxN07zZZEC</code> (sources in <code>data/README.md</code>). We want to understand:</p>
+<p>Before rebuilding anything ourselves, we look closely at the files the CausalCCC authors used to produce Figure 2 of the paper. They were downloaded by <code>scripts/case1/download_case1.sh</code> from the web server job <code>eaP9Br0llvzxN07zZZEC</code> (sources in <code>data/README.md</code>). We want to understand:</p>
 <ol type="1">
 <li>what CausalCCC takes as input (the “mosaic” table, the variable list, the L-R pairs) and with which settings it ran;</li>
 <li>what it produces (the network edge list) and how to read it;</li>
@@ -3156,7 +3156,7 @@ vertical-align: -.125em;
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>root    <span class="ot">&lt;-</span> <span class="fu">find_repo_root</span>()</span>
 <span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>job_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(root, <span class="st">&quot;data&quot;</span>, <span class="st">&quot;case1&quot;</span>, <span class="st">&quot;causalccc_server_eaP9Br0llvzxN07zZZEC&quot;</span>)</span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/download_case1.sh first.&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">dir.exists</span>(job_dir)) <span class="fu">stop</span>(<span class="st">&quot;Data not found: run scripts/case1/download_case1.sh first.&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="read-the-files" class="level2">
