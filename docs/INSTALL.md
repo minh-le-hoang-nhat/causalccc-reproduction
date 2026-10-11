@@ -45,8 +45,10 @@ binaries for your distribution; on macOS and Windows it uses the standard snapsh
 Rscript envs/install_R_packages.R
 ```
 
-This installs Seurat, tidyverse and rjson from the CRAN snapshot, and `miic` (branch `causalccc`) and `causalCCC` from
-GitHub at fixed commits. It stops with an error if the installed commits do not match.
+This installs Seurat, tidyverse and rjson from the CRAN snapshot, and `miic` (branch `causalccc`), `causalCCC` and
+`liana` (ligand-receptor inference used by `causalCCC.links()`) from GitHub at fixed commits. It stops with an error if
+the installed commits do not match. LIANA also installs several Bioconductor packages (scran, scater, OmnipathR, …);
+their versions follow the Bioconductor release that matches R 4.6.
 
 ## 3. Check
 

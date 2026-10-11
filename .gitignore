@@ -18,3 +18,6 @@ __pycache__/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Log files written by OmnipathR (dependency of LIANA)
+omnipathr-log/
