@@ -245,8 +245,10 @@ expand_grid(sender = names(metadata_options), receiver = names(metadata_options)
 
 **The authors' selection is reproduced exactly** (0 missing, 0 extra in all three cell types) by: one wrapper run per
 sender → receiver direction, all the ligands or receptors of the direction as features of interest (no cap of 8), the
-subtype metadata (`labels`) as a feature of interest on both sides, and **25 genes** per run. Adding `condition` on one
-or both sides changes nothing.
+two metadata (`labels` and `condition`) as features of interest, and **25 genes** per run. The metadata matter: `labels`
+alone on both sides is not enough (4 genes missing), but the selection is exact as soon as `condition` is added on one
+side (`labels` on the sender side and both on the receiver side, or the reverse) or on both sides. The simplest
+combination, used below, is both metadata on both sides.
 
 # Part 2 – Orientations
 
@@ -444,7 +446,8 @@ selection is **reproduced exactly**, in all three cell types, by one wrapper run
 
 - **25 genes per run** instead of the default `max(15, min(4 × genes of interest, 100))`;
 - **all** the ligands or receptors of the direction as features of interest, not only the first 8;
-- the subtype metadata (`labels`) as a feature of interest on both sides (`condition` changes nothing).
+- the two metadata (`labels` and `condition`) as features of interest: `labels` alone on both sides leaves 4 genes
+  missing, `condition` must be added on at least one side.
 
 The last 5 missing dendritic cell genes were the clue: they are the top genes of TMEM219 and TNFRSF14, the two
 receptors removed by the cap of 8. These settings are not those of the published wrapper, and the paper does not
@@ -487,7 +490,7 @@ orientations that MIIC finds.
 We will not run it, because of the cost (about 3 hours of MIIC on one thread, the server's settings), but it is the
 experiment to do to confirm the hypothesis:
 
-1. take our rebuilt input (authors' settings: 25 genes per run, no cap of 8, `labels` as feature of interest);
+1. take our rebuilt input (authors' settings: 25 genes per run, no cap of 8, `labels` and `condition` as features of interest);
 2. add the 14 duplicated columns, copied from the authors' table, in the authors' column order;
 3. run MIIC with the server's settings (`scripts/run_miic.R`, one thread, same seed);
 4. compare with the authors' network (links, orientations, genuine causations): if the duplicates are the only

@@ -645,7 +645,7 @@ wrapper once per direction, including the metadata, and pooled the results.
 
 **Update (notebook 07).** Protocol B+ is only an approximation. Notebook 07 shows that the authors' selection is
 reproduced **exactly** (0 missing, 0 extra) with one run per direction, **25 genes per run** instead of the default,
-**all** the ligands or receptors of the direction as features of interest (no cap of 8), and the subtype metadata.
+**all** the ligands or receptors of the direction as features of interest (no cap of 8), and both metadata (`labels` and `condition`) as features of interest.
 The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the
 published wrapper.
 

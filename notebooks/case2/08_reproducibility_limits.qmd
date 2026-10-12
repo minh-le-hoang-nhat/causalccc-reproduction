@@ -1,0 +1,540 @@
+---
+title: "08 – Where is the CausalCCC pipeline not reproducible? (case study 2)"
+subtitle: "Calling the functions and showing their outputs"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebooks 03 to 07 found, one at a time, several points that stop us from rebuilding the case study 2 network from
+public data. Here we gather them in one place. For each limit, we **call the functions of the pipeline** (or reload
+the saved outputs of the earlier notebooks) and **show what comes out**, so that each statement can be checked.
+
+The limits are ordered along the pipeline: data → software → gene selection → input table → MIIC run → network.
+
+This notebook only covers case study 2. Some limits of case study 1 (origin and version of the NicheNet pairs,
+ribosomal genes kept by the tutorial, pooling of steady-state and infected cells) do not apply here.
+
+**Inputs:** the authors' files in `data/case2/causalccc_server_w0788tM1wzXGHLzNaKKa/`, CellChat's dataset in
+`data/case2/cellchat/`, and the saved results of notebooks 04, 05 and 07 (`results/case2/`). Nothing is recomputed
+except small checks: the notebook runs in about a minute.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(Seurat)
+library(miic)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir  <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+cellchat <- file.path(root, "data", "case2", "cellchat", "data_humanSkin_CellChat.rda")
+nb04_dir <- file.path(root, "results", "case2", "04_rerun_miic")
+nb05_dir <- file.path(root, "results", "case2", "05_rebuild_input")
+nb07_dir <- file.path(root, "results", "case2", "07_differences")
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+strip      <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+lr_pairs    <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                        col_names = c("ligand", "receptor"), show_col_types = FALSE)
+lr_links    <- link_name(lr_pairs$ligand, lr_pairs$receptor)
+
+# Cell type of each row (which cell type has values) and of each column (which cell type it belongs to)
+row_type <- case_when(!is.na(mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(mosaic, row_type)
+
+rebuilt   <- readRDS(file.path(nb05_dir, "rebuild_inputs.rds"))
+mi_tables <- readRDS(file.path(nb05_dir, "mi_tables.rds"))
+lr_roles  <- rebuilt$lr_roles
+
+# Short helper: run an expression and report whether it fails, and with which message
+try_call <- function(expr) {
+  tryCatch({ invisible(capture.output(suppressMessages(force(expr)))); "no error" },
+           error = \(e) paste("ERROR:", conditionMessage(e)))
+}
+```
+
+# Part 1 – Data and software
+
+## 1. The raw counts are not provided
+
+CausalCCC needs **raw counts**. The only public version of the 7,563 cells is the CellChat example dataset
+`data_humanSkin`, which contains normalised values.
+
+```{r}
+#| label: raw-counts
+
+load(cellchat)   # creates data_humanSkin
+norm <- data_humanSkin$data
+
+# Largest distance to a whole number: raw counts would give 0
+tibble(object = "CellChat matrix (data_humanSkin$data)",
+       example_values = paste(round(head(norm@x, 5), 3), collapse = ", "),
+       largest_distance_to_a_whole_number = max(abs(norm@x - round(norm@x))))
+```
+
+The values are not counts. We can recover the counts only by undoing the normalisation, by a reasoning that is
+not documented anywhere (smallest value of each cell = count of 1; notebook 05):
+
+```{r}
+#| label: recovered-counts
+
+cell_of_value <- rep(seq_len(ncol(norm)), diff(norm@p))
+library_size  <- as.numeric(10000 / expm1(tapply(norm@x, cell_of_value, min)))
+recovered     <- expm1(norm@x) * library_size[cell_of_value] / 10000
+
+tibble(largest_distance_to_a_whole_number = max(abs(recovered - round(recovered))),
+       identical_to_notebook_05_counts    = all(round(recovered) == rebuilt$counts@x))
+```
+
+The recovery is exact, but this input data and its normalisation are not described in the tutorial or the paper.
+Moreover, nothing tells us how the authors' cells were selected, or which preprocessing produced the CellChat
+dataset itself (see section 11).
+
+## 2. The wrapper does not run on a current installation
+
+We build a small Seurat object (200 cells) from the recovered counts and call the CausalCCC functions on it.
+
+```{r}
+#| label: seurat-object
+
+set.seed(1)
+meta <- rebuilt$meta
+keep <- c(sample(which(meta$cell_type == "DCs"), 100), sample(which(meta$cell_type == "Fibroblasts"), 100))
+so   <- CreateSeuratObject(counts = rebuilt$counts[, keep], meta.data = meta[keep, ])
+so
+packageVersion("SeuratObject")
+```
+
+**The gene-selection function fails with Seurat 5.** `causalCCC.MIselection()` reads the counts with
+`GetAssayData(..., slot = "counts")`, an argument that no longer exists.
+
+```{r}
+#| label: slot-error
+
+try_call(causalCCC.MIselection(so, interact_ident = "cell_type", oneinteract = "DCs",
+                               goi = c("CXCR4", "CCR7"), metadata_list = c("labels", "condition")))
+```
+
+**The data-frame input does not work either.** The wrapper looks for the ligands and receptors among
+`row.names(data_input)`, which are cell names:
+
+```{r}
+#| label: data-frame-input
+
+df <- cbind(meta[keep, ], as.data.frame(t(as.matrix(rebuilt$counts[c("CXCR4", "CCR7"), keep]))))
+head(row.names(df), 3)
+c("CXCR4", "CCR7") %in% row.names(df)
+```
+
+**One sender and one receiver only.** The wrapper takes a single `senders_name` and a single `receivers_name`, whereas
+case study 2 has three cell types that are both sender and receiver:
+
+```{r}
+#| label: wrapper-arguments
+
+intersect(names(formals(causalCCC.wrapper)), c("senders_name", "receivers_name", "n_genes_senders", "n_genes_receivers",
+                                               "goi_senders", "goi_receivers", "metadata_senders", "metadata_receivers"))
+```
+
+**The suffixes do not match the authors' table.** The mosaic function writes `_senders` and `_receivers`; the authors'
+table uses the cell-type names:
+
+```{r}
+#| label: suffixes
+
+body_lines <- deparse(causalCCC.mosaic)
+trimws(body_lines[str_detect(body_lines, "senders|receivers") & str_detect(body_lines, "paste|_")]) |> head(6)
+
+tibble(variables_with_suffix_senders_or_receivers = sum(str_detect(names(mosaic), "_senders|_receivers")),
+       variables_with_a_cell_type_suffix          = sum(str_detect(names(mosaic), "_(Fibroblasts|T_cell|DCs)$")))
+```
+
+The authors therefore did not obtain their table with a single call of the published wrapper, and we do not have the
+parameters they used.
+
+# Part 2 – Gene selection
+
+## 3. The selection settings are not documented
+
+`causalCCC.MIselection()` has settings (number of genes, features of interest, metadata) whose values are not in the
+paper or in the tutorial. We run the selection with the published defaults and with the settings found in notebook 07,
+using the saved MI tables, and compare with the authors' genes.
+
+```{r}
+#| label: selection-functions
+
+authors_selected <- map(set_names(cell_types), \(t) {
+  genes <- unique(strip(names(mosaic)[col_type == t & !str_detect(names(mosaic), "^(labels|condition)_")]))
+  setdiff(genes, lr_roles$gene[lr_roles$cell_type == t])
+})
+
+directions <- lr_pairs |>
+  transmute(sender = col_type[ligand], receiver = col_type[receptor],
+            ligand = strip(ligand), receptor = strip(receptor))
+
+mi_by_type <- split(mi_tables, mi_tables$cell_type)
+
+# One wrapper run per sender -> receiver direction, genes pooled per cell type (protocol B of notebook 05)
+run_protocol <- function(meta_sender, meta_receiver, cap = 8, n_genes = default_n_genes) {
+  one_side <- function(t, goi, meta) {
+    goi <- head(unique(goi), cap)
+    select_genes(mi_by_type[[t]], foi = c(goi, meta), n_genes = n_genes(goi))
+  }
+  runs <- directions |>
+    group_by(sender, receiver) |>
+    summarise(sender_genes   = list(one_side(first(sender), ligand, meta_sender)),
+              receiver_genes = list(one_side(first(receiver), receptor, meta_receiver)),
+              .groups = "drop")
+  map(set_names(cell_types), \(t) {
+    unique(c(unlist(runs$sender_genes[runs$sender == t]), unlist(runs$receiver_genes[runs$receiver == t])))
+  })
+}
+
+score <- function(selected, protocol) {
+  map(cell_types, \(t) {
+    ours <- setdiff(selected[[t]], c(lr_roles$gene[lr_roles$cell_type == t], "labels", "condition"))
+    tibble(protocol, cell_type = t,
+           authors_genes = length(authors_selected[[t]]),
+           missing = length(setdiff(authors_selected[[t]], ours)),
+           extra   = length(setdiff(ours, authors_selected[[t]])))
+  }) |> list_rbind()
+}
+
+both_metadata <- c("labels", "condition")
+```
+
+```{r}
+#| label: selection-comparison
+
+protocols <- list(
+  "Published defaults: cap of 8, default n_genes, both metadata" = run_protocol(both_metadata, both_metadata, 8, default_n_genes),
+  "Same with 25 genes per run"                                   = run_protocol(both_metadata, both_metadata, 8, \(goi) 25),
+  "No cap, 25 genes, `labels` only"                              = run_protocol("labels", "labels", Inf, \(goi) 25),
+  "No cap, 25 genes, both metadata (found in notebook 07)"       = run_protocol(both_metadata, both_metadata, Inf, \(goi) 25))
+
+imap(protocols, \(selected, name) score(selected, name)) |>
+  list_rbind() |>
+  mutate(protocol = factor(protocol, levels = names(protocols))) |>
+  group_by(protocol) |>
+  summarise(authors_genes = sum(authors_genes), missing = sum(missing), extra = sum(extra))
+```
+
+Only the last combination (both metadata, no cap, 25 genes) reproduces the authors' selection exactly (0 missing, 0 extra). None of its settings (25
+genes, no cap of 8, both metadata as features of interest) is stated in the paper, and the first two differ from the
+default of the published wrapper. Dropping `condition` already loses 4 genes.
+
+**The cap of 8.** The wrapper only uses the first 8 ligands or receptors of a run as features of interest. The order
+of the L-R pairs therefore decides which genes are selected. For example, TMEM219 and TNFRSF14 are beyond the cap in
+two directions:
+
+```{r}
+#| label: receptor-order
+
+directions |>
+  filter(receiver == "DCs") |>
+  group_by(sender) |>
+  summarise(receptors = paste(seq_along(unique(receptor)), unique(receptor), sep = ".", collapse = " "))
+```
+
+# Part 3 – The input table
+
+## 4. The input contains duplicated columns
+
+The authors' `input.tsv` has 14 genes that appear **twice in the same cell type, as two identical columns**. The
+duplication is in the table `input.tsv` itself (two columns), and so also in `clean_state_order.tsv` (two rows, one per
+column).
+
+```{r}
+#| label: duplicated-columns
+
+dup <- duplicated_columns(mosaic, row_type, col_type)
+
+duplicates <- tibble(cell_type = col_type[dup], column_2 = dup) |>
+  mutate(column_1 = map2_chr(column_2, cell_type, \(d, t) {
+    block <- mosaic[row_type == t, col_type == t]
+    names(block)[match(TRUE, map_lgl(as.list(block), \(column) identical(column, block[[d]])))]
+  }),
+  identical_values = map2_lgl(column_1, column_2, \(a, b) identical(mosaic[[a]], mosaic[[b]]))) |>
+  select(cell_type, column_1, column_2, identical_values)
+
+nrow(duplicates)
+duplicates
+```
+
+The two copies of a gene have different names (one carries an extra cell-type suffix) and are two separate variables
+for MIIC, as shown by the state-order file:
+
+```{r}
+#| label: duplicates-state-order
+
+state_order |>
+  filter(var_names %in% unlist(duplicates[1, c("column_1", "column_2")])) |>
+  select(var_names, var_type, group)
+```
+
+**A likely origin** is the pooling of the six wrapper runs (one per direction): the same gene can be selected on the
+sender side in some runs and on the receiver side in others, and get two names. The naming rule tested in notebook 05
+predicts 11 of the 14 duplicates, but also 24 that the authors' table does not have, so the exact origin remains
+unknown. The pooling script is not available.
+
+## 5. The strongest link of the network is an artefact
+
+Identical columns are linked as strongly as possible. In the authors' network, the strongest gene–gene link is between
+two copies of the same gene, and the L-R links take its strength:
+
+```{r}
+#| label: strongest-link
+
+edges_authors <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+
+edges_authors |>
+  filter(type == "P", !link_name(x, y) %in% lr_links) |>
+  arrange(desc(info_shifted)) |>
+  select(x, y, info_shifted, infOrt) |>
+  head(3)
+
+edges_authors |>
+  filter(link_name(x, y) %in% lr_links) |>
+  summarise(L_R_links = n(), strength = unique(info_shifted))
+```
+
+# Part 4 – The MIIC run
+
+## 6. The run settings are not those of `miic()`, and they are not in the paper
+
+The settings used by the server are only visible in the job's `script.sh`. We read them and compare them with the
+defaults of the installed `miic`:
+
+```{r}
+#| label: settings
+
+script <- readLines(file.path(job_dir, "script.sh"), warn = FALSE)
+tokens <- str_split(paste(script[str_detect(script, "run_whole_causalCCC")], collapse = " "), "\\s+")[[1]]
+
+server_value <- function(option) {
+  i <- match(option, tokens)
+  if (is.na(i)) return(NA_character_)
+  if (is.na(tokens[i + 1]) || str_starts(tokens[i + 1], "--")) "TRUE" else tokens[i + 1]
+}
+same_value <- function(a, b) {
+  clean <- \(v) case_when(v %in% c("no", "FALSE") ~ "FALSE", v %in% c("yes", "TRUE") ~ "TRUE", TRUE ~ v)
+  a <- clean(a); b <- clean(b)
+  na <- suppressWarnings(as.numeric(a)); nb <- suppressWarnings(as.numeric(b))
+  if_else(!is.na(na) & !is.na(nb), na == nb, a == b)
+}
+
+tribble(~server_option,         ~miic_argument,
+        "--complexity",         "cplx",
+        "--orientation",        "orientation",
+        "--latent_variables",   "latent",
+        "--test_MAR",           "test_mar",
+        "--consistency",        "consistent",
+        "--eff_n",              "n_eff",
+        "--negative_info",      "negative_info",
+        "--consensus_threshold", "consensus_threshold",
+        "--max_iteration",      "max_iteration",
+        "--n_threads",          "n_threads",
+        "--orient_probab_ratio", "ori_proba_ratio",
+        "--conf_shuffle",       "n_shuffles",
+        "--conf_ratio",         "conf_threshold") |>
+  mutate(server_value  = map_chr(server_option, server_value),
+         miic_default  = map_chr(miic_argument, \(a) str_remove_all(paste(deparse(formals(miic)[[a]]), collapse = ""), '"')),
+         differs       = !same_value(server_value, miic_default)) |>
+  arrange(desc(differs))
+```
+
+The three settings that differ (`ori_proba_ratio`, `n_shuffles`, `conf_threshold`) change which links are kept and
+how they are oriented. They are not mentioned in the paper.
+
+## 7. No random seed is recorded
+
+The confidence filter shuffles the data 100 times. The server script sets no seed:
+
+```{r}
+#| label: seed
+
+any(str_detect(script, regex("seed", ignore_case = TRUE)))
+```
+
+With our own seed, the rerun of notebook 04 reproduces the decisions but not exactly the confidence ratios:
+
+```{r}
+#| label: confidence-ratios
+
+rerun <- read_tsv(file.path(nb04_dir, "edges_rerun.tsv"), show_col_types = FALSE)
+
+inner_join(edges_authors |> transmute(link = link_name(x, y), confidence_authors = confidence),
+           rerun |> transmute(link = link_name(x, y), confidence_ours = confidence),
+           by = "link") |>
+  summarise(shared_pairs_examined = n(),
+            largest_difference = max(abs(confidence_authors - confidence_ours), na.rm = TRUE))
+```
+
+## 8. Our version of `miic` writes each L-R pair twice
+
+The C++ reconstruction forces each L-R pair into the network (a *placeholder* row), and `summarizeResults()` then
+appends the real row (maximum strength, ligand → receptor) without removing the placeholder:
+
+```{r}
+#| label: placeholders
+
+res04 <- readRDS(file.path(nb04_dir, "miic_result.rds"))
+raw   <- as_tibble(res04$all.edges.summary)
+is_lr <- link_name(raw$x, raw$y) %in% lr_links
+
+tibble(source = c("our run (miic, causalccc branch, commit 5ca0b22)", "authors' file"),
+       rows_for_the_43_L_R_pairs = c(sum(is_lr), sum(link_name(edges_authors$x, edges_authors$y) %in% lr_links)),
+       placeholders_computed_on_0_cells = c(sum(is_lr & raw$Nxy_ai %in% 0),
+                                            sum(link_name(edges_authors$x, edges_authors$y) %in% lr_links &
+                                                  edges_authors$Nxy_ai %in% 0)))
+```
+
+The server ran on 21 January 2025 and the branch commit we use is dated 23 January 2025, so the server cannot have run
+this exact code. The version it used is not stated.
+
+```{r}
+#| label: miic-version
+
+packageVersion("miic")
+```
+
+## 9. The computation is heavy
+
+```{r}
+#| label: run-times
+
+tibble(step = c("MI tables for the gene selection (notebook 05)", "MIIC on the authors' input (notebook 04)"),
+       time = c(format(round(attr(mi_tables, "run_time"), 1)), format(round(attr(res04, "run_time"), 1))))
+```
+
+The MIIC run lasts about 3 hours on one thread, and the server's own run is of the same order (see `whole_run.log`). A
+run with 4 threads crashed in our hands (C stack errors, notebook 06), so the single-thread setting cannot be
+sped up.
+
+# Part 5 – Consequence on the network
+
+## 10. The orientations depend on the duplicates
+
+We compare the authors' network with the one obtained by running MIIC on their input **without** the duplicated
+columns (saved in notebook 07, section 5):
+
+```{r}
+#| label: dedup-network
+
+dedup_result <- readRDS(file.path(nb07_dir, "authors_dedup", "miic_result.rds"))
+edges_dedup  <- as_tibble(dedup_result$all.edges.summary) |>
+  filter(!(link_name(x, y) %in% lr_links & Nxy_ai %in% 0))   # placeholder rows (section 8)
+
+# Every variable identified as "<gene>_<cell type>": the two copies of a duplicated gene become one node
+key_of <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  mutate(key = if_else(str_detect(variable, "^(labels|condition)_"), variable,
+                       paste0(strip(variable), "_", cell_type))) |>
+  pull(key, name = variable)
+
+gene_links <- function(edge_list) {
+  edge_list |>
+    filter(type == "P") |>
+    mutate(a = key_of[x], b = key_of[y]) |>
+    filter(a != b, !link_name(x, y) %in% lr_links) |>
+    transmute(link = link_name(a, b),
+              orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt),
+              is_causal) |>
+    distinct(link, .keep_all = TRUE)
+}
+
+net_authors <- gene_links(edges_authors)
+net_dedup   <- gene_links(edges_dedup)
+shared      <- inner_join(net_authors, net_dedup, by = "link", suffix = c("_authors", "_dedup"))
+
+tibble(links_authors = nrow(net_authors),
+       links_without_duplicates = nrow(net_dedup),
+       jaccard_of_the_links = nrow(shared) / n_distinct(c(net_authors$link, net_dedup$link)),
+       same_orientation = mean(shared$orientation_authors == shared$orientation_dedup),
+       reversed = sum(abs(shared$orientation_authors) == 2 & shared$orientation_authors == -shared$orientation_dedup),
+       genuine_causations_authors = sum(net_authors$is_causal == "Y"),
+       genuine_causations_without_duplicates = sum(net_dedup$is_causal == "Y"),
+       genuine_causations_in_both = sum(shared$is_causal_authors == "Y" & shared$is_causal_dedup == "Y")) |>
+  pivot_longer(everything(), names_to = "measure", values_to = "value")
+```
+
+The links do not change, but the orientation of a fraction of them does: MIIC's orientations are much more sensitive to
+the input than its links. The orientation claims of the paper therefore depend on an artefact of the preparation.
+
+# Part 6 – What we could not check
+
+## 11. The preprocessing of the data is not described
+
+No document describes how the Seurat object (cells, quality control, normalisation, annotation) was obtained from the
+raw data of He *et al.* We tried to rebuild one of the eight samples from its FASTQ files
+(`notebooks/case2/preprocessing/`). The cells are found again and their expression is correlated with CellChat's, but
+the agreement is only partial: the preprocessing parameters of the CellChat dataset are not available, so the exact
+counts cannot be recovered this way. The counts can be recovered exactly only from the CellChat matrix (section 1),
+which does not tell us how it was produced.
+
+## 12. The sources are fragile
+
+```{r}
+#| label: sources
+
+list.files(job_dir)
+
+tibble(file = "data_humanSkin_CellChat.rda",
+       md5_of_our_copy = unname(tools::md5sum(cellchat)),
+       md5_recorded_in_data_README = "9d31f4c88be64912b937b5d6a2cb6c2d") |>
+  mutate(same = md5_of_our_copy == md5_recorded_in_data_README)
+```
+
+The CausalCCC server is not an archive: the authors' job files could disappear. The figshare link of the CellChat
+dataset refused scripted downloads on 2026-10-05, so that file has to be downloaded by hand.
+
+# Summary
+
+| # | Limit | Evidence | Consequence |
+| --- | --- | --- | --- |
+| 1 | Raw counts not provided | CellChat values are not integers | counts can only be recovered by undoing the normalisation |
+| 2 | Wrapper does not run as published | `slot` error with Seurat 5; data frame input; one sender and receiver; wrong suffixes | the authors' table did not come from a single call; their parameters are unknown |
+| 3 | Selection settings undocumented | exact match only with 25 genes, no cap of 8, `labels` and `condition` | default settings recover only part of the authors' genes |
+| 4 | Duplicated columns in the input | 14 identical column pairs in `input.tsv` | one gene counted as two variables; pooling script unavailable |
+| 5 | Strongest link is an artefact | two copies of a gene linked at maximum strength | the strength of all L-R links comes from the duplicate |
+| 6 | MIIC settings differ from `miic()` defaults | three settings differ (`ori_proba_ratio`, `n_shuffles`, `conf_threshold`) | must be copied from `script.sh`; not in the paper |
+| 7 | No random seed | no seed in `script.sh` | confidence ratios differ slightly between runs |
+| 8 | Version differences | 86 rows instead of 43 for the L-R pairs | placeholders must be removed; exact version unknown |
+| 9 | Heavy computation | about 3 hours on one thread; multithreading crashed | hard to rerun and to test variants |
+| 10 | Orientations depend on the duplicates | links unchanged, a fraction of orientations differ | causal claims depend on an artefact |
+| 11 | Preprocessing not described | partial agreement when rebuilt from FASTQ | the Seurat object cannot be reproduced |
+| 12 | Fragile sources | server not an archive; figshare refuses scripts | data may become unavailable |
+
+**What we did not test.** Adding the duplicated columns to our rebuilt input and checking that MIIC returns the authors'
+network exactly (notebook 07, "What we did not test"). This would confirm that the duplicates are the only remaining
+difference.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

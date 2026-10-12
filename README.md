@@ -26,7 +26,7 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 ├── data/                # not tracked by Git – see data/README.md; subfolders case1/, case2/
 ├── notebooks/
 │   ├── 01_*, 02_*       # case study 1 (notebooks numbered in execution order across the project)
-│   └── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
+│   └── case2/           # case study 2: 03_* to 08_* (08 = reproducibility limits), and preprocessing/ (raw reads -> matrix, Python)
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── download_case1.sh
