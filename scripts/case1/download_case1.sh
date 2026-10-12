@@ -5,8 +5,8 @@
 # data from Medaglia et al., Science 2017, L-R pairs from NicheNet.
 #
 # Usage (from the root of the repository):
-#   bash scripts/download_case1.sh              # everything except GEO raw data
-#   bash scripts/download_case1.sh --with-geo   # also GEO raw data (+ 89 MB)
+#   bash scripts/case1/download_case1.sh              # everything except GEO raw data
+#   bash scripts/case1/download_case1.sh --with-geo   # also GEO raw data (+ 89 MB)
 #
 # Safe to run again: complete files are skipped, interrupted downloads resume.
 # Sources are described in data/README.md.

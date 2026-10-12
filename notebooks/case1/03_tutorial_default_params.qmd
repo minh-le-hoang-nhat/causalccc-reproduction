@@ -1,0 +1,266 @@
+---
+title: "03 – The CausalCCC tutorial with default parameters (case study 1)"
+subtitle: "Does the published code, run as in the tutorial, reproduce Figure 2?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 02 showed that MIIC gives exactly the authors' network when it is run on the authors' three input files. Here we
+build those input files ourselves, from the public data, by following the [CausalCCC
+tutorial](https://miic.curie.fr/tutorial_causalCCC.php) with its **default parameters**, then run MIIC with the
+settings of the authors' server job and compare the network with theirs and with the statements of the paper
+(`docs/case_study1_article_description.txt`).
+
+**Inputs:** the NicheNet Seurat object (`data/case1/nichenet_seurat/`), and the authors' server job
+(`data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/`) for its L-R pairs and for the comparison.
+**Outputs** in `results/case1/03_tutorial_default_params/`: the CausalCCC input files (`causalccc_files/`, the files
+the web server accepts), the MI tables (`MI_tables/`), the MIIC result (`miic_input/`), and two files reused by notebook
+04 (`t_cells.rds`, `gene_aliases.tsv`).
+
+::: {.callout-note}
+## Running time
+The gene selection takes about 10 minutes per cell type and MIIC about 15 to 30 minutes. Both results are saved the
+first time and reloaded afterwards. To force a new run, delete `selected_genes.rds` or `miic_input/miic_result.rds`.
+:::
+
+## Setup
+
+`miic` must be loaded before `causalCCC`: the gene selection calls `miic()` without importing it. The shared helper
+functions are in `scripts/helpers.R` (all case studies) and `scripts/case1/case1_helpers.R` (this notebook and the
+next one).
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Seurat)
+library(miic)
+library(causalCCC)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+
+root        <- find_repo_root()
+source(file.path(root, "scripts", "helpers.R"))
+source(file.path(root, "scripts", "case1", "case1_helpers.R"))
+
+authors_dir <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
+results_dir <- file.path(root, "results", "case1", "03_tutorial_default_params")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+**Fix for SeuratObject 5.** `causalCCC.MIselection()` and `causalCCC.mosaic()` read the counts with
+`GetAssayData(slot = "counts")`. Since SeuratObject 5.3 the `slot` argument is an error (it was replaced by `layer`).
+`patch_causalccc()` makes copies of the two functions with `layer` instead, for this R session only.
+
+```{r}
+#| label: patch
+
+patch_causalccc()
+```
+
+## 1. The cells
+
+The Seurat object was made with Seurat v3 in 2019, so it is updated first. We keep the CD4⁺ T cells (senders) and
+the CD8⁺ T cells (receivers), from both conditions (steady state and 72 h after LCMV infection), as the authors did.
+
+```{r}
+#| label: cells
+#| warning: false
+
+seurat_obj <- UpdateSeuratObject(readRDS(file.path(root, "data", "case1", "nichenet_seurat", "seuratObj.rds")))
+t_cells    <- subset(seurat_obj, subset = celltype %in% c(senders, receivers))
+rm(seurat_obj)
+
+table(t_cells$celltype, t_cells$aggregate)   # SS = steady state, LCMV = after infection
+
+saveRDS(t_cells, file.path(results_dir, "t_cells.rds"))
+```
+
+**Same counts as the authors?** For each of the 144 variables of the authors' input, we look for the gene of our
+object whose counts, in the cells of the same type, are exactly the authors' values (compared as sorted values,
+because the authors' table has no cell names).
+
+```{r}
+#| label: match-counts
+
+matched <- match_authors_genes(t_cells, authors_dir)
+
+matched |>
+  count(found_with = case_when(is.na(object_gene)   ~ "no gene with these counts",
+                               object_gene == gene  ~ "same name",
+                               .default             = "another name"))
+
+# The genes found under another name
+renamed <- matched |> filter(object_gene != gene) |> distinct(authors_name = gene, object_name = object_gene)
+renamed
+
+write_tsv(renamed, file.path(results_dir, "gene_aliases.tsv"))
+aliases <- setNames(renamed$authors_name, renamed$object_name)   # our name = authors' name
+```
+
+Every variable of the authors' input is found in our cells with identical counts. Four genes (seven variables, as some
+are measured on both sides) carry a different name in the authors' table, because their count matrix used a newer gene
+annotation (for example, Rack1 is the current name of Gnb2l1). From now on we translate our names into theirs when
+comparing.
+
+## 2. The ligand–receptor pairs
+
+Case study 1 uses L-R pairs inferred by NicheNet. We take the authors' 18 pairs from their server job and remove the
+`_senders` / `_receivers` suffixes; `causalCCC.mosaic()` adds them again where needed. (The tutorial's own function
+for L-R pairs, `causalCCC.links()`, uses LIANA and currently fails for mouse data inside OmnipathR.)
+
+```{r}
+#| label: lr-pairs
+
+interact_edges <- read_tsv(file.path(authors_dir, "clean_interact_edges.tsv"),
+                           col_names = c("ligands", "receptors"), show_col_types = FALSE) |>
+  mutate(across(everything(), strip_suffix)) |>
+  distinct()
+
+interact_edges
+```
+
+## 3. Build the CausalCCC input with the default parameters
+
+`build_causalccc_input()` (in `scripts/case1/case1_helpers.R`) runs the tutorial steps:
+
+1. `causalCCC.MIselection()`: for each cell type, the genes sharing the most mutual information (MI) with the ligands
+   (CD4⁺) or with the receptors (CD8⁺). With the default `n_genes`, it keeps 4 genes per gene of interest, i.e. 40 for
+   the 10 ligands and 32 for the 8 receptors, plus the 3 best genes of each gene of interest;
+2. `causalCCC.mosaic()`: the mosaic table, one row per cell, `NA` outside each cell type's genes;
+3. `causalCCC.state_order()` and `causalCCC.layout()`: the variable descriptions and the drawing layout.
+
+```{r}
+#| label: build
+#| message: false
+#| results: hide
+
+default_settings <- list(remove_ribo = FALSE, n_genes = NULL, sender_genes_in_receivers = FALSE)
+built <- build_causalccc_input(t_cells, interact_edges, default_settings, results_dir)
+
+```
+
+Number of variables of each group in the new input:
+
+```{r}
+#| label: groups
+
+count(built$state_order, group)
+```
+
+The genes ranked by MI with the genes of interest, as drawn by `causalCCC.MIselection()`:
+
+```{r}
+#| label: heatmaps
+#| layout-ncol: 2
+#| out-width: 100%
+
+knitr::include_graphics(file.path(results_dir, "MI_tables", paste0(c(senders, receivers), "_MI_heatmap_filtered.png")))
+```
+
+## 4. Run MIIC with the authors' settings
+
+The four files in `causalccc_files/` can be uploaded to the web server. Instead, we run MIIC locally with
+`scripts/run_miic.R`, which uses the settings of the authors' server job (notebook 02, section 2), in particular the
+confidence filter (100 shuffles, ratio 0.01) and the strict orientation threshold (0.01). The server's default settings
+are different, so a network from the server with its default settings could not be compared fairly with the authors'.
+
+```{r}
+#| label: miic
+
+miic_result <- run_miic_authors_settings(built, results_dir, root)
+attr(miic_result, "run_time")
+```
+
+## 5. Compare with the authors
+
+We read both networks in the same format: one node per gene and side (`B2m(S)` in sender cells, `B2m(R)` in receiver
+cells), our gene names translated into the authors'. The authors' network is the one of their January 2025 run
+(`edgesList.miic.summary.txt_save`, notebook 02).
+
+```{r}
+#| label: read-networks
+
+authors_nodes <- read_nodes(read_tsv(file.path(authors_dir, "clean_state_order.tsv"), show_col_types = FALSE))
+authors_net   <- read_network(read_tsv(file.path(authors_dir, "edgesList.miic.summary.txt_save"),
+                                       show_col_types = FALSE), authors_nodes)
+
+our_nodes <- read_nodes(built$state_order, aliases)
+our_net   <- read_network(miic_result$all.edges.summary, our_nodes)
+```
+
+**Genes.**
+
+```{r}
+#| label: compare-genes
+
+bind_rows(authors = summarise_nodes(authors_nodes, authors_nodes),
+          ours    = summarise_nodes(our_nodes, authors_nodes), .id = "network")
+
+# The authors' genes missing from our input
+setdiff(authors_nodes$node, our_nodes$node) |> sort()
+```
+
+**Links.**
+
+```{r}
+#| label: compare-links
+
+compare_networks(our_net, authors_net)
+```
+
+## 6. The links described in the paper
+
+The paper describes 17 links of Figure 2 (`paper_links` in `case1_helpers.R`). For each, the table gives its
+orientation in each network, or "absent".
+
+```{r}
+#| label: paper-links
+
+check_paper_links(list(authors = authors_net, ours = our_net)) |>
+  knitr::kable()
+```
+
+## What we learned
+
+**The data are the authors'.** Our CD4⁺ and CD8⁺ T cells (2,562 and 1,645, both conditions pooled) have exactly the
+counts of the authors' input, for all 144 variables; four genes only carry newer names in their table.
+
+**The tutorial with default parameters does not reproduce the authors' input.** It selects 112 genes (60 sender, 52
+receiver), of which only 61 are among the authors' 144, and 33 are ribosomal protein genes, none of which the authors
+kept.
+
+**Hence a different network.** With the authors' MIIC settings, our network has 282 links and contains 107 of the
+authors' 364 (92 with the same orientation). Of the 17 links described in the paper, 12 are found. Three of the 5 missing
+ones involve receiver genes that the default selection does not keep (Cd8b1, Ly6c1); the other two (H2-K1 – Shisa5,
+H2-D1 – Mir703) are between genes present in our input, so the other selected genes changed the network around them. The central statement, Stat1 →
+B2m as a genuine cause, holds. Stat1 – Isg20 is oriented Stat1 → Isg20 here, bidirected in the authors' network.
+
+Since MIIC is reproducible (notebook 02), these differences come from the gene selection. Notebook 04 looks for the
+settings that explain them.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

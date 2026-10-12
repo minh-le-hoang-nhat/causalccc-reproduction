@@ -15,7 +15,7 @@ execute:
 ## Goal
 
 Before rebuilding anything ourselves, we look closely at the files the CausalCCC authors used to produce Figure 2 of
-the paper. They were downloaded by `scripts/download_case1.sh` from the web server job `eaP9Br0llvzxN07zZZEC` (sources in
+the paper. They were downloaded by `scripts/case1/download_case1.sh` from the web server job `eaP9Br0llvzxN07zZZEC` (sources in
 `data/README.md`). We want to understand:
 
 1. what CausalCCC takes as input (the "mosaic" table, the variable list, the L-R pairs) and with which settings it ran;
@@ -52,7 +52,7 @@ find_repo_root <- function(dir = getwd()) {
 root    <- find_repo_root()
 job_dir <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
 
-if (!dir.exists(job_dir)) stop("Data not found: run scripts/download_case1.sh first.")
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/case1/download_case1.sh first.")
 ```
 
 ## 1. Read the files

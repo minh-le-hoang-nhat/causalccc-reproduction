@@ -19,6 +19,9 @@ __pycache__/
 .DS_Store
 .vscode/
 
+# Log files written by OmnipathR (dependency of LIANA)
+omnipathr-log/
+
 # Case 2 preprocessing (raw reads and kallisto|bustools output live in data/, already ignored)
 *.fastq.gz
 *.bus

@@ -1,0 +1,290 @@
+---
+title: "04 – The CausalCCC tutorial with updated parameters (case study 1)"
+subtitle: "Which settings bring the gene selection close to the authors', and do the paper's statements then hold?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+With its default parameters, the tutorial selects genes that differ from the authors' (notebook 03). Since MIIC itself
+is reproducible (notebook 02), the differences between the networks come from this gene selection. Here we:
+
+1. look, in the MI tables computed in notebook 03, for the settings that explain the differences;
+2. rebuild the input with these settings, run MIIC with the authors' settings, and compare again.
+
+**The updated settings are chosen by looking at the authors' input.** This notebook therefore shows that the published
+code *can* produce the authors' input and network, not which settings the authors actually used.
+
+**Inputs:** the outputs of notebook 03 (`results/case1/03_tutorial_default_params/`) and the authors' server job.
+**Outputs** in `results/case1/04_tutorial_updated_params/`: same layout as notebook 03.
+
+::: {.callout-note}
+## Running time
+Gene selection about 10 minutes per cell type, MIIC about 30 to 60 minutes (the input is larger than in notebook 03).
+Both are saved the first time and reloaded afterwards.
+:::
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Seurat)
+library(miic)
+library(causalCCC)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+
+root        <- find_repo_root()
+source(file.path(root, "scripts", "helpers.R"))
+source(file.path(root, "scripts", "case1", "case1_helpers.R"))
+patch_causalccc()   # SeuratObject 5 fix, see notebook 03
+
+authors_dir <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
+nb03_dir    <- file.path(root, "results", "case1", "03_tutorial_default_params")
+results_dir <- file.path(root, "results", "case1", "04_tutorial_updated_params")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+if (!file.exists(file.path(nb03_dir, "miic_input", "miic_result.rds"))) stop("Run notebook 03 first.")
+```
+
+We reload what notebook 03 produced: the cells, the gene names translated into the authors', the L-R pairs, and the
+default network.
+
+```{r}
+#| label: reload
+
+t_cells <- readRDS(file.path(nb03_dir, "t_cells.rds"))
+renamed <- read_tsv(file.path(nb03_dir, "gene_aliases.tsv"), show_col_types = FALSE)
+aliases <- setNames(renamed$authors_name, renamed$object_name)   # our name = authors' name
+
+interact_edges <- read_tsv(file.path(authors_dir, "clean_interact_edges.tsv"),
+                           col_names = c("ligands", "receptors"), show_col_types = FALSE) |>
+  mutate(across(everything(), strip_suffix)) |>
+  distinct()
+ligands   <- unique(interact_edges$ligands)
+receptors <- unique(interact_edges$receptors)
+
+authors_nodes <- read_nodes(read_tsv(file.path(authors_dir, "clean_state_order.tsv"), show_col_types = FALSE))
+authors_net   <- read_network(read_tsv(file.path(authors_dir, "edgesList.miic.summary.txt_save"),
+                                       show_col_types = FALSE), authors_nodes)
+
+default_nodes <- read_nodes(read_tsv(file.path(nb03_dir, "causalccc_files", "causalCCC_st.tsv"),
+                                     show_col_types = FALSE), aliases)
+default_net   <- read_network(readRDS(file.path(nb03_dir, "miic_input", "miic_result.rds"))$all.edges.summary,
+                              default_nodes)
+```
+
+## 1. Why the default selection differs from the authors'
+
+`causalCCC.MIselection()` computes, in each cell type, the MI between every gene and each gene of interest (the
+ligands in CD4⁺ cells, the receptors in CD8⁺ cells), saves it as an MI table, then keeps the 3 best genes of each gene
+of interest plus the `n_genes` genes with the highest MI. `select_genes()` (in `scripts/helpers.R`) redoes this last
+step from a saved MI table, so we can try other settings without computing MI again. We first check that it gives
+exactly the genes selected in notebook 03.
+
+```{r}
+#| label: redo-selection
+
+mi_tables <- list(
+  S = read_tsv(file.path(nb03_dir, "MI_tables", paste0(senders, "_MI_table.csv")), show_col_types = FALSE),
+  R = read_tsv(file.path(nb03_dir, "MI_tables", paste0(receivers, "_MI_table.csv")), show_col_types = FALSE))
+goi <- list(S = ligands, R = receptors)
+
+# Genes of one side (ligands or receptors + selected genes), in the authors' names
+selection <- function(side, n_genes = default_n_genes(goi[[side]]), drop_ribo = FALSE) {
+  mi <- mi_tables[[side]]
+  if (drop_ribo) mi <- filter(mi, !str_detect(variables, "^Rp[sl]"))
+  harmonise(unique(c(goi[[side]], select_genes(mi, goi[[side]], n_genes))), aliases)
+}
+
+c(senders   = setequal(selection("S"), default_nodes$gene[default_nodes$side == "S"]),
+  receivers = setequal(selection("R"), default_nodes$gene[default_nodes$side == "R"]))
+```
+
+**Three differences.** (1) Notebook 03's selection contains ribosomal protein genes (Rpl…, Rps…), which have high
+counts in every cell and therefore high MI with almost any gene; the authors' input contains none. (2) The number of
+genes kept. (3) The authors' receiver list contains all their sender genes.
+
+```{r}
+#| label: three-differences
+
+authors_genes <- list(S = authors_nodes$gene[authors_nodes$side == "S"],
+                      R = authors_nodes$gene[authors_nodes$side == "R"])
+
+tibble(network         = c("authors", "default (notebook 03)"),
+       ribosomal_genes = c(sum(str_detect(authors_nodes$gene, "^Rp[sl]")),
+                           sum(str_detect(default_nodes$gene, "^Rp[sl]"))))
+
+# Are all the authors' sender genes also receiver genes?
+all(authors_genes$S %in% authors_genes$R)
+# Receiver genes of the authors that are neither sender genes nor receptors
+authors_receiver_only <- setdiff(authors_genes$R, c(authors_genes$S, receptors))
+length(authors_receiver_only)
+```
+
+**Number of genes, with and without ribosomal genes.** For each setting, the share of the authors' genes found by the
+selection, on each side (for the receivers, compared with the authors' receiver-only genes, since the sender genes are
+added separately, see below).
+
+```{r}
+#| label: grid
+
+grid <- expand_grid(side = c("S", "R"), n_genes = c(NA, 40, 60, 80, 100), drop_ribo = c(FALSE, TRUE)) |>
+  mutate(n_genes = if_else(is.na(n_genes), map_dbl(side, \(s) default_n_genes(goi[[s]])), n_genes)) |>
+  distinct()
+
+grid$genes <- pmap(grid, \(side, n_genes, drop_ribo) selection(side, n_genes, drop_ribo))
+grid |>
+  mutate(target = if_else(side == "S", list(authors_genes$S), list(authors_receiver_only)),
+         selected = lengths(genes),
+         authors_found = map2_int(genes, target, \(g, t) sum(t %in% g)),
+         authors_total = lengths(target)) |>
+  select(side, n_genes, drop_ribo, selected, authors_found, authors_total) |>
+  arrange(side, drop_ribo, n_genes)
+```
+
+Without ribosomal genes, `n_genes = 60` is the smallest value at which the selection finds all the authors' genes, on
+both sides (55 of 55 sender genes, 26 of 26 receiver-only genes); with ribosomal genes, it takes 80 (senders) and 100 (receivers). We therefore use three updated settings:
+
+| Setting                      | Default (notebook 03)          | Updated                    |
+| ---------------------------- | ------------------------------ | -------------------------- |
+| ribosomal genes (Rpl, Rps)   | candidates                     | removed before selection   |
+| `n_genes`                    | 40 (senders), 32 (receivers)   | 60 on both sides           |
+| sender genes in receivers    | no                             | yes, as in the authors' input |
+
+## 2. Build the input with the updated settings
+
+```{r}
+#| label: build
+#| message: false
+#| results: hide
+
+updated_settings <- list(remove_ribo = TRUE, n_genes = 60, sender_genes_in_receivers = TRUE)
+built <- build_causalccc_input(t_cells, interact_edges, updated_settings, results_dir)
+
+```
+
+Number of variables of each group in the new input:
+
+```{r}
+#| label: groups
+
+count(built$state_order, group)
+```
+
+## 3. Run MIIC with the authors' settings
+
+```{r}
+#| label: miic
+
+miic_result <- run_miic_authors_settings(built, results_dir, root)
+attr(miic_result, "run_time")
+
+updated_nodes <- read_nodes(built$state_order, aliases)
+updated_net   <- read_network(miic_result$all.edges.summary, updated_nodes)
+```
+
+## 4. Compare with the authors
+
+**Genes.**
+
+```{r}
+#| label: compare-genes
+
+bind_rows(authors = summarise_nodes(authors_nodes, authors_nodes),
+          default = summarise_nodes(default_nodes, authors_nodes),
+          updated = summarise_nodes(updated_nodes, authors_nodes), .id = "network")
+
+# The authors' genes missing from the updated input
+setdiff(authors_nodes$node, updated_nodes$node) |> sort()
+```
+
+**Links.**
+
+```{r}
+#| label: compare-links
+
+bind_rows(default = compare_networks(default_net, authors_net),
+          updated = compare_networks(updated_net, authors_net), .id = "network")
+```
+
+**Orientation of the links found in both networks** (authors in rows, updated in columns).
+
+```{r}
+#| label: orientation
+
+shared <- intersect(authors_net$key, updated_net$key)
+orientation_type <- function(o) if_else(str_detect(o, "->"), "directed", o)
+table(authors = orientation_type(authors_net$orientation[match(shared, authors_net$key)]),
+      updated = orientation_type(updated_net$orientation[match(shared, updated_net$key)]))
+```
+
+## 5. The links described in the paper
+
+```{r}
+#| label: paper-links
+
+check_paper_links(list(authors = authors_net, default = default_net, updated = updated_net)) |>
+  knitr::kable()
+```
+
+**Neighbours of the key genes of the paper**, in the authors' network and in the updated one.
+
+```{r}
+#| label: neighbours
+
+key_nodes <- c("H2-K1(S)", "H2-D1(S)", "Stat1(S)", "B2m(S)", "Cd8a(R)", "Klrd1(R)", "Cd8b1(R)", "Ly6c2(R)")
+tibble(node = key_nodes) |>
+  mutate(a = map(node, \(k) neighbours(authors_net, k)),
+         u = map(node, \(k) neighbours(updated_net, k)),
+         both         = map2_chr(a, u, \(a, u) paste(intersect(a, u), collapse = ", ")),
+         authors_only = map2_chr(a, u, \(a, u) paste(setdiff(a, u), collapse = ", ")),
+         updated_only = map2_chr(a, u, \(a, u) paste(setdiff(u, a), collapse = ", "))) |>
+  select(node, both, authors_only, updated_only) |>
+  knitr::kable()
+```
+
+## What we learned
+
+**Three settings explain the authors' gene selection.** Removing ribosomal protein genes before the selection,
+keeping 60 genes per side, and adding the sender genes to the receiver genes gives an input that contains all 144 of
+the authors' variables (with identical counts, notebook 03), plus 53 more (197 in total).
+
+**The network then matches the authors'.** With the authors' MIIC settings, our network contains 347 of the authors'
+364 links, 319 of them with the same orientation. All 17 links described in the paper are present, each with the
+authors' orientation: the H2 ligands and their first neighbours (Psmb8, Ifi27l2b, Slfn1, Shisa5, Irf7, Mir703, B2m),
+Stat1 → B2m, Stat1 and the interferon genes, and Cd8a – Cd8b1 – Ly6c2 – Ly6c1 downstream of the receptors. The
+statements of the paper about Figure 2 therefore hold in a network rebuilt with the published code.
+
+**What remains different.** Our network is larger (497 links), because our input has 53 more genes than the authors'.
+These settings were chosen by looking at the authors' input: they show that the published code can produce it, not
+that the authors used them. The authors' input is likely a selection of the same kind with one more step that we
+cannot infer from the files (for example a manual choice among the selected genes). This is a question for the
+authors.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

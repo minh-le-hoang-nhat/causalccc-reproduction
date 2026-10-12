@@ -29,12 +29,12 @@ Three things can make our result differ even if everything is done correctly:
 3. **Number of threads.** The server used 2. This should not change the result, but we keep 2 to stay close.
 
 **Inputs:** the authors' files in `data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/` (read only).
-**Outputs:** `results/02_rerun_miic/`: the full MIIC result (`miic_result.rds`) and our edge list (`edges_rerun.tsv`).
+**Outputs:** `results/case1/02_rerun_miic/`: the full MIIC result (`miic_result.rds`) and our edge list (`edges_rerun.tsv`).
 
 ::: {.callout-note}
 ## Running time
 The MIIC run takes roughly 15 to 30 minutes. The notebook saves its result the first time and simply reloads it
-afterwards. To force a new run, delete `results/02_rerun_miic/miic_result.rds`.
+afterwards. To force a new run, delete `results/case1/02_rerun_miic/miic_result.rds`.
 :::
 
 ## Setup
@@ -62,9 +62,9 @@ find_repo_root <- function(dir = getwd()) {
 
 root        <- find_repo_root()
 job_dir     <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
-results_dir <- file.path(root, "results", "02_rerun_miic")
+results_dir <- file.path(root, "results", "case1", "02_rerun_miic")
 
-if (!dir.exists(job_dir)) stop("Data not found: run scripts/download_case1.sh first.")
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/case1/download_case1.sh first.")
 dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Which miic are we using? It should be the causalccc branch, version 2.0.x.
