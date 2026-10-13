@@ -15,7 +15,7 @@ execute:
 ## Goal
 
 Notebook 05 rebuilt the ingredients of the authors' input from public data: the same cells and counts exactly, and a
-gene selection that recovers 89 % of theirs (protocol B+). Here we assemble these ingredients into a mosaic table, run
+gene selection that recovers 92 % of theirs (160 of 174 genes, Jaccard index 0.89; protocol B+). Here we assemble these ingredients into a mosaic table, run
 MIIC with the authors' settings, and compare the resulting network with the published one.
 
 Our mosaic differs from the authors' in two ways only:
@@ -486,21 +486,26 @@ in dendritic cells (NR4A3, RGS1, UBC) and in T cells (JUNB, ZFP36) are exactly t
 paper is at the same distance as in the authors' network (CFD, NR4A3, JUNB direct; DCN, APOD, GPR183, VIM, FOS at two
 links).
 
-**Orientations are less robust.** On the 461 gene–gene links found in both networks, 79 % have the same orientation
-status and only 2 are oriented in opposite directions. But many links oriented in the authors' network are not
-oriented in ours (68), and genuine causations fall from 30 to 19, only 9 shared (the table above gives 49 for the
-authors because it lists the links of duplicated genes twice; 30 counts each link once). The CXCL12 → CFD orientation of
-the authors' network, for example, is not found. Removing the duplicated columns and changing about 7 % of the genes is
-enough to change many orientations: orientations, and the "upstream"/"downstream" reading they support, should be
-interpreted with more caution than the presence of links. Notebook 07 separates the two effects.
+**Orientations: mostly robust, genuine causations less so.** On the 461 gene–gene links found in both networks, the
+table above gives 79 % with the same orientation status. That figure is biased: in the authors' network, a link of one of
+the 14 duplicated genes appears once per copy, the two copies often get different orientations, and the comparison keeps
+one copy (notebook 07, section 5). On the 361 shared links that involve no duplicated gene, **96 % keep their
+orientation and none is reversed**; against the authors' network without duplicates, 94 % of all 461 shared links keep
+their orientation (notebook 07). Genuine causations are less stable: on these 361 links, the authors' network has 14 and
+ours 12, with only 8 in common. The CXCL12 → CFD orientation of the authors' network, for example, is not found.
+Orientations, and the "upstream"/"downstream" reading they support, should be interpreted with more caution than the
+presence of links.
 
 **L-R link strength.** Without duplicates, the strongest link of the network is S100A10–S100A6 in fibroblasts (3,050
 instead of 11,579 for the two copies of S100A6). Since the `causalccc` branch gives every L-R link the strength of the
 strongest link, the L-R strengths of the published network were set by a duplicated gene.
 
-**Overall, for case study 2.** The input can be rebuilt from public data with the authors' own tools, apart from a
-handful of genes near the selection cut-off and the duplicated columns. The links of the published network, and the
-Figure 3 neighbourhoods, are reproduced; the orientations are only partly reproduced.
+**Overall, for case study 2.** The input of this notebook (protocol B+) differs from the authors' by a handful of genes
+near the selection cut-off and by the duplicated columns. The links of the published network, and the Figure 3
+neighbourhoods, are reproduced; the orientations are only partly reproduced. Notebook 07 then shows that the gene
+differences come from the selection settings (25 genes per run, no cap of 8, both metadata), which reproduce the
+authors' genes exactly, and that the duplicated columns change no link and no orientation outside the links of the
+14 duplicated genes, whose two copies are often oriented differently.
 
 ## Session information
 

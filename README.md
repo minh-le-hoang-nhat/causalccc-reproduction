@@ -12,7 +12,7 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
       (data: Medaglia *et al.*, *Science* 2017). Notebooks 01 (authors' files, paper's claims), 02 (MIIC rerun), 03 (CausalCCC
       tutorial, default parameters) and 04 (tutorial, updated parameters).
 - [ ] **Case study 2** – fibroblasts, dendritic cells and T cells in atopic dermatitis, with CellChat ligand–receptor pairs
-      (data: He *et al.*, *J Allergy Clin Immunol* 2020). Notebooks 03 (authors' files, paper's claims), 04 (MIIC rerun), 05 (rebuilding the input) and 06 (MIIC on the rebuilt input).
+      (data: He *et al.*, *J Allergy Clin Immunol* 2020). Notebooks 03 (authors' files, paper's claims), 04 (MIIC rerun), 05 (rebuilding the input), 06 (MIIC on the rebuilt input), 07 (why our results differ), 08 (reproducibility limits) and 09 (effect of the duplicated genes).
 - [ ] Assess the preprocessing of the input data used in the case studies.
 - [ ] Extensions of the published analyses (to be defined with the teaching team).
 - [ ] Analysis of a dataset shared with the BoNesis team, and comparison of the two approaches.

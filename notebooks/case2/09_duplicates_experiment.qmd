@@ -1,0 +1,296 @@
+---
+title: "09 – What do the duplicated genes do to CausalCCC? (case study 2)"
+subtitle: "Rebuilding the input with the duplicates, and comparing with the authors' network"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+The authors' input table has 14 genes that appear twice in the same cell type, as two identical columns (notebook 03,
+section 3). Notebook 07 measured what **removing** them does: the same 525 gene–gene links and the same orientations,
+except for the 111 links of the duplicated genes, whose two copies are often oriented differently. What it did not test is the opposite direction, which is the real test of the hypothesis:
+
+> *The authors' network is what CausalCCC returns when the input has these 14 duplicated columns. If we rebuild the
+> input from public data with the right selection settings and add the 14 duplicates, MIIC should return the authors'
+> network.*
+
+The experiment:
+
+1. rebuild the mosaic table with the selection settings found in notebook 07 (one run per sender → receiver
+   direction, 25 genes per run, no cap of 8, `labels` and `condition` as features of interest);
+2. **add** the 14 duplicated columns (a copy of each original column, placed right after it);
+3. run MIIC with the settings of the server (one thread, `scripts/run_miic.R`, about 3 hours);
+4. compare with the authors' network, and with the network obtained without the duplicates (notebook 07).
+
+The cells are in the authors' row order. The columns are in **our** order: the authors' column order is unknown, so this
+experiment also tests whether the column order matters.
+
+**Inputs:** `results/case2/09_duplicates_experiment/` (written by `scripts/case2/build_duplicates_input.R`, which
+also checks the table; the MIIC result is `miic_result.rds`), the authors' files, and the network without duplicates of
+notebook 07.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(miic)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+
+job_dir  <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+exp_dir  <- file.path(root, "results", "case2", "09_duplicates_experiment")
+nb07_dir <- file.path(root, "results", "case2", "07_differences")
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+strip      <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+
+mosaic_authors <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+lr_authors     <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                           col_names = c("ligand", "receptor"), show_col_types = FALSE)
+mosaic_exp     <- read_tsv(file.path(exp_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+lr_exp         <- read_tsv(file.path(exp_dir, "interact_edges.tsv"),
+                           col_names = c("ligand", "receptor"), show_col_types = FALSE)
+
+row_type <- case_when(!is.na(mosaic_authors$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(mosaic_authors$labels_T_cell)      ~ "T_cell",
+                      !is.na(mosaic_authors$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(mosaic_authors, row_type)
+```
+
+## 1. Is the rebuilt input the authors' input?
+
+The script built the input from the public data only (CellChat's matrix with the normalisation undone, and the
+selection function). We compare it with the authors' table, column by column. The names differ (the authors name the
+two copies of a gene in two ways, ours are `<gene>_<cell type>` and `<gene>_<cell type>_dup`), so each variable is
+identified by its gene and cell type.
+
+```{r}
+#| label: same-input
+
+key_authors <- tibble(variable = names(mosaic_authors), cell_type = col_type) |>
+  mutate(key = if_else(str_detect(variable, "^(labels|condition)_"), variable,
+                       paste0(strip(variable), "_", cell_type)))
+key_exp <- set_names(str_remove(names(mosaic_exp), "_dup$"), names(mosaic_exp))
+
+tibble(authors_variables = ncol(mosaic_authors), rebuilt_variables = ncol(mosaic_exp),
+       rows_authors = nrow(mosaic_authors), rows_rebuilt = nrow(mosaic_exp),
+       same_set_of_genes = setequal(key_authors$key, unname(key_exp)),
+       duplicated_genes_added = sum(str_detect(names(mosaic_exp), "_dup$")))
+
+# Every column of the authors' table against the rebuilt column of the same gene
+same_values <- map2_lgl(key_authors$variable, key_authors$key,
+                        \(a, k) identical(as.character(mosaic_authors[[a]]), as.character(mosaic_exp[[k]])))
+table(same_values)
+
+# Is the column order the same?
+tibble(same_column_order = identical(key_authors$key, unname(key_exp)),
+       columns_in_the_same_position = sum(key_authors$key == unname(key_exp)))
+```
+
+The values of the rebuilt table are the authors' values, for all 238 variables. Only the order of the columns differs.
+Any difference in the network can therefore come from the column order or from the random shuffles of the confidence
+filter, but not from the data.
+
+## 2. The networks
+
+```{r}
+#| label: load-networks
+
+lr_links_authors <- link_name(lr_authors$ligand, lr_authors$receptor)
+lr_links_exp     <- link_name(lr_exp$ligand, lr_exp$receptor)
+
+edges_authors <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE)
+
+res_exp   <- readRDS(file.path(exp_dir, "miic_result.rds"))
+edges_exp <- as_tibble(res_exp$all.edges.summary) |>
+  filter(!(link_name(x, y) %in% lr_links_exp & Nxy_ai %in% 0))   # placeholder rows (notebook 08, section 8)
+
+res_dedup   <- readRDS(file.path(nb07_dir, "authors_dedup", "miic_result.rds"))
+edges_dedup <- as_tibble(res_dedup$all.edges.summary) |>
+  filter(!(link_name(x, y) %in% lr_links_authors & Nxy_ai %in% 0))
+
+attr(res_exp, "run_time")
+```
+
+**Same decisions?** For every pair of variables, retained (`P`) or not:
+
+```{r}
+#| label: same-decisions
+
+# Variable-level comparison of the retained links: the two copies of a gene are interchangeable, so we compare
+# links between genes (key) and count how many variable-level links each gene-level link stands for.
+gene_level <- function(edges, key_of, lr_links) {
+  edges |>
+    filter(type == "P") |>
+    mutate(a = key_of[x], b = key_of[y],
+           is_lr = link_name(x, y) %in% lr_links,
+           is_copy_link = a == b) |>
+    filter(!is_lr, !is_copy_link) |>
+    mutate(link = link_name(a, b),
+           orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt)) |>
+    group_by(link) |>
+    summarise(variable_links = n(),
+              orientations   = paste(sort(orientation), collapse = ","),
+              causal         = paste(sort(is_causal), collapse = ","),
+              .groups = "drop")
+}
+
+key_authors_vec <- set_names(key_authors$key, key_authors$variable)
+
+net_authors <- gene_level(edges_authors, key_authors_vec, lr_links_authors)
+net_exp     <- gene_level(edges_exp, key_exp, lr_links_exp)
+net_dedup   <- gene_level(edges_dedup, key_authors_vec, lr_links_authors)
+
+tibble(network = c("authors", "rebuilt input + duplicates (this notebook)", "authors without duplicates (notebook 07)"),
+       retained_links_all = c(sum(edges_authors$type == "P"), sum(edges_exp$type == "P"), sum(edges_dedup$type == "P")),
+       gene_level_links   = c(nrow(net_authors), nrow(net_exp), nrow(net_dedup)),
+       links_between_the_two_copies = c(
+         sum(edges_authors$type == "P" & key_authors_vec[edges_authors$x] == key_authors_vec[edges_authors$y]),
+         sum(edges_exp$type == "P" & key_exp[edges_exp$x] == key_exp[edges_exp$y]),
+         NA_integer_))
+```
+
+**Is the rebuilt network the authors' network?** At the level of genes, comparing the links, how many variable-level
+links each stands for, their orientations and their genuine causations:
+
+```{r}
+#| label: identical
+
+compare <- function(a, b) {
+  joined <- full_join(a, b, by = "link", suffix = c("_a", "_b"))
+  tibble(jaccard_of_the_links = nrow(inner_join(a, b, by = "link")) / nrow(joined),
+         links_only_in_first = sum(is.na(joined$variable_links_b)),
+         links_only_in_second = sum(is.na(joined$variable_links_a)),
+         same_number_of_variable_links = mean(joined$variable_links_a == joined$variable_links_b, na.rm = TRUE),
+         same_orientations = mean(joined$orientations_a == joined$orientations_b, na.rm = TRUE),
+         same_genuine_causations = mean(joined$causal_a == joined$causal_b, na.rm = TRUE))
+}
+
+compare(net_authors, net_exp) |>
+  pivot_longer(everything(), names_to = "measure")
+```
+
+## 3. What the duplicates do to CausalCCC
+
+The same quantities for the three networks, to measure the effect of the duplicates:
+
+```{r}
+#| label: impact
+
+lr_strength <- function(edges, lr_links) {
+  unique(edges$info_shifted[link_name(edges$x, edges$y) %in% lr_links])
+}
+strongest <- function(edges, lr_links) {
+  edges |> filter(type == "P", !link_name(x, y) %in% lr_links) |> slice_max(info_shifted, n = 1, with_ties = FALSE)
+}
+
+summarise_network <- function(edges, lr_links, name) {
+  gene_links <- filter(edges, type == "P", !link_name(x, y) %in% lr_links)
+  tibble(network = name,
+         gene_gene_links = nrow(gene_links),
+         oriented = sum(abs(gene_links$infOrt) == 2),
+         bidirected = sum(gene_links$infOrt == 6),
+         genuine_causations = sum(gene_links$is_causal == "Y"),
+         strongest_link = paste(strongest(edges, lr_links)$x, "-", strongest(edges, lr_links)$y),
+         strongest_strength = round(strongest(edges, lr_links)$info_shifted),
+         L_R_strength = round(max(lr_strength(edges, lr_links))))
+}
+
+bind_rows(summarise_network(edges_authors, lr_links_authors, "authors (with the 14 duplicates)"),
+          summarise_network(edges_exp, lr_links_exp, "rebuilt input + duplicates"),
+          summarise_network(edges_dedup, lr_links_authors, "authors without duplicates")) |>
+  pivot_longer(-network, names_to = "measure", values_transform = as.character) |>
+  pivot_wider(names_from = network)
+```
+
+**The links around the duplicated genes.** Each duplicated gene enters the network twice, with each neighbour linked to
+both copies; the number of links of these genes in each network:
+
+```{r}
+#| label: duplicated-gene-links
+
+dup_keys <- read_lines(file.path(exp_dir, "duplicated_genes.txt"))
+
+degree_of_duplicates <- function(edges, key_of, lr_links) {
+  edges |>
+    filter(type == "P", !link_name(x, y) %in% lr_links) |>
+    pivot_longer(c(x, y), values_to = "variable") |>
+    mutate(key = key_of[variable]) |>
+    filter(key %in% dup_keys) |>
+    count(key, name = "links")
+}
+
+full_join(degree_of_duplicates(edges_authors, key_authors_vec, lr_links_authors) |> rename(authors = links),
+          degree_of_duplicates(edges_exp, key_exp, lr_links_exp) |> rename(rebuilt_plus_duplicates = links),
+          by = "key") |>
+  full_join(degree_of_duplicates(edges_dedup, key_authors_vec, lr_links_authors) |> rename(without_duplicates = links),
+            by = "key") |>
+  arrange(desc(authors))
+```
+
+## What we learned
+
+**The rebuilt network is the authors' network.** With the selection settings of notebook 07 and the 14 duplicated
+columns added, MIIC on our rebuilt input returns exactly the authors' network:
+
+- the rebuilt input has the authors' **values in all 238 columns**; only the order of the columns differs (5 columns are
+  in the same position);
+- the same 715 retained links: 672 links between variables (14 of them join the two copies of a gene) and the 43 L-R
+  links; once the copies are merged, the same 525 gene–gene links;
+- the same orientations (188 oriented, 44 bidirected) and the same 49 genuine causations, link by link, with the same
+  number of variable-level links behind each gene-level link;
+- the same strongest link (S100A6 in fibroblasts with its copy, 11,579) and so the same L-R strength;
+- the same number of links for every duplicated gene (for example 48 for S100A6 in fibroblasts).
+
+**The column order does not matter here.** Our columns are not in the authors' order, and the network is nevertheless
+identical, so the order of the columns, which we could not control, is not a source of differences.
+
+**The effect of the duplicates on CausalCCC.** Compared with the same input without the duplicates (notebook 07):
+
+| | with the 14 duplicates (authors) | without |
+| --- | --- | --- |
+| gene–gene links (variable level) | 672 | 525 |
+| oriented links | 188 | 97 |
+| bidirected links | 44 | 18 |
+| genuine causations | 49 | 30 |
+| strongest link | S100A6 – its copy, 11,579 | S100A10 – S100A6, 3,050 |
+| strength given to the 43 L-R links | 11,579 | 3,050 |
+
+The table counts rows of the edge list, so a link of a duplicated gene is counted once per copy. The 525 gene–gene
+links are the same in both networks, so the duplicates do not create or remove a gene–gene link. Notebook 07
+(section 5) shows that they change no orientation outside the 111 links of the duplicated genes. What they do:
+
+- they **multiply the links of the duplicated genes** (for example 48 links for S100A6 in fibroblasts, 20 without
+  the duplicate) and inflate the counts of links, oriented links, bidirected links and genuine causations;
+- they give the links of the duplicated genes **two orientations**, which differ for 87 of these 111 links;
+- they set the **strength of all the L-R links** to a value that comes from a copy of a gene (11,579 instead of 3,050).
+
+**What this means.** Case study 2 can be reproduced from public data, provided one uses the selection settings of
+notebook 07 and the duplicated columns. The duplicates are an artefact of the authors' preparation, not a biological
+signal, and they should be removed when reusing the pipeline. One caveat remains: the 14 genes to duplicate were copied
+from the authors' table. We cannot predict them, because the script that pooled the six runs is not available
+(notebook 05).
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

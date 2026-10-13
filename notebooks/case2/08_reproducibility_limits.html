@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-09">
+<meta name="dcterms.date" content="2026-10-13">
 
 <title>08 – Where is the CausalCCC pipeline not reproducible? (case study 2)</title>
 <style>
@@ -2234,7 +2234,7 @@ vertical-align: -.125em;
   </ul></li>
   <li><a href="#part-5-consequence-on-the-network" id="toc-part-5-consequence-on-the-network" class="nav-link" data-scroll-target="#part-5-consequence-on-the-network">Part 5 – Consequence on the network</a>
   <ul class="collapse">
-  <li><a href="#the-orientations-depend-on-the-duplicates" id="toc-the-orientations-depend-on-the-duplicates" class="nav-link" data-scroll-target="#the-orientations-depend-on-the-duplicates">10. The orientations depend on the duplicates</a></li>
+  <li><a href="#the-duplicated-genes-get-contradictory-orientations" id="toc-the-duplicated-genes-get-contradictory-orientations" class="nav-link" data-scroll-target="#the-duplicated-genes-get-contradictory-orientations">10. The duplicated genes get contradictory orientations</a></li>
   </ul></li>
   <li><a href="#part-6-what-we-could-not-check" id="toc-part-6-what-we-could-not-check" class="nav-link" data-scroll-target="#part-6-what-we-could-not-check">Part 6 – What we could not check</a>
   <ul class="collapse">
@@ -2270,7 +2270,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 9, 2026</p>
+      <p class="date">October 13, 2026</p>
     </div>
   </div>
   
@@ -2764,59 +2764,66 @@ Active assay: RNA (17328 features, 0 variable features)
 </section>
 <section id="part-5-consequence-on-the-network" class="level1">
 <h1>Part 5 – Consequence on the network</h1>
-<section id="the-orientations-depend-on-the-duplicates" class="level2">
-<h2 class="anchored" data-anchor-id="the-orientations-depend-on-the-duplicates">10. The orientations depend on the duplicates</h2>
-<p>We compare the authors’ network with the one obtained by running MIIC on their input <strong>without</strong> the duplicated columns (saved in notebook 07, section 5):</p>
+<section id="the-duplicated-genes-get-contradictory-orientations" class="level2">
+<h2 class="anchored" data-anchor-id="the-duplicated-genes-get-contradictory-orientations">10. The duplicated genes get contradictory orientations</h2>
+<p>We compare the authors’ network with the one obtained by running MIIC on their input <strong>without</strong> the duplicated columns (saved in notebook 07, section 5). A link of a duplicated gene appears once per copy in the authors’ network, so we keep every row and look separately at the links that involve a duplicated gene:</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>dedup_result <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="fu">file.path</span>(nb07_dir, <span class="st">&quot;authors_dedup&quot;</span>, <span class="st">&quot;miic_result.rds&quot;</span>))</span>
 <span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>edges_dedup  <span class="ot">&lt;-</span> <span class="fu">as_tibble</span>(dedup_result<span class="sc">$</span>all.edges.summary) <span class="sc">|&gt;</span></span>
 <span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>(<span class="fu">link_name</span>(x, y) <span class="sc">%in%</span> lr_links <span class="sc">&amp;</span> Nxy_ai <span class="sc">%in%</span> <span class="dv">0</span>))   <span class="co"># placeholder rows (section 8)</span></span>
 <span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Every variable identified as &quot;&lt;gene&gt;_&lt;cell type&gt;&quot;: the two copies of a duplicated gene become one node</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Every variable identified as &quot;&lt;gene&gt;_&lt;cell type&gt;&quot;: the two copies of a duplicated gene get the same key</span></span>
 <span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a>key_of <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">variable =</span> <span class="fu">names</span>(mosaic), <span class="at">cell_type =</span> col_type) <span class="sc">|&gt;</span></span>
 <span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">key =</span> <span class="fu">if_else</span>(<span class="fu">str_detect</span>(variable, <span class="st">&quot;^(labels|condition)_&quot;</span>), variable,</span>
 <span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a>                       <span class="fu">paste0</span>(<span class="fu">strip</span>(variable), <span class="st">&quot;_&quot;</span>, cell_type))) <span class="sc">|&gt;</span></span>
 <span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(key, <span class="at">name =</span> variable)</span>
-<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a>gene_links <span class="ot">&lt;-</span> <span class="cf">function</span>(edge_list) {</span>
-<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a>  edge_list <span class="sc">|&gt;</span></span>
-<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(type <span class="sc">==</span> <span class="st">&quot;P&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">a =</span> key_of[x], <span class="at">b =</span> key_of[y]) <span class="sc">|&gt;</span></span>
-<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(a <span class="sc">!=</span> b, <span class="sc">!</span><span class="fu">link_name</span>(x, y) <span class="sc">%in%</span> lr_links) <span class="sc">|&gt;</span></span>
-<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">transmute</span>(<span class="at">link =</span> <span class="fu">link_name</span>(a, b),</span>
-<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a>              <span class="at">orientation =</span> <span class="fu">if_else</span>(a <span class="sc">==</span> <span class="fu">pmin</span>(a, b) <span class="sc">|</span> infOrt <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">6</span>), infOrt, <span class="sc">-</span>infOrt),</span>
-<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a>              is_causal) <span class="sc">|&gt;</span></span>
-<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">distinct</span>(link, <span class="at">.keep_all =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-22"><a href="#cb53-22" aria-hidden="true" tabindex="-1"></a>net_authors <span class="ot">&lt;-</span> <span class="fu">gene_links</span>(edges_authors)</span>
-<span id="cb53-23"><a href="#cb53-23" aria-hidden="true" tabindex="-1"></a>net_dedup   <span class="ot">&lt;-</span> <span class="fu">gene_links</span>(edges_dedup)</span>
-<span id="cb53-24"><a href="#cb53-24" aria-hidden="true" tabindex="-1"></a>shared      <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(net_authors, net_dedup, <span class="at">by =</span> <span class="st">&quot;link&quot;</span>, <span class="at">suffix =</span> <span class="fu">c</span>(<span class="st">&quot;_authors&quot;</span>, <span class="st">&quot;_dedup&quot;</span>))</span>
-<span id="cb53-25"><a href="#cb53-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-26"><a href="#cb53-26" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">links_authors =</span> <span class="fu">nrow</span>(net_authors),</span>
-<span id="cb53-27"><a href="#cb53-27" aria-hidden="true" tabindex="-1"></a>       <span class="at">links_without_duplicates =</span> <span class="fu">nrow</span>(net_dedup),</span>
-<span id="cb53-28"><a href="#cb53-28" aria-hidden="true" tabindex="-1"></a>       <span class="at">jaccard_of_the_links =</span> <span class="fu">nrow</span>(shared) <span class="sc">/</span> <span class="fu">n_distinct</span>(<span class="fu">c</span>(net_authors<span class="sc">$</span>link, net_dedup<span class="sc">$</span>link)),</span>
-<span id="cb53-29"><a href="#cb53-29" aria-hidden="true" tabindex="-1"></a>       <span class="at">same_orientation =</span> <span class="fu">mean</span>(shared<span class="sc">$</span>orientation_authors <span class="sc">==</span> shared<span class="sc">$</span>orientation_dedup),</span>
-<span id="cb53-30"><a href="#cb53-30" aria-hidden="true" tabindex="-1"></a>       <span class="at">reversed =</span> <span class="fu">sum</span>(<span class="fu">abs</span>(shared<span class="sc">$</span>orientation_authors) <span class="sc">==</span> <span class="dv">2</span> <span class="sc">&amp;</span> shared<span class="sc">$</span>orientation_authors <span class="sc">==</span> <span class="sc">-</span>shared<span class="sc">$</span>orientation_dedup),</span>
-<span id="cb53-31"><a href="#cb53-31" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_authors =</span> <span class="fu">sum</span>(net_authors<span class="sc">$</span>is_causal <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>),</span>
-<span id="cb53-32"><a href="#cb53-32" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_without_duplicates =</span> <span class="fu">sum</span>(net_dedup<span class="sc">$</span>is_causal <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>),</span>
-<span id="cb53-33"><a href="#cb53-33" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_in_both =</span> <span class="fu">sum</span>(shared<span class="sc">$</span>is_causal_authors <span class="sc">==</span> <span class="st">&quot;Y&quot;</span> <span class="sc">&amp;</span> shared<span class="sc">$</span>is_causal_dedup <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb53-34"><a href="#cb53-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">&quot;measure&quot;</span>, <span class="at">values_to =</span> <span class="st">&quot;value&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a>dup_keys <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">unname</span>(key_of[dup]))</span>
+<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a>all_rows <span class="ot">&lt;-</span> <span class="cf">function</span>(edge_list) {</span>
+<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a>  edge_list <span class="sc">|&gt;</span></span>
+<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(type <span class="sc">==</span> <span class="st">&quot;P&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">a =</span> key_of[x], <span class="at">b =</span> key_of[y]) <span class="sc">|&gt;</span></span>
+<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(a <span class="sc">!=</span> b, <span class="sc">!</span><span class="fu">link_name</span>(x, y) <span class="sc">%in%</span> lr_links) <span class="sc">|&gt;</span></span>
+<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">transmute</span>(<span class="at">link =</span> <span class="fu">link_name</span>(a, b),</span>
+<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a>              <span class="at">involves_duplicate =</span> a <span class="sc">%in%</span> dup_keys <span class="sc">|</span> b <span class="sc">%in%</span> dup_keys,</span>
+<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a>              <span class="at">orientation =</span> <span class="fu">if_else</span>(a <span class="sc">==</span> <span class="fu">pmin</span>(a, b) <span class="sc">|</span> infOrt <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">6</span>), infOrt, <span class="sc">-</span>infOrt),</span>
+<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a>              is_causal)</span>
+<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb53-22"><a href="#cb53-22" aria-hidden="true" tabindex="-1"></a>rows_authors <span class="ot">&lt;-</span> <span class="fu">all_rows</span>(edges_authors)</span>
+<span id="cb53-23"><a href="#cb53-23" aria-hidden="true" tabindex="-1"></a>rows_dedup   <span class="ot">&lt;-</span> <span class="fu">all_rows</span>(edges_dedup)</span>
+<span id="cb53-24"><a href="#cb53-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-25"><a href="#cb53-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Links without a duplicated gene: one row per link in both networks</span></span>
+<span id="cb53-26"><a href="#cb53-26" aria-hidden="true" tabindex="-1"></a>clean <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(<span class="fu">filter</span>(rows_authors, <span class="sc">!</span>involves_duplicate), <span class="fu">filter</span>(rows_dedup, <span class="sc">!</span>involves_duplicate),</span>
+<span id="cb53-27"><a href="#cb53-27" aria-hidden="true" tabindex="-1"></a>                    <span class="at">by =</span> <span class="st">&quot;link&quot;</span>, <span class="at">suffix =</span> <span class="fu">c</span>(<span class="st">&quot;_authors&quot;</span>, <span class="st">&quot;_dedup&quot;</span>))</span>
+<span id="cb53-28"><a href="#cb53-28" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">links =</span> <span class="fu">nrow</span>(clean),</span>
+<span id="cb53-29"><a href="#cb53-29" aria-hidden="true" tabindex="-1"></a>       <span class="at">same_orientation =</span> <span class="fu">mean</span>(clean<span class="sc">$</span>orientation_authors <span class="sc">==</span> clean<span class="sc">$</span>orientation_dedup),</span>
+<span id="cb53-30"><a href="#cb53-30" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_authors =</span> <span class="fu">sum</span>(clean<span class="sc">$</span>is_causal_authors <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>),</span>
+<span id="cb53-31"><a href="#cb53-31" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_without_duplicates =</span> <span class="fu">sum</span>(clean<span class="sc">$</span>is_causal_dedup <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>),</span>
+<span id="cb53-32"><a href="#cb53-32" aria-hidden="true" tabindex="-1"></a>       <span class="at">genuine_causations_in_both =</span> <span class="fu">sum</span>(clean<span class="sc">$</span>is_causal_authors <span class="sc">==</span> <span class="st">&quot;Y&quot;</span> <span class="sc">&amp;</span> clean<span class="sc">$</span>is_causal_dedup <span class="sc">==</span> <span class="st">&quot;Y&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 8 × 2
-  measure                                 value
-  &lt;chr&gt;                                   &lt;dbl&gt;
-1 links_authors                         525    
-2 links_without_duplicates              525    
-3 jaccard_of_the_links                    1    
-4 same_orientation                        0.834
-5 reversed                                0    
-6 genuine_causations_authors             30    
-7 genuine_causations_without_duplicates  30    
-8 genuine_causations_in_both             23    </code></pre>
+<pre><code># A tibble: 1 × 5
+  links same_orientation genuine_causations_authors genuine_causations_without…¹
+  &lt;int&gt;            &lt;dbl&gt;                      &lt;int&gt;                        &lt;int&gt;
+1   414                1                         18                           18
+# ℹ abbreviated name: ¹​genuine_causations_without_duplicates
+# ℹ 1 more variable: genuine_causations_in_both &lt;int&gt;</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Links of the duplicated genes: do the two copies agree?</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>rows_authors <span class="sc">|&gt;</span></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(involves_duplicate) <span class="sc">|&gt;</span></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(link) <span class="sc">|&gt;</span></span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">rows =</span> <span class="fu">n</span>(), <span class="at">orientations =</span> <span class="fu">n_distinct</span>(orientation), <span class="at">causal =</span> <span class="fu">n_distinct</span>(is_causal), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">links =</span> <span class="fu">n</span>(), <span class="at">rows =</span> <span class="fu">sum</span>(rows),</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">copies_disagree_on_orientation =</span> <span class="fu">sum</span>(orientations <span class="sc">&gt;</span> <span class="dv">1</span>),</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>            <span class="at">copies_disagree_on_causality =</span> <span class="fu">sum</span>(causal <span class="sc">&gt;</span> <span class="dv">1</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 4
+  links  rows copies_disagree_on_orientation copies_disagree_on_causality
+  &lt;int&gt; &lt;int&gt;                          &lt;int&gt;                        &lt;int&gt;
+1   111   244                             87                           18</code></pre>
 </div>
 </div>
-<p>The links do not change, but the orientation of a fraction of them does: MIIC’s orientations are much more sensitive to the input than its links. The orientation claims of the paper therefore depend on an artefact of the preparation.</p>
+<p>Removing the duplicates changes <strong>no link</strong>, and no orientation or genuine causation outside the links of the 14 duplicated genes. But in the authors’ network these 111 links appear once per copy, and the two copies get different orientations for most of them: the published network gives these links <strong>contradictory orientations</strong>. None of the genes named in Figure 3 is duplicated, so the paper’s claims are not affected; any orientation involving one of the 14 duplicated genes should not be interpreted.</p>
 </section>
 </section>
 <section id="part-6-what-we-could-not-check" class="level1">
@@ -2828,7 +2835,7 @@ Active assay: RNA (17328 features, 0 variable features)
 <section id="the-sources-are-fragile" class="level2">
 <h2 class="anchored" data-anchor-id="the-sources-are-fragile">12. The sources are fragile</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(job_dir)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(job_dir)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code> [1] &quot;adjacencyMatrix.miic.orientProba.txt&quot;
  [2] &quot;adjacencyMatrix.miic.txt&quot;            
@@ -2847,10 +2854,10 @@ Active assay: RNA (17328 features, 0 variable features)
 [15] &quot;template_category_order.tsv&quot;         
 [16] &quot;whole_run.log&quot;                       </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">file =</span> <span class="st">&quot;data_humanSkin_CellChat.rda&quot;</span>,</span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">md5_of_our_copy =</span> <span class="fu">unname</span>(tools<span class="sc">::</span><span class="fu">md5sum</span>(cellchat)),</span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>       <span class="at">md5_recorded_in_data_README =</span> <span class="st">&quot;9d31f4c88be64912b937b5d6a2cb6c2d&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">same =</span> md5_of_our_copy <span class="sc">==</span> md5_recorded_in_data_README)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">file =</span> <span class="st">&quot;data_humanSkin_CellChat.rda&quot;</span>,</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>       <span class="at">md5_of_our_copy =</span> <span class="fu">unname</span>(tools<span class="sc">::</span><span class="fu">md5sum</span>(cellchat)),</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>       <span class="at">md5_recorded_in_data_README =</span> <span class="st">&quot;9d31f4c88be64912b937b5d6a2cb6c2d&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">same =</span> md5_of_our_copy <span class="sc">==</span> md5_recorded_in_data_README)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 1 × 4
   file                        md5_of_our_copy       md5_recorded_in_data…¹ same 
@@ -2936,9 +2943,9 @@ Active assay: RNA (17328 features, 0 variable features)
 </tr>
 <tr class="even">
 <td>10</td>
-<td>Orientations depend on the duplicates</td>
-<td>links unchanged, a fraction of orientations differ</td>
-<td>causal claims depend on an artefact</td>
+<td>Duplicated genes get contradictory orientations</td>
+<td>the two copies of a gene are oriented differently for 87 of their 111 links</td>
+<td>orientations involving these 14 genes cannot be interpreted; the rest of the network is unaffected</td>
 </tr>
 <tr class="odd">
 <td>11</td>
@@ -2954,11 +2961,11 @@ Active assay: RNA (17328 features, 0 variable features)
 </tr>
 </tbody>
 </table>
-<p><strong>What we did not test.</strong> Adding the duplicated columns to our rebuilt input and checking that MIIC returns the authors’ network exactly (notebook 07, “What we did not test”). This would confirm that the duplicates are the only remaining difference.</p>
+<p><strong>What the rest of the pipeline shows.</strong> Adding the 14 duplicated columns to our rebuilt input (final selection settings) and running MIIC with the server’s settings gives the authors’ network exactly (notebook 09). The duplicates, together with the undocumented selection settings, therefore explain all the differences. The remaining caveat is that the 14 genes to duplicate were copied from the authors’ table, because the pooling script is not available.</p>
 <section id="session-information" class="level2">
 <h2 class="anchored" data-anchor-id="session-information">Session information</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>R version 4.6.1 (2026-06-24)
 Platform: x86_64-pc-linux-gnu

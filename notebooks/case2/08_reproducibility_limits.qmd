@@ -436,10 +436,11 @@ sped up.
 
 # Part 5 – Consequence on the network
 
-## 10. The orientations depend on the duplicates
+## 10. The duplicated genes get contradictory orientations
 
 We compare the authors' network with the one obtained by running MIIC on their input **without** the duplicated
-columns (saved in notebook 07, section 5):
+columns (saved in notebook 07, section 5). A link of a duplicated gene appears once per copy in the authors' network,
+so we keep every row and look separately at the links that involve a duplicated gene:
 
 ```{r}
 #| label: dedup-network
@@ -448,40 +449,50 @@ dedup_result <- readRDS(file.path(nb07_dir, "authors_dedup", "miic_result.rds"))
 edges_dedup  <- as_tibble(dedup_result$all.edges.summary) |>
   filter(!(link_name(x, y) %in% lr_links & Nxy_ai %in% 0))   # placeholder rows (section 8)
 
-# Every variable identified as "<gene>_<cell type>": the two copies of a duplicated gene become one node
+# Every variable identified as "<gene>_<cell type>": the two copies of a duplicated gene get the same key
 key_of <- tibble(variable = names(mosaic), cell_type = col_type) |>
   mutate(key = if_else(str_detect(variable, "^(labels|condition)_"), variable,
                        paste0(strip(variable), "_", cell_type))) |>
   pull(key, name = variable)
+dup_keys <- unique(unname(key_of[dup]))
 
-gene_links <- function(edge_list) {
+all_rows <- function(edge_list) {
   edge_list |>
     filter(type == "P") |>
     mutate(a = key_of[x], b = key_of[y]) |>
     filter(a != b, !link_name(x, y) %in% lr_links) |>
     transmute(link = link_name(a, b),
+              involves_duplicate = a %in% dup_keys | b %in% dup_keys,
               orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt),
-              is_causal) |>
-    distinct(link, .keep_all = TRUE)
+              is_causal)
 }
+rows_authors <- all_rows(edges_authors)
+rows_dedup   <- all_rows(edges_dedup)
 
-net_authors <- gene_links(edges_authors)
-net_dedup   <- gene_links(edges_dedup)
-shared      <- inner_join(net_authors, net_dedup, by = "link", suffix = c("_authors", "_dedup"))
+# Links without a duplicated gene: one row per link in both networks
+clean <- inner_join(filter(rows_authors, !involves_duplicate), filter(rows_dedup, !involves_duplicate),
+                    by = "link", suffix = c("_authors", "_dedup"))
+tibble(links = nrow(clean),
+       same_orientation = mean(clean$orientation_authors == clean$orientation_dedup),
+       genuine_causations_authors = sum(clean$is_causal_authors == "Y"),
+       genuine_causations_without_duplicates = sum(clean$is_causal_dedup == "Y"),
+       genuine_causations_in_both = sum(clean$is_causal_authors == "Y" & clean$is_causal_dedup == "Y"))
 
-tibble(links_authors = nrow(net_authors),
-       links_without_duplicates = nrow(net_dedup),
-       jaccard_of_the_links = nrow(shared) / n_distinct(c(net_authors$link, net_dedup$link)),
-       same_orientation = mean(shared$orientation_authors == shared$orientation_dedup),
-       reversed = sum(abs(shared$orientation_authors) == 2 & shared$orientation_authors == -shared$orientation_dedup),
-       genuine_causations_authors = sum(net_authors$is_causal == "Y"),
-       genuine_causations_without_duplicates = sum(net_dedup$is_causal == "Y"),
-       genuine_causations_in_both = sum(shared$is_causal_authors == "Y" & shared$is_causal_dedup == "Y")) |>
-  pivot_longer(everything(), names_to = "measure", values_to = "value")
+# Links of the duplicated genes: do the two copies agree?
+rows_authors |>
+  filter(involves_duplicate) |>
+  group_by(link) |>
+  summarise(rows = n(), orientations = n_distinct(orientation), causal = n_distinct(is_causal), .groups = "drop") |>
+  summarise(links = n(), rows = sum(rows),
+            copies_disagree_on_orientation = sum(orientations > 1),
+            copies_disagree_on_causality = sum(causal > 1))
 ```
 
-The links do not change, but the orientation of a fraction of them does: MIIC's orientations are much more sensitive to
-the input than its links. The orientation claims of the paper therefore depend on an artefact of the preparation.
+Removing the duplicates changes **no link**, and no orientation or genuine causation outside the links of the 14
+duplicated genes. But in the authors' network these 111 links appear once per copy, and the two copies get different
+orientations for most of them: the published network gives these links **contradictory orientations**. None of the
+genes named in Figure 3 is duplicated, so the paper's claims are not affected; any orientation involving one of the 14
+duplicated genes should not be interpreted.
 
 # Part 6 – What we could not check
 
@@ -523,13 +534,14 @@ dataset refused scripted downloads on 2026-10-05, so that file has to be downloa
 | 7 | No random seed | no seed in `script.sh` | confidence ratios differ slightly between runs |
 | 8 | Version differences | 86 rows instead of 43 for the L-R pairs | placeholders must be removed; exact version unknown |
 | 9 | Heavy computation | about 3 hours on one thread; multithreading crashed | hard to rerun and to test variants |
-| 10 | Orientations depend on the duplicates | links unchanged, a fraction of orientations differ | causal claims depend on an artefact |
+| 10 | Duplicated genes get contradictory orientations | the two copies of a gene are oriented differently for 87 of their 111 links | orientations involving these 14 genes cannot be interpreted; the rest of the network is unaffected |
 | 11 | Preprocessing not described | partial agreement when rebuilt from FASTQ | the Seurat object cannot be reproduced |
 | 12 | Fragile sources | server not an archive; figshare refuses scripts | data may become unavailable |
 
-**What we did not test.** Adding the duplicated columns to our rebuilt input and checking that MIIC returns the authors'
-network exactly (notebook 07, "What we did not test"). This would confirm that the duplicates are the only remaining
-difference.
+**What the rest of the pipeline shows.** Adding the 14 duplicated columns to our rebuilt input (final selection settings)
+and running MIIC with the server's settings gives the authors' network exactly (notebook 09). The duplicates, together
+with the undocumented selection settings, therefore explain all the differences. The remaining caveat is that the 14
+genes to duplicate were copied from the authors' table, because the pooling script is not available.
 
 ## Session information
 

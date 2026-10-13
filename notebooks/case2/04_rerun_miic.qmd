@@ -396,7 +396,8 @@ edges_authors |>
 - the same 715 retained links: 247 within fibroblasts, 200 within T cells, 225 within dendritic cells and the 43 L-R
   links;
 - identical link strengths (differences below 10⁻¹²) and orientation probabilities;
-- identical orientations and the same 49 genuine causations;
+- identical orientations and the same 49 genuine causations (rows of the edge list: a link of one of the 14 duplicated
+  genes appears once per copy, and the two copies do not always agree, see notebook 07, section 5);
 - confidence ratios slightly different (random shuffles with another seed, largest difference 0.008), with no effect on
   any decision.
 

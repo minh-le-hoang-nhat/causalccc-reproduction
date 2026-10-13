@@ -649,11 +649,11 @@ reproduced **exactly** (0 missing, 0 extra) with one run per direction, **25 gen
 The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the
 published wrapper.
 
-**The remaining differences** are mostly genes close to the selection cut-off: the genes we miss and the genes we add
-have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). Possible
-causes are a different gene order in the authors' Seurat object (MI is computed in blocks of 100 genes, together with
-conditioning on the other genes of the block, so the block composition can shift values slightly), a different order of
-the L-R pairs (only the first 8 ligands or receptors of a run are used), or a different version of the code.
+**The remaining differences** of protocol B+ are mostly genes close to the selection cut-off: the genes we miss and the
+genes we add have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320).
+We first suspected a different gene order in the authors' Seurat object, a different order of the L-R pairs or a
+different version of the code. Notebook 07 tests these causes: the code version and the gene order are **not** the
+cause; the differences come from the selection settings (25 genes per run, no cap of 8, both metadata).
 
 **The genes named in the paper** (DCN, APOD, CFD in fibroblasts; GPR183, NR4A3, VIM in dendritic cells; FOS, JUNB in T
 cells) are all selected by protocol B+.
@@ -664,7 +664,8 @@ which 14 genes were duplicated. Whatever the cause, removing duplicates should b
 **Next steps.**
 
 - Build the full mosaic from our selection (protocol B+, without duplicates) and rerun MIIC on it, to see how much the
-  network and the Figure 3 claims depend on these preprocessing details (notebook 06).
+  network and the Figure 3 claims depend on these preprocessing details (notebook 06; it uses protocol B+, not the
+  exact settings found afterwards in notebook 07).
 - Ask the authors for the script used to pool the runs, and for the gene order of their Seurat object.
 
 ## Session information

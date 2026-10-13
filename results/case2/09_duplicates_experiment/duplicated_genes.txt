@@ -1,0 +1,14 @@
+ANXA2_DCs
+S100A10_DCs
+TMSB10_DCs
+LGALS1_DCs
+S100A4_DCs
+ACTB_T_cell
+B2M_T_cell
+S100A6_T_cell
+SH3BGRL3_T_cell
+H3F3B_T_cell
+S100A6_Fibroblasts
+B2M_Fibroblasts
+S100A10_Fibroblasts
+FTH1_Fibroblasts

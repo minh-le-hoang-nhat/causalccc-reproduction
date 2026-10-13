@@ -339,6 +339,76 @@ bind_rows(compare_networks("authors", "authors_without_duplicates"),
   print(width = Inf)
 ```
 
+**A caveat on this table.** In the authors' network, a link of a duplicated gene appears once per copy (two rows, or
+four when both genes are duplicated), and `gene_links()` keeps only the first row of each link. If the two copies do not
+get the same orientation, the orientation kept for that link depends on which copy comes first, so the comparisons
+involving the authors' network are not reliable for these links. We therefore look separately at the links that
+involve a duplicated gene, keeping every row:
+
+```{r}
+#| label: duplicate-links
+
+dup_keys <- unique(unname(key_of[dropped]))   # "<gene>_<cell type>" of the 14 duplicated genes
+
+all_rows <- function(edge_list, keys) {
+  edge_list |>
+    filter(type == "P") |>
+    mutate(a = keys[x], b = keys[y]) |>
+    filter(a != b, !link_name(x, y) %in% c(lr_links_authors, link_name(keys[lr_pairs$ligand], keys[lr_pairs$receptor]))) |>
+    transmute(link = link_name(a, b),
+              involves_duplicate = a %in% dup_keys | b %in% dup_keys,
+              orientation = if_else(a == pmin(a, b) | infOrt %in% c(1, 6), infOrt, -infOrt),
+              is_causal)
+}
+rows <- list(authors = all_rows(edges_authors, key_of),
+             authors_without_duplicates = all_rows(edges_dedup, key_of),
+             ours_notebook_06 = all_rows(edges_ours, key_of_ours))
+
+# Links of the duplicated genes in the authors' network: do the copies agree?
+copies <- rows$authors |>
+  filter(involves_duplicate) |>
+  group_by(link) |>
+  summarise(rows = n(), orientations = list(orientation), causal = list(is_causal), .groups = "drop") |>
+  left_join(rows$authors_without_duplicates |> select(link, orientation_without = orientation,
+                                                      causal_without = is_causal), by = "link")
+copies |>
+  summarise(links = n(), rows = sum(rows),
+            copies_disagree_on_orientation = sum(map_int(orientations, n_distinct) > 1),
+            copies_disagree_on_causality   = sum(map_int(causal, n_distinct) > 1),
+            without_duplicates_same_as_one_copy = sum(map2_lgl(orientations, orientation_without, \(o, w) w %in% o)),
+            genuine_causation_in_a_copy = sum(map_lgl(causal, \(v) any(v == "Y"))),
+            genuine_causation_without_duplicates = sum(causal_without == "Y", na.rm = TRUE))
+
+# Links without a duplicated gene: one row per link in every network
+compare_clean <- function(a, b) {
+  shared <- inner_join(filter(rows[[a]], !involves_duplicate), filter(rows[[b]], !involves_duplicate),
+                       by = "link", suffix = c("_a", "_b"))
+  tibble(comparison = paste(a, "vs", b),
+         shared_links = nrow(shared),
+         same_orientation = mean(shared$orientation_a == shared$orientation_b),
+         opposite_orientation = sum(abs(shared$orientation_a) == 2 & shared$orientation_a == -shared$orientation_b),
+         causal_a = sum(shared$is_causal_a == "Y"), causal_b = sum(shared$is_causal_b == "Y"),
+         causal_both = sum(shared$is_causal_a == "Y" & shared$is_causal_b == "Y"))
+}
+
+bind_rows(compare_clean("authors", "authors_without_duplicates"),
+          compare_clean("authors_without_duplicates", "ours_notebook_06"),
+          compare_clean("authors", "ours_notebook_06")) |>
+  print(width = Inf)
+```
+
+**Reading.** Removing the duplicated columns changes **nothing** outside the links of the 14 duplicated genes: the 414
+other gene–gene links keep exactly the same orientation and the same 18 genuine causations. The effect is confined to
+the 111 links that involve a duplicated gene. In the authors' network, the two copies of a gene get **different
+orientations for 87 of these 111 links** (and a different causal status for 18 of them), so these links have no single
+orientation. Without the duplicates, each of them has one orientation, which is always that of one of the two copies.
+The "17 %" of the table above (87 of 525 links) is therefore not a change of orientation caused by the duplicates, but
+the choice of one copy by `gene_links()`.
+
+The same caveat applies to the comparison of the authors' network with ours (notebook 06): on the 361 shared links
+without a duplicated gene, 96 % keep their orientation and none is reversed (79 % in the table above, which includes the
+links of the duplicated genes).
+
 **Figure 3** in the network without duplicates (distances in the authors' network: DCN 2, APOD 2, CFD 1; GPR183 2,
 NR4A3 1, VIM 2; FOS 2, JUNB 1):
 
@@ -453,48 +523,46 @@ The last 5 missing dendritic cell genes were the clue: they are the top genes of
 receptors removed by the cap of 8. These settings are not those of the published wrapper, and the paper does not
 mention them: the authors probably changed the wrapper or called the selection function themselves.
 
-**Orientations: two effects.** On the authors' input without its 14 duplicated columns, which is exactly the input
-the settings above produce:
+**Orientations: the duplicates make some of them contradictory.** On the authors' input without its 14 duplicated
+columns, which is exactly the input the settings above produce:
 
 - the **links are unchanged** (the same 525 gene–gene links, Jaccard index 1);
-- the **orientation status of 17 % of the links changes** (83 % agreement, none reversed), and the genuine causations
-  change too (30 in both networks, but only 23 shared).
+- the 414 links that do not involve a duplicated gene keep **exactly** the same orientation and the same 18 genuine
+  causations;
+- the 111 links of the duplicated genes appear once per copy in the authors' network, and the two copies get
+  **different orientations for 87 of them** (different causal status for 18). Without the duplicates each link has one
+  orientation, always that of one of the two copies. Counting a link as a genuine causation when one of its copies is,
+  the authors' network has 41 genuine causations at the gene level (18 + 23), against 30 without the duplicates
+  (18 + 12).
 
-Between that input and our input of notebook 06 (default settings, about 7 % different genes), links differ more
-(Jaccard 0.82) but orientations agree on 94 % of shared links. So the **duplicated columns mainly change the
-orientations, and the gene selection mainly changes the links**. Figure 3 holds in the network without duplicates: the
-same distances for all the genes named in the paper, and CXCL12 → CFD is kept.
+An earlier version of this notebook reported that "17 % of the orientations change": this figure came from keeping one
+copy at random for the links of the duplicated genes (section 5).
+
+Between the input without duplicates and our input of notebook 06 (default settings, about 7 % different genes), links
+differ more (Jaccard 0.82) and orientations agree on 94 % of the shared links. Figure 3 holds in the network without
+duplicates: the same distances for all the genes named in the paper, and CXCL12 → CFD is kept.
 
 **Summary: what changes what.**
 
 | Change made to the input | Effect on the links | Effect on the orientations |
 | --- | --- | --- |
-| Remove the 14 duplicated columns (same genes otherwise) | none (same 525 links, Jaccard 1) | 17 % of the links change status (none reversed); only 23 of the 30 genuine causations are shared |
+| Remove the 14 duplicated columns (same genes otherwise) | none (same 525 links, Jaccard 1) | none for the 414 links without a duplicated gene; the 111 links of the duplicated genes go from two (often contradictory) orientations to one |
 | Default selection settings instead of the authors' (about 7 % different genes) | links differ more (Jaccard 0.82) | 94 % of the shared links keep their orientation |
 
-The duplicated columns therefore act mainly on the **orientations**, and the gene selection mainly on the **links**.
+The duplicated columns therefore do not change the rest of the network: they give the links of the 14 duplicated genes
+two orientations instead of one. The gene selection acts mainly on the **links**.
 
 **What this means.** Case study 2 can be rebuilt exactly from public data, provided the selection settings above are
-used. The duplicated columns are an artefact of the authors' preparation: removing them changes no link but about one
-orientation in six, which confirms that MIIC's orientations are much more sensitive to the input than its links.
+used. The duplicated columns are an artefact of the authors' preparation: removing them changes no link and no
+orientation outside the links of the duplicated genes, but these 111 links have contradictory orientations in the
+published network. None of the genes named in Figure 3 is duplicated, so the paper's claims are not affected.
 
-**What we did not test.** We showed what *removing* the duplicates does to the authors' input. We did not do the
-opposite experiment, which is the direct test of our hypothesis: *adding* the duplicated columns to the input we rebuild,
-and checking that MIIC then returns the authors' network exactly. Logically it should: notebook 04 shows that MIIC on the
-authors' input gives their network, and Part 1 shows that our selection gives their genes. But this is not verified, for
-two reasons. First, we cannot predict which 14 genes are duplicated (the naming rule of notebook 05 finds 11 of them
-but also 24 that the authors do not have), so the test would have to copy their 14 columns, which is partly circular.
-Second, we have not checked that the order of the columns, which does not change the MI values, has no effect on the
-orientations that MIIC finds.
-
-We will not run it, because of the cost (about 3 hours of MIIC on one thread, the server's settings), but it is the
-experiment to do to confirm the hypothesis:
-
-1. take our rebuilt input (authors' settings: 25 genes per run, no cap of 8, `labels` and `condition` as features of interest);
-2. add the 14 duplicated columns, copied from the authors' table, in the authors' column order;
-3. run MIIC with the server's settings (`scripts/run_miic.R`, one thread, same seed);
-4. compare with the authors' network (links, orientations, genuine causations): if the duplicates are the only
-   difference, the two networks should be identical.
+**The opposite experiment (notebook 09).** We showed here what *removing* the duplicates does to the authors' input.
+The direct test of the hypothesis is the opposite: *add* the 14 duplicated columns to the input rebuilt with the settings
+above and check that MIIC returns the authors' network. We ran it in notebook 09: the rebuilt input has exactly the
+authors' values in all 238 columns, and the resulting network is **identical** to the authors' one (same links,
+orientations and genuine causations), although the column order is not the authors' one. The only caveat is that the
+14 genes to duplicate were taken from the authors' table, because we cannot predict them (notebook 05).
 
 **Questions for the authors.** How were the six wrapper runs pooled (origin of the duplicated columns)? Why 25 genes
 and no cap of 8, and are these the settings to use? Were the published L-R link strengths meant to come from a

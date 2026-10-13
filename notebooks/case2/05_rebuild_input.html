@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Minh Le, Jeanne Leclerc">
-<meta name="dcterms.date" content="2026-10-09">
+<meta name="dcterms.date" content="2026-10-12">
 
 <title>05 – Rebuild the CausalCCC input from the public data (case study 2)</title>
 <style>
@@ -2249,7 +2249,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 9, 2026</p>
+      <p class="date">October 12, 2026</p>
     </div>
   </div>
   
@@ -3088,12 +3088,12 @@ max(15, min(length(goi) * 4, 100))</code></pre>
 <p><strong>The wrapper cannot be run as is.</strong> <code>causalCCC.wrapper()</code> (commit <code>0aa8586</code>) fails with Seurat 5 (<code>slot</code> argument removed), cannot find ligands and receptors when given a data frame (it searches the cell names), and handles one sender and one receiver only, whereas case study 2 has three cell types. We call the gene selection function directly, with a one-word fix (<code>slot</code> → <code>layer</code>).</p>
 <p><strong>Gene selection: mostly reproduced.</strong> The best match is protocol B+: one wrapper run per sender → receiver direction (6 runs), with the ligands or receptors of that direction and both metadata (subtype, condition) as features of interest, and the default number of genes. It recovers 160 of the authors’ 174 selected genes (49/51 in T cells, 56/60 in fibroblasts, 55/63 in dendritic cells) and adds only 7 others (Jaccard index 0.89). Without the metadata, or with a single selection per cell type, the agreement is much lower (0.52 to 0.67). So the authors most likely ran the wrapper once per direction, including the metadata, and pooled the results.</p>
 <p><strong>Update (notebook 07).</strong> Protocol B+ is only an approximation. Notebook 07 shows that the authors’ selection is reproduced <strong>exactly</strong> (0 missing, 0 extra) with one run per direction, <strong>25 genes per run</strong> instead of the default, <strong>all</strong> the ligands or receptors of the direction as features of interest (no cap of 8), and both metadata (<code>labels</code> and <code>condition</code>) as features of interest. The genes we miss here (for example the top genes of TMEM219 and TNFRSF14) are removed by the cap of 8 of the published wrapper.</p>
-<p><strong>The remaining differences</strong> are mostly genes close to the selection cut-off: the genes we miss and the genes we add have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). Possible causes are a different gene order in the authors’ Seurat object (MI is computed in blocks of 100 genes, together with conditioning on the other genes of the block, so the block composition can shift values slightly), a different order of the L-R pairs (only the first 8 ligands or receptors of a run are used), or a different version of the code.</p>
+<p><strong>The remaining differences</strong> of protocol B+ are mostly genes close to the selection cut-off: the genes we miss and the genes we add have similar MI ranks (around 25 to 70). A few dendritic cell genes we miss rank further away (up to 320). We first suspected a different gene order in the authors’ Seurat object, a different order of the L-R pairs or a different version of the code. Notebook 07 tests these causes: the code version and the gene order are <strong>not</strong> the cause; the differences come from the selection settings (25 genes per run, no cap of 8, both metadata).</p>
 <p><strong>The genes named in the paper</strong> (DCN, APOD, CFD in fibroblasts; GPR183, NR4A3, VIM in dendritic cells; FOS, JUNB in T cells) are all selected by protocol B+.</p>
 <p><strong>Duplicated genes.</strong> Pooling the six runs explains how a gene can get two names, but we could not reproduce exactly which 14 genes were duplicated. Whatever the cause, removing duplicates should be part of building a clean input.</p>
 <p><strong>Next steps.</strong></p>
 <ul>
-<li>Build the full mosaic from our selection (protocol B+, without duplicates) and rerun MIIC on it, to see how much the network and the Figure 3 claims depend on these preprocessing details (notebook 06).</li>
+<li>Build the full mosaic from our selection (protocol B+, without duplicates) and rerun MIIC on it, to see how much the network and the Figure 3 claims depend on these preprocessing details (notebook 06; it uses protocol B+, not the exact settings found afterwards in notebook 07).</li>
 <li>Ask the authors for the script used to pool the runs, and for the gene order of their Seurat object.</li>
 </ul>
 </section>
