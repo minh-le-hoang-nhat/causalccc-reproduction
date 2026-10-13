@@ -244,6 +244,70 @@ full_join(degree_of_duplicates(edges_authors, key_authors_vec, lr_links_authors)
   arrange(desc(authors))
 ```
 
+## 4. Drawings
+
+The Figure 3C neighbourhood and the full network, drawn with the conventions of notebook 06 (section 7): the authors'
+network and the network of the rebuilt input with the duplicates, side by side. A star marks the second copy of a
+duplicated gene. The PNG files are written to `results/figures/case2/` for the slides.
+
+```{r}
+#| label: drawings
+
+centres <- c("CXCL12_Fibroblasts", "CXCR4_DCs", "CXCR4_T_cell")
+
+type_of_authors <- set_names(str_extract(key_authors_vec, "(Fibroblasts|T_cell|DCs)$"), names(key_authors_vec))
+type_of_exp     <- set_names(str_extract(key_exp, "(Fibroblasts|T_cell|DCs)$"), names(key_exp))
+
+dropped_authors <- duplicated_columns(mosaic_authors, row_type, col_type)   # second copy of each duplicated gene
+label_exp <- function(v) {
+  label <- gene_label(str_remove(v, "_dup$"))
+  if_else(str_detect(v, "_dup$"), paste0(label, "*"), label)
+}
+
+titles <- c(authors = "Authors' network",
+            rebuilt_with_duplicates = "Rebuilt input + 14 duplicated columns (notebook 09)")
+
+drawings <- list(
+  authors = network_data(edges_authors, lr_links_authors, type_of_authors, \(v) gene_label(v, dropped_authors), centres),
+  rebuilt_with_duplicates = network_data(edges_exp, lr_links_exp, type_of_exp, label_exp, centres))
+full_networks <- list(
+  authors = network_data(edges_authors, lr_links_authors, type_of_authors, \(v) gene_label(v, dropped_authors)),
+  rebuilt_with_duplicates = network_data(edges_exp, lr_links_exp, type_of_exp, label_exp))
+
+# Same nodes and links in both drawings?
+map(drawings, \(d) tibble(nodes = nrow(d$nodes), links = nrow(d$links))) |> list_rbind(names_to = "network")
+```
+
+```{r}
+#| label: fig-3c
+#| fig-width: 9
+#| fig-height: 8
+
+figures_dir <- file.path(root, "results", "figures", "case2")
+
+figure <- plot_network_static(drawings$rebuilt_with_duplicates,
+                              title = paste("Figure 3C neighbourhood –", titles[["rebuilt_with_duplicates"]]))
+ggsave(file.path(figures_dir, "fig3c_rebuilt_with_duplicates.png"), figure, width = 9, height = 8, dpi = 300)
+figure
+
+plot_network_static(drawings$authors, title = paste("Figure 3C neighbourhood –", titles[["authors"]]))
+```
+
+```{r}
+#| label: full-network
+#| fig-width: 14
+#| fig-height: 13
+
+figure <- plot_network_static(full_networks$rebuilt_with_duplicates,
+                              title = paste("Full network –", titles[["rebuilt_with_duplicates"]]), label_size = 1.6)
+ggsave(file.path(figures_dir, "full_network_rebuilt_with_duplicates.png"), figure, width = 14, height = 13, dpi = 300)
+figure
+```
+
+The two drawings have the same 42 nodes and 66 links, with the same orientations and genuine causations. Only the
+layout differs from the authors' drawing (`fig3c_authors.png`): the layout algorithm depends on the order of the
+variables, which differs, so the same graph is placed differently on the page.
+
 ## What we learned
 
 **The rebuilt network is the authors' network.** With the selection settings of notebook 07 and the 14 duplicated
