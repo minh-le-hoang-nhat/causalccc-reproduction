@@ -120,8 +120,6 @@ step2 += ('<h3><code>LTB_LTBR</code></h3><div class="scroll"><table><thead><tr><
 
 # ---------------------------------------------------------------- overview (all stages pooled), oriented L-R
 P = pd.read_csv(f'{RES}/cpdb/statistical_analysis_pvalues_thymus.txt', sep='\t')
-M = pd.read_csv(f'{RES}/cpdb/statistical_analysis_means_thymus.txt', sep='\t', usecols=['id_cp_interaction', 'receptor_a', 'directionality'])
-P = P.merge(M, on='id_cp_interaction')
 pc = [c for c in P.columns if '|' in c]
 LR = P[P.directionality == 'Ligand-Receptor']
 SENDERS = ['cTEC', 'mTEC(I)', 'mTEC(II)', 'mcTEC', 'DC1', 'DC2', 'aDC', 'pDC', 'Fb_1', 'Fb_2', 'Endo']
