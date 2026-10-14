@@ -1,0 +1,9 @@
+setup	miic	threads	miic_s	links	verdict_vs_server	wall_s	peak_mb	orientations_changed_vs_server	causal_changed_vs_server	verdict_vs_stock_t1	speedup_vs_server	speedup_vs_stock_t1
+CausalCCC web server (Curie, 2025-01-21)	server	2	935.0276	364	(reference)	NA	NA	NA	NA	NA	1	0.8819573249762894
+local WSL (this laptop)	stock (causalccc branch)	1	824.654440875	364	same decisions, values differ	830.16	577.52734375	0	0	identical	1.1338417083013443	1
+local WSL (this laptop)	stock (causalccc branch)	2	457.419596669	364	same decisions, values differ	462.62	582.00390625	0	0	same decisions, values differ	2.044135421413982	1.8028402081595558
+local WSL (this laptop)	patched (deterministic)	1	833.874321741	364	same decisions, values differ	839.21	577.6484375	0	0	same decisions, values differ	1.1213051842726223	0.9889433208031273
+local WSL (this laptop)	patched (deterministic)	2	485.973784366	364	same decisions, values differ	491.52	581.52734375	0	0	same decisions, values differ	1.9240288881422571	1.6969113713630495
+local WSL (this laptop)	patched (deterministic)	4	371.197648687	364	same decisions, values differ	377.08	587.3984375	0	0	same decisions, values differ	2.518948067983132	2.2216046997925956
+local WSL (this laptop)	patched (deterministic)	8	287.533793874	364	same decisions, values differ	292.53	620.50390625	0	0	same decisions, values differ	3.2518876734528734	2.868026153601866
+local WSL (this laptop)	patched (deterministic)	12	262.217183892	364	same decisions, values differ	267.43	645.07421875	0	0	same decisions, values differ	3.5658517345114653	3.144929057031794

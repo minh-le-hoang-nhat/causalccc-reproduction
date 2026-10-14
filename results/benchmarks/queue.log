@@ -71,3 +71,24 @@ Installed miic variant 'deterministic' in /root/R/miic_variants/deterministic
 2026-10-14 07:14:21 start results/benchmarks/miic/rebuilt/deterministic_t8
 2026-10-14 07:36:18 end results/benchmarks/miic/rebuilt/deterministic_t8: ok
 2026-10-14 07:36:18 after4 chain finished
+2026-10-14 08:59:04 start results/benchmarks/miic/case1/baseline_t1
+2026-10-14 09:12:54 end results/benchmarks/miic/case1/baseline_t1: ok
+2026-10-14 09:12:55 start results/benchmarks/miic/case1/deterministic_t1
+2026-10-14 09:26:54 end results/benchmarks/miic/case1/deterministic_t1: ok
+2026-10-14 09:26:54 start results/benchmarks/miic/case1/deterministic_t2
+2026-10-14 09:35:06 end results/benchmarks/miic/case1/deterministic_t2: ok
+2026-10-14 09:35:06 start results/benchmarks/miic/case1/deterministic_t8
+2026-10-14 09:39:58 end results/benchmarks/miic/case1/deterministic_t8: ok
+2026-10-14 09:39:59 start results/benchmarks/miic/case1/baseline_t2
+2026-10-14 09:47:41 end results/benchmarks/miic/case1/baseline_t2: ok
+2026-10-14 09:47:41 all case 1 runs done
+Already done: results/benchmarks/miic/case1/baseline_t1
+Already done: results/benchmarks/miic/case1/deterministic_t1
+Already done: results/benchmarks/miic/case1/deterministic_t2
+Already done: results/benchmarks/miic/case1/deterministic_t8
+Already done: results/benchmarks/miic/case1/baseline_t2
+2026-10-14 10:07:11 start results/benchmarks/miic/case1/deterministic_t4
+2026-10-14 10:13:28 end results/benchmarks/miic/case1/deterministic_t4: ok
+2026-10-14 10:13:28 start results/benchmarks/miic/case1/deterministic_t12
+2026-10-14 10:17:56 end results/benchmarks/miic/case1/deterministic_t12: ok
+2026-10-14 10:17:56 all case 1 runs done

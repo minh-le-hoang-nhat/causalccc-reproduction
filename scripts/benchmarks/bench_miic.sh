@@ -6,7 +6,8 @@
 # Usage (from the root of the repository):
 #   bash scripts/benchmarks/bench_miic.sh <variant> <dataset> <n_threads>
 #   dataset: rebuilt (notebook 06 input, 217 variables), authors (authors' server input, 238 variables) or dedup
-#   (authors' input without its 14 duplicated columns, notebook 07, 224 variables)
+#   (authors' input without its 14 duplicated columns, notebook 07, 224 variables), or case1 (authors' server input of
+#   case study 1, 144 variables)
 # Writes results/benchmarks/miic/<dataset>/<variant>_t<n_threads>/:
 #   miic_result.rds, run.log (MIIC messages), time.txt (GNU time: wall clock, peak memory), status.txt
 # A run whose status.txt says "ok" is skipped when the script is called again.
@@ -28,6 +29,9 @@ case "$dataset" in
   dedup)   # the authors' input without its 14 duplicated columns (notebook 07)
     dir="results/case2/07_differences/authors_dedup"
     files=("$dir/input.tsv" "$dir/state_order.tsv" "$dir/interact_edges.tsv") ;;
+  case1)   # authors' server input of case study 1 (144 variables, no duplicated columns)
+    dir="data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC"
+    files=("$dir/input.tsv" "$dir/clean_state_order.tsv" "$dir/clean_interact_edges.tsv") ;;
   *) echo "Unknown dataset: $dataset" >&2; exit 1 ;;
 esac
 

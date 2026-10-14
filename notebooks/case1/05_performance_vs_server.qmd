@@ -1,0 +1,172 @@
+---
+title: "05 – Faster MIIC against the web server (case study 1)"
+subtitle: "Does the patched miic give the server's network, and how much time does it save?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 10 of case study 2 made the network reconstruction (`miic()`) about 3 times faster with three patches of
+`miic`, tested on the humanSkin data. Here we check the patched version on another dataset, the authors' job of case
+study 1 on the official CausalCCC web server (miic.curie.fr, job `eaP9Br0llvzxN07zZZEC`, 21 January 2025), and compare
+its running time with the server's.
+
+Two versions of `miic` are compared:
+
+- **Stock miic** (variant `baseline`): the `miic` package used by CausalCCC (branch `causalccc`, commit `5ca0b22`),
+  compiled as is, without any change of ours. It is the code the server runs.
+- **Patched miic** (variant `deterministic`): the same code with three patches (`envs/patches/miic/`):
+  1. **no console message from worker threads**: stock `miic` prints messages (`Rcout`) from its OpenMP threads, which
+     makes it crash with more than one thread on case study 2. This is what makes 8 threads usable;
+  2. **early decision of the confidence cut**: the 100 shuffles of a link stop as soon as keeping or removing it is
+     certain, so the exported `confidence` of those links becomes a bound, while decisions stay the same;
+  3. **exact ties broken by position**: when two candidates have exactly the same score, the choice no longer depends
+     on the order in which threads finish.
+
+Each local run is compared with the server's network (links, orientations, genuine causations, values) and timed.
+The runs are made outside this notebook, one after another on an idle machine (WSL Ubuntu 24.04, R 4.6.1, 12 cores,
+7.8 GB of memory), with the server's settings (`scripts/run_miic.R`):
+
+```bash
+bash scripts/case1/download_case1.sh                   # only the server job files are needed here
+bash scripts/benchmarks/build_miic_variant.sh baseline  # and deterministic, see notebook 10 of case study 2
+bash scripts/benchmarks/run_case1_benchmarks.sh         # 7 runs, about 1 hour
+Rscript scripts/benchmarks/compare_case1.R              # writes results/benchmarks/case1_server_vs_local.tsv
+```
+
+**Inputs:** the authors' server job in `data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/` (read only) and the runs in
+`results/benchmarks/miic/case1/`. **Output:** `results/benchmarks/case1_server_vs_local.tsv`.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+source(file.path(root, "scripts", "benchmarks", "compare_outputs.R"))
+
+job_dir   <- file.path(root, "data", "case1", "causalccc_server_eaP9Br0llvzxN07zZZEC")
+bench_dir <- file.path(root, "results", "benchmarks", "miic", "case1")
+if (!dir.exists(job_dir)) stop("Data not found: run scripts/case1/download_case1.sh first.")
+```
+
+## 1. Same input?
+
+The local runs read the server's own input files, so only identical columns could still cause trouble (they made
+multithreaded orientations unstable on case study 2, notebook 10). The mosaic has none:
+
+```{r}
+#| label: duplicates
+
+mosaic      <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+state_order <- read_tsv(file.path(job_dir, "clean_state_order.tsv"), show_col_types = FALSE)
+
+group    <- set_names(state_order$group, state_order$var_names)[names(mosaic)]
+col_type <- if_else(group %in% c("ligands", "senders genes"), "senders", "receivers")
+row_type <- if_else(!is.na(mosaic[[which(col_type == "senders")[1]]]), "senders", "receivers")
+tibble(cells = nrow(mosaic), variables = ncol(mosaic),
+       duplicated_columns = length(duplicated_columns(mosaic, row_type, col_type)))
+```
+
+## 2. Server network against local runs
+
+The server's network is `edgesList.miic.summary.txt_save`, the file written by the run itself (the April 2025 edit of
+`edgesList.miic.summary.txt` only changes the values of the 18 L-R links, `data/README.md`). Each local run is
+compared with it and with the stock one-thread run (`compare_miic()`, `scripts/benchmarks/compare_outputs.R`).
+
+```{r}
+#| label: comparisons
+
+server <- list(all.edges.summary = read_tsv(file.path(job_dir, "edgesList.miic.summary.txt_save"),
+                                            show_col_types = FALSE))
+runs <- c("baseline_t1", "baseline_t2", paste0("deterministic_t", c(1, 2, 4, 8, 12)))
+results <- set_names(map(file.path(bench_dir, runs, "miic_result.rds"), readRDS), runs)
+
+comparisons <- map_dfr(runs, \(r) bind_rows(
+  server   = compare_miic(server, results[[r]]),
+  stock_t1 = compare_miic(results$baseline_t1, results[[r]]), .id = "against") |>
+    mutate(run = r, .before = 1))
+comparisons |>
+  select(run, against, verdict, links_new, orientations_changed, causal_changed,
+         max_diff_info_shifted, max_diff_confidence, links_confidence_diff) |>
+  mutate(max_diff_info_shifted = signif(max_diff_info_shifted, 2)) |>
+  knitr::kable()
+```
+
+## 3. Running times
+
+The server's time is the one `miic` prints at the end of its search in `whole_run.log` ("TIME : 935"); the local times
+are those `miic` records (`$time`), with the wall clock and peak memory from GNU `time`.
+
+```{r}
+#| label: summary
+
+summary <- read_tsv(file.path(root, "results", "benchmarks", "case1_server_vs_local.tsv"), show_col_types = FALSE)
+summary |>
+  transmute(setup, miic, threads,
+            miic_time = sprintf("%.0f s (%.1f min)", miic_s, miic_s / 60),
+            peak_mb = round(peak_mb), links, verdict_vs_server,
+            speedup_vs_server = sprintf("x%.2f", speedup_vs_server),
+            speedup_vs_stock_t1 = sprintf("x%.2f", speedup_vs_stock_t1)) |>
+  knitr::kable()
+```
+
+## What we learned
+
+**The patched miic gives the server's network.** Every local run, stock or patched, on 1, 2 or 8 threads, has the
+server's 364 retained links, its orientations and its 13 genuine causations. Link strengths (`info_shifted`) differ by
+less than 10⁻¹³ (rounding). The verdict "same decisions, values differ" is the best possible against the server: its
+file stores values rounded to 6 decimals and its random seed is not ours.
+
+**Only `confidence` moves, and never enough to change a decision.** With stock miic it differs from the server's by
+up to 0.0009 on 10 links (another random seed for the shuffles). With the patched miic, by up to 0.009 on 132 links,
+already on one thread: this is change 2, which stops the shuffles of a link once its decision is certain, so its
+`confidence` is a bound rather than the full estimate.
+
+**What "stock" and "patched" mean.** Stock miic is the `miic` package of CausalCCC (branch `causalccc`) compiled as is:
+the code the server runs. The patched miic (`deterministic`) is the same code with three changes: no console message
+from worker threads (stock miic crashes with several threads on case study 2), early decision of the confidence cut, and
+exact ties broken by position (results independent of thread timing). Comparing them at the same number of threads
+isolates the effect of the patches.
+
+**The patches do not make miic faster by themselves; they make 8 threads usable and reliable.** At equal threads the
+patched version is as fast as stock (1 thread: 834 vs 825 s; 2 threads: 486 vs 457 s). The gain comes from using 8
+threads: 288 s (4.8 min), 2.9 times faster than stock on one thread and 3.3 times faster than the server (935 s,
+15.6 min, 2 threads), as on case study 2 (÷ 3). The server's hardware is not ours: on the same settings this laptop is
+already 1.13 times faster on one thread than the server on two, so only the local comparisons measure the code.
+
+**More threads help less and less; 12 is the maximum of this laptop.** Patched miic takes 834 s on 1 thread, 486 s on
+2, 371 s on 4, 288 s on 8 and 262 s on 12 (÷ 3.2 against one thread, ÷ 3.6 against the server), always with the
+server's decisions. The i7-1365U has 10 cores (2 performance cores with hyper-threading, 8 efficiency cores without),
+i.e. 12 logical CPUs, already counted by `nproc`: more than 12 threads would only share them. Going from 8 to 12 threads
+saves 26 s (9 %) because the 4 extra threads are hyper-threads and slower efficiency cores, and because the main loop of
+`iter` treats one link at a time (notebook 10 of case study 2). 8 threads leave the machine usable for a 9 % cost;
+12 threads are worth it for unattended runs.
+
+**Stock miic did not crash on 2 threads here**, unlike case study 2 with 4 threads; it was not tried on 8 threads, and
+case study 1 has no duplicated columns, so the tie-breaking of change 3 was not put to the test. For larger datasets
+(thymus) the patched variant on 8 threads remains the safe choice.
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

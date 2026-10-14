@@ -1,0 +1,23 @@
+	Command being timed: "Rscript scripts/run_miic.R data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/input.tsv data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/clean_state_order.tsv data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/clean_interact_edges.tsv results/benchmarks/miic/case1/baseline_t1 1"
+	User time (seconds): 829.24
+	System time (seconds): 1.41
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 13:50.16
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 591388
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 372
+	Minor (reclaiming a frame) page faults: 172587
+	Voluntary context switches: 2964
+	Involuntary context switches: 2402
+	Swaps: 0
+	File system inputs: 132808
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
