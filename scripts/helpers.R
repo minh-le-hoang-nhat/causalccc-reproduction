@@ -102,14 +102,15 @@ default_n_genes <- function(goi) max(15, min(length(goi) * 4, 100))
 # - the counts stay sparse and only one block of genes at a time is made dense (MIselection makes the whole matrix
 #   dense, then copies it again for every feature of interest);
 # - genes never detected in these cells are not computed: MIselection gives them 0;
-# - blocks of block_size genes instead of 100, so fewer miic() calls (the MI of a gene with a feature does not depend on
-#   the other genes of its block, notebook 07);
+# - the block size is an argument (the MI of a gene with a feature does not depend on the other genes of its block,
+#   notebook 07); larger blocks turned out slower (notebook 10), and 50-100 genes are best;
 # - with cache_dir (one folder per cell type), the table of each feature is saved, and reused by later calls.
+# Notebook 10: 21 % faster on dendritic cells, 8 % on the three cell types of case study 2, a third of the memory.
 # counts: genes x cells sparse matrix of raw counts; meta: one row per cell, same order; cells: the cells of the type
 # (logical or indices); goi: genes of interest; metadata: columns of meta used both as features of interest and as
 # variables, like metadata_list in MIselection. Requires miic to be loaded.
 # Returns a tibble (variables, foi, value) with the rows of MIselection(return_full = TRUE) in the same order.
-compute_mi_table <- function(counts, meta, cells, goi, metadata = NULL, block_size = 1000, n_threads = 8,
+compute_mi_table <- function(counts, meta, cells, goi, metadata = NULL, block_size = 100, n_threads = 8,
                              cache_dir = NULL) {
   counts    <- counts[, cells, drop = FALSE]
   meta      <- meta[cells, , drop = FALSE]

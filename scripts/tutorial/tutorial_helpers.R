@@ -190,3 +190,164 @@ compare_runs <- function(runs, reference, interact_edges) {
            same_causal      = mean(common$is_causal == common$is_causal_ref))
   }) |> list_rbind()
 }
+
+# ---- Comparing with a run on the CausalCCC web server (section 8b) ---------------------------------------------
+server_outputs_url <- "https://miic.curie.fr/server/server_outputs"
+
+# The files of a server job used by the comparison
+server_job_files <- c("script.sh", "edgesList.miic.summary.txt", "input.zip", "clean_state_order.tsv",
+                      "clean_interact_edges.tsv", "whole_run.log")
+
+# The 20-character code of a job, from its link (any link containing it) or from the code alone
+server_job_id <- function(link) {
+  code <- str_extract(link, "(?<![A-Za-z0-9])[A-Za-z0-9]{20}(?![A-Za-z0-9])")
+  if (is.na(code)) stop("No 20-character job code in '", link, "'. Paste the link of the job page or of one of its ",
+                        "files (e.g. ", server_outputs_url, "/w0788tM1wzXGHLzNaKKa/script.sh), or the code alone.")
+  code
+}
+
+# Downloads the files of a job to dest_dir, skipping those already there, and logs each download in log_file (date,
+# file relative to root, URL), as scripts/case2/download_case2.sh does. Unzips input.zip into input.tsv.
+# Returns one row per file: "already here", "downloaded" or "missing on the server".
+download_server_job <- function(code, dest_dir, log_file, root, files = server_job_files) {
+  dir.create(dest_dir, recursive = TRUE, showWarnings = FALSE)
+  status <- map_chr(files, \(f) {
+    dest <- file.path(dest_dir, f)
+    if (file.exists(dest)) return("already here")
+    url <- paste(server_outputs_url, code, f, sep = "/")
+    ok <- tryCatch(download.file(url, paste0(dest, ".part"), mode = "wb", quiet = TRUE) == 0,
+                   error = \(e) FALSE, warning = \(w) FALSE)
+    if (!ok) {
+      unlink(paste0(dest, ".part"))
+      return("missing on the server")
+    }
+    file.rename(paste0(dest, ".part"), dest)
+    if (!file.exists(log_file)) write_lines("date\tfile\turl", log_file)
+    write_lines(paste(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+                      str_remove(dest, fixed(paste0(root, "/"))), url, sep = "\t"), log_file, append = TRUE)
+    "downloaded"
+  })
+  if (file.exists(file.path(dest_dir, "input.zip")) && !file.exists(file.path(dest_dir, "input.tsv")))
+    unzip(file.path(dest_dir, "input.zip"), exdir = dest_dir)
+  tibble(file = files, status = status)
+}
+
+# Options of the server's script.sh (run_whole_causalCCC.py), the miic() argument each one sets and the field of the
+# submission form (workbench_causalCCC.php). kind: "value" (option followed by a value), "flag" (TRUE when present,
+# FALSE when absent), "yes/no" (yes = TRUE).
+server_options <- tribble(
+  ~option,                ~argument,             ~kind,    ~form_field,
+  "complexity",           "cplx",                "value",  "",
+  "orientation",          "orientation",         "flag",   "",
+  "latent_variables",     "latent",              "value",  "latent",
+  "orient_probab_ratio",  "ori_proba_ratio",     "value",  "orientation probability ratio",
+  "conf_shuffle",         "n_shuffles",          "value",  "confidence cut: number of shuffles",
+  "conf_ratio",           "conf_threshold",      "value",  "confidence cut: confidence threshold",
+  "test_MAR",             "test_mar",            "flag",   "KL test",
+  "consistency",          "consistent",          "value",  "consistency",
+  "eff_n",                "n_eff",               "value",  "effN",
+  "negative_info",        "negative_info",       "yes/no", "negative info",
+  "propagation",          "propagation",         "flag",   "propagation",
+  "consensus_threshold",  "consensus_threshold", "value",  "",
+  "max_iteration",        "max_iteration",       "value",  "",
+  "max_nodes",            "max_nodes",           "value",  "max_nodes",
+  "n_threads",            "n_threads",           "value",  "")
+
+# Options that name files, not settings
+server_file_options <- c("d", "i", "o", "l", "s", "interact-edges")
+
+# Parses the run_whole_causalCCC.py command of a job's script.sh. Returns one row per option of the command and per
+# option of server_options absent from it: option, `written` (its value in the command, NA if absent), miic()
+# argument and `value`, the value it gets (an absent "value" option gets the miic() default, an absent flag FALSE).
+# known = FALSE for the options this function does not know (they are printed as they are).
+parse_server_script <- function(script_file) {
+  command <- str_subset(read_lines(script_file), "run_whole_causalCCC")
+  if (length(command) != 1) stop("No run_whole_causalCCC.py command in ", script_file)
+  tokens <- str_split_1(str_squish(str_remove(command, "\\s*&>.*$")), " ")
+  is_option <- str_detect(tokens, "^--?[A-Za-z]")                 # "-1" is a value, not an option
+  option_of <- cumsum(is_option)
+  written <- tibble(option = str_remove(tokens[is_option], "^--?"),
+                    written = map_chr(seq_len(sum(is_option)), \(k)
+                      paste(tokens[option_of == k & !is_option], collapse = " "))) |>
+    filter(!option %in% server_file_options)
+  defaults <- formals(miic)
+  full_join(written, server_options, by = "option") |>
+    mutate(known = !is.na(argument),
+           value = pmap(list(written, argument, kind), \(w, a, k) {
+             if (is.na(a)) return(NULL)
+             if (k == "flag") return(!is.na(w))
+             if (is.na(w)) return(eval(defaults[[a]]))
+             if (k == "yes/no") return(w == "yes")
+             num <- suppressWarnings(as.numeric(w))
+             if (is.na(num)) w else num
+           }))
+}
+
+# Settings of a server job (parse_server_script()) next to local settings (a list of miic() arguments, e.g.
+# authors_miic_settings). note: "DIFFERS", or "speed only" for n_threads, or "temporal mode only" for max_nodes.
+compare_settings <- function(parsed, local) {
+  known    <- filter(parsed, known)
+  defaults <- formals(miic)
+  show     <- \(v) paste(format(v), collapse = " ")
+  value_of <- \(values, a) if (a %in% names(values)) values[[a]] else eval(defaults[[a]])
+  server   <- set_names(known$value, known$argument)
+  tibble(argument = union(known$argument, names(local))) |>
+    left_join(select(known, argument, option, written, form_field), by = "argument") |>
+    mutate(script_sh = case_when(is.na(option) ~ "",
+                                 is.na(written) ~ paste0("(no --", option, ")"),
+                                 .default = str_trim(paste0("--", option, " ", written))),
+           server = map_chr(argument, \(a) show(value_of(server, a))),
+           local  = map_chr(argument, \(a) show(value_of(local, a))),
+           note   = case_when(server == local ~ "",
+                              argument == "n_threads" ~ "speed only",
+                              argument == "max_nodes" ~ "temporal mode only",
+                              .default = "DIFFERS")) |>
+    select(argument, form_field, script_sh, server, local, note)
+}
+
+# The server's settings as a list of miic() arguments, for scripts/run_miic.R (without n_threads, which only changes
+# the speed, and max_nodes, used in temporal mode only)
+server_settings_list <- function(parsed) {
+  known <- filter(parsed, known, !argument %in% c("n_threads", "max_nodes"))
+  set_names(known$value, known$argument)
+}
+
+# Is a server input the same table as a local one? Compares the column names, then the values of the shared columns,
+# in the same order of cells, then with each column sorted (which detects a reordering of the cells).
+compare_inputs <- function(server, local) {
+  shared  <- intersect(names(server), names(local))
+  as_text <- \(v) as.character(v)
+  same_rows   <- nrow(server) == nrow(local)
+  same_order  <- same_rows && all(map_lgl(shared, \(v) identical(as_text(server[[v]]), as_text(local[[v]]))))
+  same_sorted <- same_rows && all(map_lgl(shared, \(v) identical(sort(as_text(server[[v]]), na.last = TRUE),
+                                                                 sort(as_text(local[[v]]), na.last = TRUE))))
+  tibble(cells_server = nrow(server), cells_local = nrow(local),
+         columns_server = ncol(server), columns_local = ncol(local), columns_shared = length(shared),
+         values = case_when(length(shared) == 0 ~ "no shared column",
+                            same_order ~ "identical",
+                            same_sorted ~ "same values, cells in another order",
+                            .default = "different values"))
+}
+
+# Runs scripts/run_miic.R on the three files of a server job (or reloads its result). settings_file: optional .rds of
+# miic() arguments. Large networks (more than max_variables) are not run, the command is returned instead: run it in
+# a terminal, then render again.
+run_miic_script <- function(root, job_dir, out_dir, settings_file = NULL, n_threads = 1, max_variables = 100) {
+  result_file <- file.path(out_dir, "miic_result.rds")
+  if (file.exists(result_file)) return(readRDS(result_file))
+  files <- file.path(job_dir, c("input.tsv", "clean_state_order.tsv", "clean_interact_edges.tsv"))
+  args  <- c(file.path(root, "scripts", "run_miic.R"), files, out_dir, n_threads, settings_file)
+  n_variables <- length(str_split_1(read_lines(files[1], n_max = 1), "\t"))
+  if (n_variables > max_variables) {
+    command <- paste("Rscript", paste(shQuote(str_remove(args, fixed(paste0(root, "/")))), collapse = " "))
+    message("Not run (", n_variables, " variables, about 1-3 hours): from the repository root, run\n  ", command,
+            "\n(8 threads with the patched miic: R_LIBS=~/R/miic_variants/deterministic and 8 as n_threads),",
+            " then render again.")
+    return(NULL)
+  }
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  log_file <- file.path(out_dir, "run.log")
+  status <- system2(file.path(R.home("bin"), "Rscript"), shQuote(args), stdout = log_file, stderr = log_file)
+  if (status != 0 || !file.exists(result_file)) stop("scripts/run_miic.R failed, see ", log_file)
+  readRDS(result_file)
+}

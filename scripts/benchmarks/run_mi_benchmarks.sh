@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # The MI benchmarks of notebook 10 (change 3), one after another, each in its own R process timed with GNU time.
-# Run when no other benchmark is running. Runs already done are skipped.
+# Run when no other benchmark is running. Runs already done are skipped. (The first series had blocks of 1,000 and
+# 2,000 genes for the repeats and the three cell types; larger blocks turned out slower, hence the list below.)
 #
 # Usage (from the root of the repository, in WSL/Linux):
 #   bash scripts/benchmarks/run_mi_benchmarks.sh 2>&1 | tee -a results/benchmarks/queue.log

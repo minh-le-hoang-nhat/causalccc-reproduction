@@ -1,0 +1,21 @@
+step	change	dataset	reference	new	verdict	reference_s	new_s	time_delta	peak_mb
+network reconstruction	stock miic, run again	rebuilt	baseline_t1	baseline_idle_t1	identical	5377	4214	-22%	783
+network reconstruction	1: no Rcout in threads	rebuilt	baseline_idle_t1	no_rcout_t1	identical	4214	4235	0%	783
+network reconstruction	1: no Rcout in threads	rebuilt	baseline_idle_t1	no_rcout_t4	same decisions, values differ	4214	1774	-58%	806
+network reconstruction	1: no Rcout in threads	rebuilt	baseline_idle_t1	no_rcout_t8	same decisions, values differ	4214	1388	-67%	882
+network reconstruction	2: early confidence decision	rebuilt	baseline_idle_t1	early_conf_t1	same decisions, values differ	4214	3919	-7%	783
+network reconstruction	1 + 2 combined	rebuilt	baseline_idle_t1	combined_t8	same decisions, values differ	4214	1345	-68%	883
+network reconstruction	1 + 2 + 3 (ties by position)	rebuilt	baseline_idle_t1	deterministic_t8	same decisions, values differ	4214	1316	-69%	883
+network reconstruction	1 + 2 combined	authors	baseline_t1	combined_t8	different network	5439	1853	-66%	958
+network reconstruction	1 alone	authors	baseline_t1	no_rcout_t8	different network	5439	1982	-64%	958
+network reconstruction	1 + 2, 8 threads run again	authors	combined_t8	combined_again_t8	different network	1853	1856	0%	959
+network reconstruction	1 + 2 + 3 (ties by position)	authors	baseline_t1	deterministic_t8	same decisions, values differ	5439	1788	-67%	959
+network reconstruction	1 + 2, without duplicates	dedup	nb07	combined_t8	same decisions, values differ	NA	1595	NA	905
+network reconstruction	stock miic vs published	authors	published	baseline_t1	same decisions, values differ	NA	5439	NA	873
+network reconstruction	1 + 2 + 3 vs published	authors	published	deterministic_t8	same decisions, values differ	NA	1788	NA	959
+gene selection	4: compute_mi_table()	humanSkin DCs	MIselection, block 100	block 50	identical	233	182	-22%	887
+gene selection	4: compute_mi_table()	humanSkin DCs	MIselection, block 100	block 100	identical	233	186	-20%	885
+gene selection	4: compute_mi_table()	humanSkin DCs	MIselection, block 100	block 200	identical	233	221	-5%	893
+gene selection	4: compute_mi_table()	humanSkin DCs	MIselection, block 100	block 500	identical	233	358	54%	1195
+gene selection	4: compute_mi_table()	humanSkin DCs	MIselection, block 100	block 1000	identical	233	657	182%	1937
+gene selection	4: compute_mi_table()	humanSkin all	MIselection, block 100	block 100	identical	1133	1048	-8%	1046

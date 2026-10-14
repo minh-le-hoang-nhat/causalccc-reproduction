@@ -18,13 +18,20 @@ The thymus dataset (255,901 cells) is much larger than the case studies, so befo
 for ways to make it faster. We read the code of the pinned versions (`causalCCC` commit `0aa8586`, `miic` branch
 `causalccc` commit `5ca0b22`, C++ included) and implemented the changes that should give **exactly the same results**.
 
+CausalCCC has two time-consuming steps, both covered here:
+
+| Step | Function | Time on case study 2 (one thread) | Changes |
+| --- | --- | --- | --- |
+| **Network reconstruction** (the causal network learnt from the mosaic table) | `miic()`, run by `scripts/run_miic.R` | 1–3 hours | 1, 2, 3 (patches of `miic`) |
+| **Gene selection** (the genes of the mosaic table) | `causalCCC.MIselection()` | about 20 minutes | 4 (`compute_mi_table()`) |
+
 Every change is tested on the humanSkin data of case study 2 in two ways:
 
-1. **Are the outputs changed?** Same retained links, orientations and genuine causations (MIIC); same MI values and
-   same selected genes (gene selection). Verdict: *identical*, *same decisions, values differ* (and which), or
+1. **Are the outputs changed?** Same retained links, orientations and genuine causations (network); same MI values
+   and same selected genes (gene selection). Verdict: *identical*, *same decisions, values differ* (and which), or
    *different network*.
 2. **What is the time delta?** Against a baseline run **on the same machine**, with GNU `time` (wall clock and peak
-   memory) and the time of each MIIC step recorded by `miic` itself.
+   memory) and the time of each step of the network reconstruction recorded by `miic` itself.
 
 The runs are made outside this notebook, by scripts in `scripts/benchmarks/` (WSL Ubuntu 24.04, R 4.6.1, 12 cores,
 7.8 GB of memory), one after another so that timings are comparable:
@@ -36,7 +43,9 @@ bash scripts/benchmarks/build_miic_variant.sh no_rcout   envs/patches/miic/01_no
 bash scripts/benchmarks/build_miic_variant.sh early_conf envs/patches/miic/02_confidence_early_decision.patch
 bash scripts/benchmarks/build_miic_variant.sh combined   envs/patches/miic/01_no_rcout_in_omp.patch \
                                                           envs/patches/miic/02_confidence_early_decision.patch
-bash scripts/benchmarks/run_benchmarks.sh      # MIIC runs (scripts/run_miic.R, settings of the server)
+bash scripts/benchmarks/build_miic_variant.sh deterministic envs/patches/miic/01_no_rcout_in_omp.patch \
+     envs/patches/miic/02_confidence_early_decision.patch envs/patches/miic/03_deterministic_ties.patch
+bash scripts/benchmarks/run_benchmarks.sh      # network reconstruction runs (scripts/run_miic.R, server settings)
 bash scripts/benchmarks/run_mi_benchmarks.sh   # gene selection runs
 ```
 
@@ -72,7 +81,7 @@ read_gnu_time <- function(file) {
 }
 ```
 
-## 1. Where does MIIC spend its time?
+## 1. Network reconstruction: where does the time go?
 
 `miic` records the time of its four steps: `init` (MI of every pair of variables), `iter` (search for conditional
 independences, i.e. for the genes that explain away a link), `cut` (confidence of each link, 100 shuffles), `ori`
@@ -101,7 +110,16 @@ in a mosaic table (planned as an optional change), could therefore save at most 
 The one exact way left to speed up `iter` is to use several threads, which `miic` supports (OpenMP) but which crashed
 on our inputs. That is change 1.
 
-## 2. MIIC runs
+## 2. Network reconstruction: changes 1 to 3
+
+- **Change 1** (`01_no_rcout_in_omp.patch`): remove a console message printed from worker threads, which made `miic`
+  crash with more than one thread, so that the reconstruction can run on several threads.
+- **Change 2** (`02_confidence_early_decision.patch`): decide the confidence cut without computing all 100 shuffles.
+- **Change 3** (`03_deterministic_ties.patch`): with several threads, break exact ties between candidate contributing
+  nodes as one thread does (found while testing changes 1 and 2, see below).
+
+Each run below is one reconstruction of the network with `scripts/run_miic.R` (settings of the server), with a given
+`miic` variant and number of threads.
 
 ```{r}
 #| label: miic-runs
@@ -167,9 +185,12 @@ tail(read_lines(file.path(bench_dir, "miic", "rebuilt", "baseline_t4", "run.log"
 result_of <- function(dataset, run) readRDS(file.path(bench_dir, "miic", dataset, run, "miic_result.rds"))
 ok        <- function(dataset, run) any(miic_runs$dataset == dataset & miic_runs$run == run & miic_runs$status == "ok")
 
-# The authors' published network, in the same form as a miic result
-authors_published <- list(all.edges.summary = read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"),
-                                                         show_col_types = FALSE))
+# References from outside the benchmarks: the authors' published network (in the same form as a miic result), and
+# the one-thread network of notebook 07 on the authors' input without its duplicated columns
+external <- list(
+  published = list(all.edges.summary = read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"),
+                                                show_col_types = FALSE)),
+  nb07      = readRDS(file.path(root, "results", "case2", "07_differences", "authors_dedup", "miic_result.rds")))
 
 # The first baseline run on the rebuilt input shared the machine with a notebook render (section 2): the reference is
 # the second baseline run, made on an idle machine, when it exists
@@ -184,14 +205,19 @@ tests <- tribble(
   "1: no Rcout in threads",        "rebuilt", ref,            "no_rcout_t8",
   "2: early confidence decision",  "rebuilt", ref,            "early_conf_t1",
   "1 + 2 combined",                "rebuilt", ref,            "combined_t8",
+  "1 + 2 + 3 (ties by position)",  "rebuilt", ref,            "deterministic_t8",
   "1 + 2 combined",                "authors", "baseline_t1",  "combined_t8",
+  "1 alone",                       "authors", "baseline_t1",  "no_rcout_t8",
+  "1 + 2, 8 threads run again",    "authors", "combined_t8",  "combined_again_t8",
+  "1 + 2 + 3 (ties by position)",  "authors", "baseline_t1",  "deterministic_t8",
+  "1 + 2, without duplicates",     "dedup",   "nb07",         "combined_t8",
   "stock miic vs published",       "authors", "published",    "baseline_t1",
-  "1 + 2 combined vs published",   "authors", "published",    "combined_t8") |>
-  filter(map2_lgl(dataset, new, ok), reference == "published" | map2_lgl(dataset, reference, ok))
+  "1 + 2 + 3 vs published",        "authors", "published",    "deterministic_t8") |>
+  filter(map2_lgl(dataset, new, ok), reference %in% names(external) | map2_lgl(dataset, reference, ok))
 
 miic_tests <- tests |>
   mutate(comparison = pmap(list(dataset, reference, new), \(d, r, n) {
-    ref <- if (r == "published") authors_published else result_of(d, r)
+    ref <- if (r %in% names(external)) external[[r]] else result_of(d, r)
     compare_miic(ref, result_of(d, n))
   })) |>
   unnest_wider(comparison) |>
@@ -208,13 +234,25 @@ miic_tests |>
 ```
 
 The comparisons with the authors' **published** file can only give "same decisions, values differ": the file stores
-values rounded to 6 decimals.
+values rounded to 6 decimals, and the server's random seed for the shuffles differs from ours, so `confidence` differs.
 
-## 3. Gene selection runs (change 3)
+**Why 8 threads changed orientations on the authors' input only.** With changes 1 + 2 on 8 threads, the authors'
+input keeps its 715 links but some orientations and genuine causations change, and they even change between two
+8-thread runs; on our rebuilt input and on the authors' input without its 14 duplicated columns (notebook 07),
+nothing changes. The cause is in `searchForBestContributingNode()` (`get_information.cpp`, l. 320-347): candidate
+contributing nodes are compared in parallel, and when two tie exactly (same score, same entropy), the one compared
+last (or first) is kept. Two identical columns always tie, and with several threads which one is compared last
+depends on which thread finishes first. The chosen copy then enters the separating sets used for orientation.
+Change 3 (`envs/patches/miic/03_deterministic_ties.patch`) breaks exact ties by the position of the candidate in its
+list, as the one-thread loop does: the `deterministic` variant gives the one-thread decisions on all inputs.
+
+## 3. Gene selection: change 4
 
 `causalCCC.MIselection()` (original, with the Seurat 5 fix of notebook 05) against `compute_mi_table()`
 (`scripts/helpers.R`), on dendritic cells (629 cells, 3 repeats) and on the three cell types (as in notebook 05). The
-`fast` runs vary the block size; `original` always uses blocks of 100 genes.
+`fast` runs vary the block size; `original` always uses blocks of 100 genes. We expected larger blocks to be faster
+(fewer `miic()` calls); they are much slower, so the cost of one `miic()` call grows faster than its number of genes,
+and smaller blocks were tried as well.
 
 ```{r}
 #| label: mi-runs
@@ -273,13 +311,13 @@ mi_runs |>
 
 benchmarks <- bind_rows(
   miic_tests |>
-    transmute(step = "MIIC", change, dataset, reference, new, verdict,
+    transmute(step = "network reconstruction", change, dataset, reference, new, verdict,
               reference_s = round(reference_s), new_s = round(new_s), time_delta, peak_mb = round(new_peak_mb)),
   mi_summary |>
     filter(method == "fast") |>
     left_join(mi_tests, by = c("cell_type", "block")) |>
     left_join(filter(mi_summary, method == "original") |> select(cell_type, reference_s = wall_s), by = "cell_type") |>
-    transmute(step = "gene selection", change = "3: compute_mi_table()", dataset = paste("humanSkin", cell_type),
+    transmute(step = "gene selection", change = "4: compute_mi_table()", dataset = paste("humanSkin", cell_type),
               reference = "MIselection, block 100", new = paste("block", block), verdict,
               reference_s = round(reference_s), new_s = round(wall_s),
               time_delta = scales::percent(new_s / reference_s - 1, accuracy = 1), peak_mb = round(peak_mb)))
@@ -290,7 +328,36 @@ knitr::kable(benchmarks)
 
 ## What we learned
 
-*(to be written once all the runs are done)*
+**The network reconstruction (`miic()`) spends 97–98 % of its time searching for conditional independences
+(`iter`).** The confidence cut, which
+reading the code suggested was expensive, takes less than 0.5 %; inside `iter`, the optimal discretisation of 3-point
+information (MIIC's core computation) dominates, and handling missing values takes about 5 %.
+
+**The gain comes from multithreading, which `miic` supports but which crashed on our inputs.** The cause was a
+console message printed from worker threads, added by the `causalccc` branch (stock `miic` with 4 threads stops in the
+middle of that message). Without it (change 1), the one-thread result is identical, and on 8 threads the network
+reconstruction takes 22 minutes instead of 70 on our rebuilt input (÷ 3.2), and 30 minutes instead of 91 on the
+authors' input (÷ 3.0). Beyond 8 threads little more is expected: the main loop of `iter` treats one link at a time.
+
+**Multithreading is exact once exact ties are broken by position (change 3).** With changes 1 + 2 only, inputs without
+identical columns give the one-thread decisions, but the authors' input, with its 14 duplicated columns, does not:
+31–35 orientations and 14–17 genuine causations change, and they even differ between two 8-thread runs. With change 3,
+the authors' input also gives exactly the one-thread links, orientations and genuine causations. Only the `confidence`
+values move slightly (up to 0.02, never changing a decision), because the shuffles draw random numbers from several
+threads.
+
+**Change 2 (early decision of the confidence cut) keeps every decision but saves only about 10 seconds**, since the
+confidence cut is a small step. It remains in the variants tested, at no cost; the exported `confidence` of the links
+decided early becomes a bound.
+
+**The gene selection (change 4) gives identical MI values and gains less.** `compute_mi_table()` is 21 % faster on dendritic
+cells (skipping the 19 % of genes never detected there) and 8 % faster on the three cell types, where fibroblasts,
+which detect most genes, dominate; its peak memory is about a third (1.0 vs 3.0 GB), which matters for the thymus.
+Larger blocks of genes are slower, not faster: blocks of 50–100 genes are best.
+
+**For the thymus:** build the `deterministic` variant (changes 1 + 2 + 3) and run `scripts/run_miic.R` with 8 threads,
+after checking that the mosaic table has no identical columns (`duplicated_columns()` in `scripts/helpers.R`); use
+`compute_mi_table()` with blocks of 100 genes for the gene selection.
 
 ## Session information
 

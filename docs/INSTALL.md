@@ -59,6 +59,21 @@ Rscript -e 'library(Seurat); library(miic); library(causalCCC); packageVersion("
 
 Compare your versions with `envs/python_versions.txt` and `envs/R_versions.txt`.
 
+## 4. Optional: a faster miic (several threads)
+
+The `causalccc` branch of `miic` crashes with more than one thread. Three small patches (`envs/patches/miic/`) fix
+this and make multithreaded runs give the one-thread links, orientations and genuine causations (notebook 10):
+
+```bash
+bash scripts/benchmarks/build_miic_variant.sh deterministic envs/patches/miic/01_no_rcout_in_omp.patch \
+     envs/patches/miic/02_confidence_early_decision.patch envs/patches/miic/03_deterministic_ties.patch
+R_LIBS=~/R/miic_variants/deterministic Rscript scripts/run_miic.R <input> <state_order> <edges> <output_dir> 8
+```
+
+The variant is installed in its own library, `~/R/miic_variants/deterministic`; the `miic` of step 2 is unchanged and
+stays the default. On case study 2, 8 threads take 22 to 30 minutes instead of 70 to 90. Only the `confidence` column
+differs slightly from a one-thread run.
+
 ## Known issues
 
 - The `causalccc` branch of `miic` uses `rjson` and `tidyverse` without declaring them; the install script installs them first.

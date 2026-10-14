@@ -1,4 +1,4 @@
-Patch for miic, branch causalccc, commit 5ca0b22 (notebook 10, change 3b).
+Patch for miic, branch causalccc, commit 5ca0b22 (notebook 10, change 3).
 searchForBestContributingNode() compares candidate contributing nodes in parallel. When two candidates tie
 exactly (same score and same entropy, e.g. two identical columns), the original code keeps the one processed
 last (or first), so with several threads the choice depends on which thread finishes first. Exact ties are

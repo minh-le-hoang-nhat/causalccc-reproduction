@@ -11,6 +11,8 @@ format:
     code-fold: false
 execute:
   warning: true
+params:
+  server_job: ""   # link (or 20-character code) of a CausalCCC web server job to compare with a local run, section 8b
 ---
 
 ## Goal and running example
@@ -18,6 +20,29 @@ execute:
 [CausalCCC](https://miic.curie.fr/causalCCC.php) (Dupuis *et al.*, *NAR* 2025) learns, with the causal network method
 MIIC, the intracellular genes linked to the ligands of sender cells and to the receptors of receiver cells. This
 tutorial goes through every step, says what to check at each one, and measures what each setting changes.
+
+### What CausalCCC is: MIIC, a data layout, and forced L-R links
+
+CausalCCC is not a new network method: it is **MIIC run on a specially built table, with the L-R pairs added as
+forced links**. It has three parts:
+
+| Part | What it does | Where |
+| --- | --- | --- |
+| **1. Data preparation** | L-R pairs (`causalCCC.links()`, with LIANA), gene selection by mutual information (`causalCCC.MIselection()`), the table (`causalCCC.mosaic()`), the variable types (`causalCCC.state_order()`) | R package `causalCCC` |
+| **2. The mosaic table** | sender and receiver cells stacked in one table; sender genes are `NA` in receiver cells and vice versa, so two genes of different cell types are never observed in the same cell | the core idea of the method |
+| **3. A modified MIIC** | the L-R pairs are given as `interact_edges`: these links are **forced** (never removed, `skeleton.cpp`) and left out of the search for conditional independences; afterwards each gets the strength of the strongest link of the network | `miic`, branch `causalccc` |
+
+Three consequences for reading a CausalCCC network:
+
+- **The L-R links are imposed, not learnt.** A ligand and its receptor are never measured in the same cells, so MIIC
+  cannot estimate anything between them; their strength is set artificially (notebook `case2/04`, section 6).
+- **What MIIC learns are the intracellular networks on each side**: the genes linked to the ligand in the sender cells
+  and to the receptor in the receiver cells. The forced L-R links are the bridge between them.
+- **"Upstream" and "downstream" of an L-R pair mean a position relative to that link**, not a causal direction found by
+  MIIC across it (notebook `case2/03`).
+
+The time-consuming parts are the gene selection (part 1) and, above all, the MIIC network reconstruction (part 3);
+notebook `case2/10` makes both faster without changing their results.
 
 The running example is **case study 2 of the paper**: fibroblasts, T cells and dendritic cells (DCs) from the skin of
 atopic dermatitis patients (He *et al.* 2020), with 43 ligand–receptor (L-R) pairs from CellChat. We use it because we
@@ -43,9 +68,10 @@ The package has six functions, all used below; the paper describes none of their
 
 ::: {.callout-note}
 ## Running time
-First rendering: about 15 minutes for the gene selection (section 6) and about 40 minutes for the nine MIIC runs (section
+First rendering: about 15 minutes for the gene selection (section 6) and about 50 minutes for the ten MIIC runs (section
 8). Every result is saved in `results/tutorial/` and reloaded afterwards; delete a file to recompute it. The full
-three-population network (section 7) takes 1 to 3 hours and is not run here (command given).
+three-population network (section 7) takes 1 to 3 hours and is not run here (command given). Section 8b runs only when
+a web server job is given (`-P server_job:<link>`): a few minutes for a small network.
 :::
 
 ## Setup
@@ -81,8 +107,12 @@ while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
 }
 source(file.path(root, "scripts", "helpers.R"))                       # select_genes(), link_name(), drawings ...
 source(file.path(root, "scripts", "tutorial", "tutorial_helpers.R"))   # functions of this tutorial
+source(file.path(root, "scripts", "benchmarks", "compare_outputs.R"))  # compare_miic(), section 8b
 
 patch_causalccc_all()
+
+# Server job to compare with (section 8b): the parameter when rendering, "" when the chunks are run by hand
+server_job <- if (exists("params")) params$server_job else ""
 
 job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")   # the authors' files
 results_dir <- file.path(root, "results", "tutorial")
@@ -387,6 +417,11 @@ Step 1 takes about a minute per feature of interest; steps 2–4 are instant. So
 is to compute the MI table once (`return_full = TRUE`, or `save = TRUE` which writes `<population>_MI_table.csv`) and
 redo steps 2–4, which `select_genes()` (in `scripts/helpers.R`) reproduces line by line.
 
+To compute the MI table itself, `compute_mi_table()` (`scripts/helpers.R`) gives exactly the table of
+`causalCCC.MIselection(return_full = TRUE)`, about 20 % faster and with a third of the memory: it keeps the counts
+sparse and skips genes never detected in the population (notebook `case2/10`). Keep its blocks at about 100 genes
+(`block_size`, the package's value): larger blocks are slower.
+
 One subtlety: the MI table contains a row for **every column** of the population's table, metadata included. The MI
 tables reused here were computed with both metadata, so `labels` is a candidate "gene" in them; in a call with
 `condition` only, it is not. We check `select_genes()` on one small call, removing `labels` from the candidates to
@@ -667,9 +702,13 @@ of fibroblasts is plain in the two directions with DCs, but suffixed in the two 
 it too. The authors' table holds two identical copies of it, `S100A6_Fibroblasts` and
 `S100A6_Fibroblasts_Fibroblasts`. All 14 duplicated genes are in this situation, but so are 25 genes that are not
 duplicated: the naming explains which genes *can* be duplicated, not exactly which ones are. The name also depends on
-the settings: with the wrapper's defaults (section 6), S100A6 is suffixed in fibroblasts → DCs too. Duplicates do
-not change the gene–gene links, but the two copies of a gene get contradictory orientations (87 of their 111 links),
-and the strength given to all L-R links is set by the duplicate pair (11,579 instead of 3,050; notebook `case2/09`).
+the settings: with the wrapper's defaults (section 6), S100A6 is suffixed in fibroblasts → DCs too. Each of the 14
+duplicates is one gene of one cell type under two names that differ only in the number of cell-type suffixes: 9 are
+`GENE_T` = `GENE_T_T` (as S100A6), 5 are `GENE` = `GENE_T`. Duplicates do not change the gene–gene links, but the two copies of a gene get contradictory orientations
+(87 of their 111 links), and the strength given to all L-R links is set by the duplicate pair (11,579 instead of 3,050;
+notebook `case2/09`). With several threads and the unpatched `miic`, they also make the orientations depend on the
+timing of the threads (notebook `case2/10`). **Check for identical columns before running MIIC**
+(`duplicated_columns()`, below).
 
 The safe way: select the genes per direction, pool them **per cell type**, and name every variable
 `<gene>_<cell type>`. `build_mosaic()` and `build_state_order()` do that with the rules of the package.
@@ -699,7 +738,11 @@ count(state3, group, var_type)
 ```
 
 The table has the authors' genes, each once (the authors' table has 238 columns: these 224 variables plus their 14
-duplicates). The three files are written in the server's format; MIIC on them takes 1–3 hours on one thread:
+duplicates). The three files are written in the server's format; MIIC on them takes 1–3 hours on one thread, and
+about 3 times less on 8 threads with the patched `miic` variant `deterministic` (`docs/INSTALL.md`, section 4; on case
+study 2, 70 → 22 minutes, and 91 → 30 minutes on the authors' input, with the one-thread links, orientations and
+genuine causations; only the `confidence` values move slightly, notebook `case2/10`). The installed `miic` crashes with
+more than one thread.
 
 ```{r}
 #| label: write-three-populations
@@ -712,9 +755,14 @@ write_tsv(edges3, files3[3], col_names = FALSE)
 ```
 
 ```bash
+# one thread, installed miic
 Rscript scripts/run_miic.R results/tutorial/three_populations/input.tsv \
   results/tutorial/three_populations/state_order.tsv results/tutorial/three_populations/interact_edges.tsv \
   results/tutorial/three_populations
+# 8 threads, patched variant
+R_LIBS=~/R/miic_variants/deterministic Rscript scripts/run_miic.R results/tutorial/three_populations/input.tsv \
+  results/tutorial/three_populations/state_order.tsv results/tutorial/three_populations/interact_edges.tsv \
+  results/tutorial/three_populations 8
 ```
 
 # Part 3 – The causal network
@@ -762,20 +810,31 @@ the run fail **at the very end**, after the whole computation.
 
 ### The settings
 
-The web server runs MIIC with settings that differ from `miic()`'s defaults on three points (server job `script.sh`,
-notebooks `case1/02` and `case2/04`):
+The authors' server jobs ran MIIC with settings that differ from `miic()`'s defaults on three points (server job
+`script.sh`, notebooks `case1/02` and `case2/04`). The last column is the field of the server's submission form
+(`workbench_causalCCC.php`) that sets each one, with its default value:
 
-| `miic()` argument | Default | Authors' server job | Meaning |
-| --- | --- | --- | --- |
-| `ori_proba_ratio` | 1 | **0.01** | an arrowhead is kept only if its probability is above 1/(1 + ratio): 0.5 by default, 0.99 on the server |
-| `n_shuffles` | 0 | **100** | number of permutations to measure the confidence of each link |
-| `conf_threshold` | 0 | **0.01** | links whose confidence ratio is above this are removed (needs `n_shuffles` > 0) |
-| `cplx` | `"nml"` | `"nml"` | complexity penalty: `"nml"` (normalised maximum likelihood) or `"mdl"` (minimum description length, close to BIC). **Any other value (for example `"bic"`) is replaced by the default with only a warning** |
-| `latent` | `"orientation"` | `"orientation"` | allow latent common causes when orienting (bidirected links `<->`); `"no"` forbids them, `"yes"` also uses them when removing links |
-| `consistent` | `"no"` | `"no"` | `"orientation"` / `"skeleton"` iterate until separating sets are consistent with the graph (slower) |
-| `test_mar`, `n_eff` | `TRUE`, -1 | same | missing-at-random test for `NA`; effective number of samples (-1 = automatic) |
-| `n_threads` | 1 | 1 | **keep 1**: 2 and 4 threads crashed with C stack errors on our inputs |
-| seed | none | none | only the permutations are random |
+| `miic()` argument | Default | Authors' server job | Meaning | Server form field (default) |
+| --- | --- | --- | --- | --- |
+| `ori_proba_ratio` | 1 | **0.01** | an arrowhead is kept only if its probability is above 1/(1 + ratio): 0.5 by default, 0.99 on the server | orientation probability ratio (**1**) |
+| `n_shuffles` | 0 | **100** | number of permutations to measure the confidence of each link | confidence cut (**no**), number of shuffles (100) |
+| `conf_threshold` | 0 | **0.01** | links whose confidence ratio is above this are removed (needs `n_shuffles` > 0) | confidence threshold (0.01) |
+| `cplx` | `"nml"` | `"nml"` | complexity penalty: `"nml"` (normalised maximum likelihood) or `"mdl"` (minimum description length, close to BIC). **Any other value (for example `"bic"`) is replaced by the default with only a warning** | – |
+| `latent` | `"orientation"` | `"orientation"` | allow latent common causes when orienting (bidirected links `<->`); `"no"` forbids them, `"yes"` also uses them when removing links | latent (orientation) |
+| `consistent` | `"no"` | `"no"` | `"orientation"` / `"skeleton"` iterate until separating sets are consistent with the graph (slower) | consistency (no) |
+| `test_mar`, `n_eff` | `TRUE`, -1 | same | missing-at-random test for `NA`; effective number of samples (-1 = automatic) | KL test (yes), effN (-1) |
+| `propagation`, `negative_info` | `FALSE`, `FALSE` | same | propagate the orientations along the network; allow negative conditional information when removing links | propagation, negative info (no) |
+| `n_threads` | 1 | 1 | **keep 1** with the installed `miic`: 2 and 4 threads crashed with C stack errors on our inputs; 8 threads work with the patched variant (section 7) | – |
+| seed | none | none | only the permutations are random | seed (0) |
+
+::: {.callout-important}
+## The server's form defaults are not the authors' settings
+By default the form runs **without the confidence cut** and with an **orientation probability ratio of 1**: a job
+submitted with the defaults is comparable with `miic()`'s defaults, not with the published networks. To reproduce the
+authors' settings, set **confidence cut = yes, 100 shuffles, confidence threshold 0.01, orientation probability ratio
+0.01**, and leave the rest by default. This is why our first server jobs of case study 1 (8 October) could not be
+compared with the authors' network (`data/README.md`). Section 8b compares a server job with a local run.
+:::
 
 We run the small network with the authors' settings, then change one setting at a time. Two runs test what should not
 matter: another seed (other permutations), and another order of the cells (the mosaic is shuffled by `sample()`).
@@ -838,6 +897,249 @@ shared with the reference. L-R links are excluded (they are imposed).
 **Rule of thumb.** Fix the settings before looking at the network, use the server's (they are what the papers used),
 and treat any oriented link that depends on `ori_proba_ratio` as fragile.
 
+### Choosing `conf_threshold` and `ori_proba_ratio` from one run
+
+`conf_threshold` has no upper bound in `miic` (`R/miic.utils.R`, l. 1109). One run with `n_shuffles = 100` and
+`conf_threshold = 1e10` therefore computes the confidence of every link and cuts none: the links that a threshold *t*
+would keep are those with a confidence ratio of at most *t*, which gives the **exact** curve of the links kept for
+every threshold. With `ori_proba_ratio = 1` in the same run, the arrowhead probabilities (`proba`) of all links are
+kept, which gives the number of links oriented for every ratio (an arrowhead is drawn if its probability is above
+1/(1 + ratio)). This curve is only **approximate**: the orientations are computed on the uncut network, which has more
+links than the network of any threshold.
+
+As a reference we count, among the links kept, those of the published network (between the same genes of the same
+cell types; the authors' network has many more variables, so it is not the answer for this small network).
+
+```{r}
+#| label: threshold-curves
+#| message: false
+#| fig-width: 10
+#| fig-height: 3.5
+
+uncut <- run("uncut", conf_threshold = 1e10, ori_proba_ratio = 1)
+uncut_links <- retained_links(uncut, small_edges) |> filter(!is_lr)
+
+# Names of the small network -> names of the authors' table (<gene>_<cell type>, one name per gene and cell type)
+side_of <- set_names(if_else(small_state$group %in% c("ligands", "senders genes") |
+                               str_detect(small_state$var_names, "_senders$"), "Fibroblasts", "DCs"),
+                     small_state$var_names)
+authors_name <- \(v) paste0(str_remove(v, "_(senders|receivers)$"), "_", side_of[v])
+authors_norm <- set_names(paste0(strip(names(authors_mosaic)), "_", col_type), names(authors_mosaic))
+paper_links  <- read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"), show_col_types = FALSE) |>
+  filter(type == "P") |>
+  transmute(link = link_name(authors_norm[x], authors_norm[y])) |>
+  pull(link) |> unique()
+in_paper <- link_name(authors_name(uncut_links$x), authors_name(uncut_links$y)) %in% paper_links
+
+thresholds <- 10^seq(-4, 0, by = 0.02)
+ratios     <- 10^seq(-3, 0, by = 0.02)
+arrowhead  <- map_dbl(str_split(uncut_links$proba, ";"), \(p) max(as.numeric(p)))
+curves <- bind_rows(
+  tibble(panel = "confidence threshold (conf_threshold)", value = thresholds,
+         `links kept`                       = map_int(thresholds, \(t) sum(uncut_links$confidence <= t, na.rm = TRUE)),
+         `links kept, in the paper's network` = map_int(thresholds, \(t) sum(uncut_links$confidence <= t & in_paper, na.rm = TRUE))),
+  tibble(panel = "orientation probability ratio (ori_proba_ratio), approximate", value = ratios,
+         `links with an arrowhead` = map_int(ratios, \(r) sum(arrowhead > 1 / (1 + r))))) |>
+  pivot_longer(-c(panel, value), names_to = "series", values_to = "links", values_drop_na = TRUE)
+
+ggplot(curves, aes(value, links, colour = series)) +
+  geom_step() +
+  geom_vline(xintercept = 0.01, linetype = "dashed", colour = "grey50") +
+  scale_x_log10() +
+  facet_wrap(~panel, scales = "free") +
+  labs(x = "setting (log scale; dashed: the authors' value, 0.01)", y = "links (L-R links excluded)", colour = NULL) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Checks: the curves at the authors' values against the reference run (cut at 0.01, ratio 0.01)
+ref_net <- retained_links(runs[["authors' settings (reference)"]], small_edges) |> filter(!is_lr)
+tibble(quantity = c("links kept at conf_threshold = 0.01", "links with an arrowhead at ori_proba_ratio = 0.01",
+                    "links with an arrowhead at ori_proba_ratio = 1"),
+       curve = c(sum(uncut_links$confidence <= 0.01, na.rm = TRUE), sum(arrowhead > 1 / 1.01), sum(arrowhead > 0.5)),
+       run   = c(nrow(ref_net), sum(ref_net$infOrt != 1), sum(uncut_links$infOrt != 1)),
+       which_run = c("reference", "reference", "uncut")) |>
+  knitr::kable()
+c(paper_links_between_these_variables = sum(map_lgl(str_split(paper_links, " \\| "), \(p)
+    all(p %in% authors_name(small_state$var_names)) && p[1] != p[2])))
+```
+
+The confidence curve is exact: at 0.01 it gives the 111 links of the reference run. On this small network it has no
+sharp elbow: about 100 links are kept even at a threshold of 1e-4, and the next ones are added slowly, one by one, up
+to 120 at a threshold of 1. Of the 77 links of the paper's network between these variables, 72 are already kept below
+a threshold of 0.003: the links added above it are not in the paper's network, consistent with a confidence filter
+that removes weakly supported links. The orientation curve rises steadily: about 27 links with an arrowhead at a ratio
+of 0.001, 31 at 0.01 (30 in the reference run, hence "approximate") and 41 at 1, the `miic()` and server default.
+Lowering the ratio is a choice of how sure an arrow must be; nothing in the curve singles out one value.
+
+**How to use these curves on your data.** Look for the elbow: the threshold below which the number of links kept
+falls quickly (strong links only) and above which it rises slowly (links added one by one, each weakly supported).
+**Do not pick the setting that recovers the most links of a published network**: that reasoning is circular (the
+published network was itself obtained with one choice of settings), and it would hide the differences you are
+looking for. Fix the settings first, then compare.
+
+## 8b. Comparing with a run on the web server
+
+The [CausalCCC web server](https://miic.curie.fr/causalCCC.php) runs the same MIIC. Comparing one of its jobs with a
+local run checks three things at once: that the settings are those you think, that the input is the same table, and
+that the network is the same. The job is a parameter of this notebook: paste its link (or its 20-character code) when
+rendering,
+
+```bash
+quarto render notebooks/tutorial/causalccc_tutorial.qmd -P server_job:https://miic.curie.fr/...<code>...
+```
+
+or, when running the chunks by hand in Positron, set `server_job <- "<link or code>"` in the console after the setup
+chunk. **Without a job, the chunks of this section are skipped.**
+
+::: {.callout-tip}
+## Submitting a job to compare with
+1. Upload the three files the wrapper wrote for the small network of section 8, in
+   `results/tutorial/small_network/CausalCCC_files/`: `causalCCC_df.csv` (the mosaic table), `causalCCC_st.tsv`
+   (the state order) and `causalCCC_interactEdges.tsv` (the L-R pairs). It runs in a few minutes, on the server and
+   here.
+2. In the form, set **confidence cut = yes, number of shuffles = 100, confidence threshold = 0.01, orientation
+   probability ratio = 0.01**, and leave the rest by default (section 8: the form's defaults are not the authors'
+   settings). Or keep the defaults on purpose, to see the comparison flag the difference.
+3. When the job is finished, copy the link of its result page (or of any of its files) and render with
+   `-P server_job:<link>`.
+
+The authors' jobs work too: `eaP9Br0llvzxN07zZZEC` (case study 1) and `w0788tM1wzXGHLzNaKKa` (case study 2, already
+in `data/`; its local run takes 1–3 hours, see below).
+:::
+
+### Downloading the job
+
+The files of a job are at `https://miic.curie.fr/server/server_outputs/<code>/<file>`. We keep six of them in
+`data/<case>/causalccc_server_<code>/` (`case1` for the authors' case 1 job, `case2` otherwise), skip those already
+there and log each download in `data/download_log.tsv`, as the download scripts do.
+
+```{r}
+#| label: server-download
+#| eval: !expr nzchar(server_job)
+
+server_code <- server_job_id(server_job)
+server_case <- if (server_code == "eaP9Br0llvzxN07zZZEC") "case1" else "case2"
+server_dir  <- file.path(root, "data", server_case, paste0("causalccc_server_", server_code))
+download_server_job(server_code, server_dir, file.path(root, "data", "download_log.tsv"), root) |>
+  knitr::kable()
+
+needed <- c("script.sh", "edgesList.miic.summary.txt", "input.tsv", "clean_state_order.tsv", "clean_interact_edges.tsv")
+if (!all(file.exists(file.path(server_dir, needed))))
+  stop("Missing files for job ", server_code, ": ", paste(needed[!file.exists(file.path(server_dir, needed))],
+       collapse = ", "), ". Is the job finished? Check its page on miic.curie.fr.")
+```
+
+### 1. Settings
+
+`script.sh` holds the command the server ran. Each option is translated into the `miic()` argument it sets and
+compared with the settings of `scripts/run_miic.R` (the authors' settings, `authors_miic_settings`). An option absent
+from the command gets the `miic()` default (an absent flag, such as `--orientation`, means `FALSE`).
+
+```{r}
+#| label: server-settings
+#| eval: !expr nzchar(server_job)
+
+server_parsed <- parse_server_script(file.path(server_dir, "script.sh"))
+settings_table <- compare_settings(server_parsed, authors_miic_settings)
+knitr::kable(settings_table)
+
+# Options of the command that this notebook does not translate, as they are written
+server_parsed |> filter(!known) |> select(option, written)
+
+settings_differ <- any(settings_table$note == "DIFFERS")
+settings_differ
+```
+
+### 2. Same input?
+
+The server stores the table it received as `input.tsv`. We compare it with the tables of this tutorial (columns, then
+values); the closest one comes first.
+
+```{r}
+#| label: server-input
+#| eval: !expr nzchar(server_job)
+
+server_input <- read_tsv(file.path(server_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+local_tables <- list("small network (section 8)"     = small_mosaic,
+                     "fibroblasts → DCs (section 6)" = wrapper_out$mosaic_table,
+                     "three populations (section 7)" = mosaic3,
+                     "authors' input, case study 2"  = authors_mosaic)
+imap(local_tables, \(t, name) compare_inputs(server_input, t) |> mutate(local_table = name, .before = 1)) |>
+  list_rbind() |>
+  arrange(desc(columns_shared / pmax(columns_server, columns_local))) |>
+  knitr::kable()
+```
+
+### 3. Networks
+
+The local run is `scripts/run_miic.R` on the server's own three files, so that only MIIC is compared. It is run here
+for networks of up to 100 variables (a few minutes); for a larger one, the chunk prints the command to run in a
+terminal (1–3 hours on one thread, about 3 times less with the patched variant on 8 threads), and the comparison
+appears at the next rendering. If the settings differ (step 1), a second local run uses the server's settings
+(saved as a list of `miic()` arguments, which `run_miic.R` accepts as its sixth argument): the difference between the
+two local runs is the effect of the settings, and the difference between the server and the second local run is the
+effect of the server.
+
+```{r}
+#| label: server-networks
+#| eval: !expr nzchar(server_job)
+
+server_runs_dir <- file.path(results_dir, paste0("server_", server_code))
+# confidence as numbers even when it is all NA (no confidence cut), as in a miic result
+server_result   <- list(all.edges.summary = read_tsv(file.path(server_dir, "edgesList.miic.summary.txt"),
+                                                     col_types = cols(confidence = col_double(), .default = col_guess())))
+
+local_run <- run_miic_script(root, server_dir, file.path(server_runs_dir, "local_settings"))
+local_server_settings_run <- NULL
+if (settings_differ) {
+  settings_file <- file.path(server_runs_dir, "server_settings.rds")
+  dir.create(server_runs_dir, recursive = TRUE, showWarnings = FALSE)
+  saveRDS(server_settings_list(server_parsed), settings_file)
+  local_server_settings_run <- run_miic_script(root, server_dir, file.path(server_runs_dir, "server_settings"),
+                                               settings_file = settings_file)
+}
+
+comparisons <- list(
+  "server vs local run, our settings"                = list(server_result, local_run),
+  "server vs local run, server's settings"           = list(server_result, local_server_settings_run),
+  "local runs: our settings vs the server's settings" = list(local_run, local_server_settings_run))
+comparisons <- keep(comparisons, \(pair) !is.null(pair[[1]]) && !is.null(pair[[2]]))
+if (length(comparisons) == 0) {
+  cat("No local run yet: run the command printed above, then render again.\n")
+} else {
+  imap(comparisons, \(pair, name) compare_miic(pair[[1]], pair[[2]]) |> mutate(comparison = name, .before = 1)) |>
+    list_rbind() |>
+    mutate(across(where(is.double), \(v) signif(v, 3))) |>
+    knitr::kable()
+}
+```
+
+How to read the verdict (`compare_miic()`, `scripts/benchmarks/compare_outputs.R`, notebook `case2/10`):
+
+- **"identical"**: same retained links, orientations, genuine causations and values. Not possible against the
+  server: its edge list stores the values rounded to 6 decimals.
+- **"same decisions, values differ"**: same links, orientations and genuine causations; the best possible verdict
+  against the server. Expect the `confidence` column to differ even with the same settings: the server's random seed
+  for the permutations is not ours (2026). On our inputs this never changed a decision (checked on the authors' case
+  study 2 job: same 715 links, 62 confidence values differ, by at most 0.008).
+- **"different network"**: look at the settings first (step 1), then at the input (step 2). The links that differ:
+
+```{r}
+#| label: server-differences
+#| eval: !expr nzchar(server_job)
+
+reference_run <- local_server_settings_run %||% local_run
+if (!is.null(reference_run)) {
+  both <- full_join(miic_links(server_result) |> filter(type == "P"), miic_links(reference_run) |> filter(type == "P"),
+                    by = "link", suffix = c("_server", "_local"))
+  list(only_server  = both |> filter(is.na(type_local)) |> select(link, info_shifted_server, confidence_server),
+       only_local   = both |> filter(is.na(type_server)) |> select(link, info_shifted_local, confidence_local),
+       orientation  = both |> filter(orientation_server != orientation_local | is_causal_server != is_causal_local) |>
+                        select(link, orientation_server, orientation_local, is_causal_server, is_causal_local)) |>
+    map(\(t) head(t, 10))
+}
+```
+
 ## 9. Reading the network
 
 The edge list (`all.edges.summary`) has one row per pair of variables examined. The columns that matter:
@@ -874,9 +1176,6 @@ The neighbourhood of the L-R pairs (diamonds), two links deep:
 ```{r}
 #| label: neighbourhood
 
-side_of <- set_names(if_else(small_state$group %in% c("ligands", "senders genes") |
-                               str_detect(small_state$var_names, "_senders$"), "Fibroblasts", "DCs"),
-                     small_state$var_names)
 plot_neighbourhood(reference$all.edges.summary |> filter(!(link_name(x, y) %in% ref_links$link[ref_links$is_lr] & Nxy_ai %in% 0)),
                    lr_links = ref_links$link[ref_links$is_lr],
                    centres  = unique(c(small_edges$ligand, small_edges$receptor)),
@@ -925,12 +1224,15 @@ orientations with care, and treat a single genuine causation as a hypothesis.
 | Selection | remove the metadata from the selected genes; patch the wrapper with two metadata or more | a metadata column can be selected as a gene |
 | Selection | remove ribosomal / mitochondrial genes from the candidates if they dominate the MI ranking | they follow library size |
 | Selection | keep the MI tables (`save = TRUE`) and redo the selection with `select_genes()` | seconds instead of hours |
+| Selection | compute the MI tables with `compute_mi_table()`, blocks of about 100 genes | same table, faster, a third of the memory |
 | Mosaic | several directions: pool per cell type, name `<gene>_<cell type>`, check for duplicated columns | duplicates make contradictory orientations |
 | Mosaic | discrete rule "≤ 5 values counting `NA`"; `set.seed()` before building | same rules as the package, reproducible order |
-| MIIC | `interact_edges` with columns `ligand`, `receptor`; `n_threads = 1` | late failure; crashes |
+| MIIC | `interact_edges` with columns `ligand`, `receptor`; `n_threads = 1`, or 8 with the patched variant | late failure; crashes |
+| MIIC | no identical columns (`duplicated_columns()`) | duplicates double links and destabilise orientations |
 | MIIC | check `result$params`: invalid values (`cplx = "bic"`) are replaced by the defaults | silent change of settings |
 | MIIC | metadata that genes cannot cause: `is_contextual = 1` | no arrows towards condition or batch |
-| MIIC | state the settings: `ori_proba_ratio`, `n_shuffles`, `conf_threshold` (server: 0.01, 100, 0.01) | they change orientations and the number of links |
+| MIIC | state the settings: `ori_proba_ratio`, `n_shuffles`, `conf_threshold` (authors: 0.01, 100, 0.01) | they change orientations and the number of links |
+| Web server | set confidence cut = yes, 100 shuffles, threshold 0.01, orientation probability ratio 0.01; compare the job with a local run (section 8b) | the form's defaults are not the authors' settings |
 | Reading | drop L-R placeholder rows; ignore L-R strengths | artefacts of the `causalccc` branch |
 | Reading | trust links > orientations > genuine causations | robustness measured in case study 2 |
 

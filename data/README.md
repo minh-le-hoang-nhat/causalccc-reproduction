@@ -33,6 +33,7 @@ data/
 │   └── geo_GSE104054/                           raw data (optional, --with-geo)
 ├── case2/
 │   ├── causalccc_server_w0788tM1wzXGHLzNaKKa/   files of the authors' web server job
+│   ├── causalccc_server_<code>/                 other server jobs, downloaded by the tutorial (section 8b)
 │   ├── cellchat/data_humanSkin_CellChat.rda     CellChat example dataset (copied by hand, see below)
 │   └── preprocessing/                           raw reads (fastq/), kallisto|bustools output (kb_out/), write/, cache/ – see notebooks/case2/preprocessing/README.md
 └── nichenet_v2/                                 NicheNet v2 mouse prior-knowledge networks
@@ -109,6 +110,17 @@ Fibroblasts, dendritic cells and T cells in atopic dermatitis skin (He *et al.*,
   (md5 of our copy: `9d31f4c88be64912b937b5d6a2cb6c2d`). Its matrix is log-normalised; notebook 05 recovers the raw
   counts exactly and shows that they are the authors' counts.
 - 14 genes appear twice in the same cell type as identical columns (notebook 03, section 3).
+
+## Server jobs downloaded by the tutorial
+
+Section 8b of the tutorial (`notebooks/tutorial/causalccc_tutorial.qmd`, rendered with `-P server_job:<link or code>`)
+compares a CausalCCC web server job with a local run. It downloads six files of the job (`script.sh`,
+`edgesList.miic.summary.txt`, `input.zip` unzipped into `input.tsv`, `clean_state_order.tsv`,
+`clean_interact_edges.tsv`, `whole_run.log`) from `https://miic.curie.fr/server/server_outputs/<code>/` into
+`case1/causalccc_server_<code>/` for the authors' case 1 job and `case2/causalccc_server_<code>/` otherwise, skips the
+files already there (so the authors' folders are never overwritten) and logs each download in `download_log.tsv`.
+These jobs are not downloaded by the scripts; render the tutorial with the same link to get them back while the server
+keeps them.
 
 ## Other datasets (optional)
 
