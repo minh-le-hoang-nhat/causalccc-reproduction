@@ -1,0 +1,25 @@
+Warning messages:
+1: replacing previous import ‘data.table::first’ by ‘dplyr::first’ when loading ‘miic’ 
+2: replacing previous import ‘data.table::between’ by ‘dplyr::between’ when loading ‘miic’ 
+3: replacing previous import ‘data.table::last’ by ‘dplyr::last’ when loading ‘miic’ 
+[1] "the interactEdges file is detected in miic.R"
+[1] "the optional weight column in interactEdges file is not a problem in miic.reconstruct.R"
+Search all pairs for unconditional independence relations...
+Did not remove 2---85edge in initializeEdges() because status is 1
+Did not remove 3---147edge in initializeEdges() because status is 1
+Did not remove 2---152edge in initializeEdges() because status is 1
+Did not remove 1---84edge in initializeEdges() because status is 1
+Did not remove 1---146edge in initializeEdges() because status is 1
+Did not remove 0---82edge in initializeEdges() because status is 1
+Did not remove 0---83edge in initializeEdges() because status is 1
+Did not remove 0---84edge in initializeEdges() because status is 1
+Did not remove 0---144edge in initializeEdges() because status is 1
+Did not remove 0---145edge in initializeEdges() because status is 1
+Did not remove 0---146edge in initializeEdges() because status is 1
+Did not remove 4---148edge in initializeEdges() because status is 1
+Did not remove 4---149edge in initializeEdges() because status is 1
+Did not remove 4Error: C stack usage  7169402938748 is too close to the limit
+Execution halted
+
+ *** caught segfault ***
+address (nil), cause 'unknown'

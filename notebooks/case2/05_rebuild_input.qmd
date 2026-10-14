@@ -607,8 +607,65 @@ full_join(mutate(predicted_duplicates, predicted = TRUE),
   print(n = 40)
 ```
 
-This rule predicts 11 of the 14 duplicates, but also 24 duplicates that the authors' table does not have. The naming
-of `causalCCC.mosaic()` is a plausible ingredient, but the exact way the authors pooled their runs cannot be recovered
+With the runs of protocol B+, this rule predicts 11 of the 14 duplicates, but also 24 duplicates that the authors'
+table does not have.
+
+**Third check: the same rule with the authors' exact settings.** Notebook 07 found the settings that reproduce the
+authors' selection exactly: one run per direction, 25 genes per run, no cap of 8, both metadata. We redo the six runs
+with these settings and compare the name each gene gets across the runs with its forms in the authors' table (number
+of cell-type suffixes: 0, 1 or 2; `1+2` = two copies, with one and two suffixes).
+
+```{r}
+#| label: duplicates-exact-settings
+
+exact_side <- function(t, goi) {
+  setdiff(select_genes(filter(mi_tables, cell_type == t), foi = c(unique(goi), metadata_foi), n_genes = 25),
+          metadata_foi)
+}
+runs_exact <- directions |>
+  group_by(sender, receiver) |>
+  summarise(genes_s = list(unique(c(unique(ligand), exact_side(first(sender), ligand)))),
+            genes_r = list(unique(c(unique(receptor), exact_side(first(receiver), receptor)))),
+            .groups = "drop")
+
+naming_exact <- runs_exact |>
+  pmap(\(sender, receiver, genes_s, genes_r) {
+    both <- intersect(genes_s, genes_r)
+    bind_rows(tibble(cell_type = sender,   gene = genes_s, suffixed = genes_s %in% both),
+              tibble(cell_type = receiver, gene = genes_r, suffixed = genes_r %in% both))
+  }) |> list_rbind() |>
+  group_by(cell_type, gene) |>
+  summarise(naming = case_when(all(suffixed) ~ "always suffixed", !any(suffixed) ~ "always plain",
+                               TRUE ~ "plain and suffixed"), .groups = "drop")
+
+authors_forms <- tibble(variable = names(mosaic), cell_type = col_type) |>
+  filter(!str_detect(variable, "^(labels|condition)_")) |>
+  mutate(gene = strip(variable), suffixes = str_count(variable, "_(Fibroblasts|T_cell|DCs)")) |>
+  group_by(cell_type, gene) |>
+  summarise(forms = paste(sort(suffixes), collapse = "+"), .groups = "drop")
+
+forms_vs_naming <- inner_join(naming_exact, authors_forms, by = c("cell_type", "gene")) |>
+  left_join(distinct(lr_roles, cell_type, gene) |> mutate(lr_gene = TRUE), by = c("cell_type", "gene")) |>
+  add_count(gene, name = "n_cell_types") |>
+  mutate(lr_gene = replace_na(lr_gene, FALSE), in_other_cell_types = n_cell_types > 1)
+
+forms_vs_naming |>
+  count(naming, forms) |>
+  pivot_wider(names_from = forms, values_from = n, values_fill = 0)
+
+# Genes always plain in the runs: one suffix when the gene is a ligand or receptor, or is present in another cell type
+forms_vs_naming |>
+  filter(naming == "always plain") |>
+  count(suffix_expected = lr_gene | in_other_cell_types, forms)
+```
+
+With the exact settings, **all 14 duplicated genes** get a plain name in some runs and a suffixed name in others, and
+no gene with a single name across the runs is duplicated. But 25 genes named both ways are not duplicated: the naming
+explains which genes *can* be duplicated, not exactly which ones are. For the genes always plain in the runs, the
+number of suffixes in the authors' table follows a simple rule: one suffix when the gene is a ligand or receptor or is
+present in another cell type (which keeps column names unique once the cell types are pooled), none otherwise. For the
+genes always suffixed, the authors' table has one or two suffixes, with no rule we could find. The naming of
+`causalCCC.mosaic()` is the most likely ingredient, but the exact way the authors pooled their runs cannot be recovered
 from the files.
 
 ## 11. Save what notebook 06 needs
@@ -658,8 +715,10 @@ cause; the differences come from the selection settings (25 genes per run, no ca
 **The genes named in the paper** (DCN, APOD, CFD in fibroblasts; GPR183, NR4A3, VIM in dendritic cells; FOS, JUNB in T
 cells) are all selected by protocol B+.
 
-**Duplicated genes.** Pooling the six runs explains how a gene can get two names, but we could not reproduce exactly
-which 14 genes were duplicated. Whatever the cause, removing duplicates should be part of building a clean input.
+**Duplicated genes.** Pooling the six runs explains how a gene can get two names: with the authors' exact settings,
+all 14 duplicated genes are plain in some runs and suffixed in others. But 25 other genes named both ways are not
+duplicated, so we could not reproduce exactly which genes were duplicated. Whatever the cause, removing duplicates
+should be part of building a clean input.
 
 **Next steps.**
 

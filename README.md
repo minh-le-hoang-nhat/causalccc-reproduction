@@ -13,6 +13,8 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
       tutorial, default parameters) and 04 (tutorial, updated parameters).
 - [ ] **Case study 2** – fibroblasts, dendritic cells and T cells in atopic dermatitis, with CellChat ligand–receptor pairs
       (data: He *et al.*, *J Allergy Clin Immunol* 2020). Notebooks 03 (authors' files, paper's claims), 04 (MIIC rerun), 05 (rebuilding the input), 06 (MIIC on the rebuilt input), 07 (why our results differ), 08 (reproducibility limits) and 09 (effect of the duplicated genes).
+- [ ] **Tutorial** – `notebooks/tutorial/causalccc_tutorial.qmd`: CausalCCC step by step on case study 2, from raw counts to the
+      network, with the pitfalls of each step and the measured effect of the settings of each function and of MIIC.
 - [ ] Assess the preprocessing of the input data used in the case studies.
 - [ ] Extensions of the published analyses (to be defined with the teaching team).
 - [ ] Analysis of a dataset shared with the BoNesis team, and comparison of the two approaches.
@@ -27,10 +29,12 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 ├── data/                # not tracked by Git – see data/README.md; subfolders case1/, case2/
 ├── notebooks/           # one folder per case study, notebooks numbered in execution order
 │   ├── case1/           # case study 1: 01_* to 04_*
-│   └── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
+│   ├── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
+│   └── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── case1/           # download_case1.sh, case1_helpers.R (functions of notebooks 03 and 04)
+│   ├── tutorial/        # tutorial_helpers.R (functions of the tutorial)
 │   └── case2/           # download_case2.sh, MIIC job, preprocessing/ (kallisto|bustools)
 └── results/
     ├── case1/           # one folder per notebook, same name

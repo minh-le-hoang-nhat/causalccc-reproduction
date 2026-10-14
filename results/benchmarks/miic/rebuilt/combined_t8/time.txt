@@ -1,0 +1,23 @@
+	Command being timed: "Rscript scripts/run_miic.R results/case2/06_rebuilt_network/input.tsv results/case2/06_rebuilt_network/state_order.tsv results/case2/06_rebuilt_network/interact_edges.tsv results/benchmarks/miic/rebuilt/combined_t8 8"
+	User time (seconds): 9363.77
+	System time (seconds): 4.52
+	Percent of CPU this job got: 696%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 22:25.10
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 903800
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 107
+	Minor (reclaiming a frame) page faults: 282217
+	Voluntary context switches: 27782
+	Involuntary context switches: 12353
+	Swaps: 0
+	File system inputs: 8848
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

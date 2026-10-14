@@ -1,0 +1,112 @@
+var_names	var_type	levels_increasing_order	is_contextual	group	group_color
+labels_senders	0	APOE+ FIB,COL11A1+ FIB,FBN1+ FIB,Inflam. FIB	0	metadata	FFE397
+condition_senders	0	NL,LS	0	metadata	FFE397
+labels_receivers	0	cDC1,cDC2,Inflam. DC,LC	0	metadata	FFD050
+condition_receivers	0	NL,LS	0	metadata	FFD050
+MIF	1		0	ligands	73C1B9
+CXCL12	1		0	ligands	73C1B9
+ANXA1	1		0	ligands	73C1B9
+C3	1		0	ligands	73C1B9
+CCL19	1		0	ligands	73C1B9
+PPIA	1		0	ligands	73C1B9
+IGFBP3	1		0	ligands	73C1B9
+LGALS1_senders	1		0	senders genes	DFE6D0
+TMSB10_senders	1		0	senders genes	DFE6D0
+S100A6_senders	1		0	senders genes	DFE6D0
+CXCL14	1		0	senders genes	DFE6D0
+CFH	1		0	senders genes	DFE6D0
+CFD	1		0	senders genes	DFE6D0
+S100A10_senders	1		0	senders genes	DFE6D0
+ANXA2_senders	1		0	senders genes	DFE6D0
+C1R	1		0	senders genes	DFE6D0
+C1S	1		0	senders genes	DFE6D0
+UBD	1		0	senders genes	DFE6D0
+IL32	1		0	senders genes	DFE6D0
+CD63	1		0	senders genes	DFE6D0
+TMSB4X_senders	1		0	senders genes	DFE6D0
+VIM_senders	1		0	senders genes	DFE6D0
+LUM	1		0	senders genes	DFE6D0
+FTL	1		0	senders genes	DFE6D0
+MFAP5	1		0	senders genes	DFE6D0
+FBN1	1		0	senders genes	DFE6D0
+COL1A1	1		0	senders genes	DFE6D0
+NNMT	1		0	senders genes	DFE6D0
+COL6A2	1		0	senders genes	DFE6D0
+COL6A1	1		0	senders genes	DFE6D0
+S100A4_senders	1		0	senders genes	DFE6D0
+DCN	1		0	senders genes	DFE6D0
+FTH1_senders	1		0	senders genes	DFE6D0
+S100A11	1		0	senders genes	DFE6D0
+ACTB_senders	1		0	senders genes	DFE6D0
+CALM2	1		0	senders genes	DFE6D0
+ACTG1_senders	1		0	senders genes	DFE6D0
+EIF1	1		0	senders genes	DFE6D0
+SERF2_senders	1		0	senders genes	DFE6D0
+B2M_senders	1		0	senders genes	DFE6D0
+ITM2B	1		0	senders genes	DFE6D0
+LAPTM4A	1		0	senders genes	DFE6D0
+SH3BGRL3_senders	1		0	senders genes	DFE6D0
+CRIP1	1		0	senders genes	DFE6D0
+TPT1_senders	1		0	senders genes	DFE6D0
+LGALS3	1		0	senders genes	DFE6D0
+SRP14	1		0	senders genes	DFE6D0
+ANXA5	1		0	senders genes	DFE6D0
+CST3_senders	1		0	senders genes	DFE6D0
+CD74	1		0	receptors	EAAE9F
+CD44	1		0	receptors	EAAE9F
+CXCR4	1		0	receptors	EAAE9F
+FPR3	1		0	receptors	EAAE9F
+ITGAX	1		0	receptors	EAAE9F
+ITGB2	1		0	receptors	EAAE9F
+CCR7	1		0	receptors	EAAE9F
+ITGAM	1		0	receptors	EAAE9F
+BSG	1		0	receptors	EAAE9F
+TMEM219	1		0	receptors	EAAE9F
+HLA-DRA	1		0	receivers genes	F3E0BF
+HLA-DPA1	1		0	receivers genes	F3E0BF
+HLA-DPB1	1		0	receivers genes	F3E0BF
+VIM_receivers	1		0	receivers genes	F3E0BF
+LMNA	1		0	receivers genes	F3E0BF
+LGALS1_receivers	1		0	receivers genes	F3E0BF
+RGS1	1		0	receivers genes	F3E0BF
+NR4A3	1		0	receivers genes	F3E0BF
+GPR183	1		0	receivers genes	F3E0BF
+FCER1G	1		0	receivers genes	F3E0BF
+SH3BGRL3_receivers	1		0	receivers genes	F3E0BF
+LIPA	1		0	receivers genes	F3E0BF
+CTSB	1		0	receivers genes	F3E0BF
+TMSB10_receivers	1		0	receivers genes	F3E0BF
+CFL1	1		0	receivers genes	F3E0BF
+BIRC3	1		0	receivers genes	F3E0BF
+CCL22	1		0	receivers genes	F3E0BF
+EFHD2	1		0	receivers genes	F3E0BF
+IRF8	1		0	receivers genes	F3E0BF
+S100A4_receivers	1		0	receivers genes	F3E0BF
+HLA-DQA2	1		0	receivers genes	F3E0BF
+EIF2AK4	1		0	receivers genes	F3E0BF
+CAMSAP2	1		0	receivers genes	F3E0BF
+HLA-DQB1	1		0	receivers genes	F3E0BF
+ACTB_receivers	1		0	receivers genes	F3E0BF
+HLA-B	1		0	receivers genes	F3E0BF
+PFN1	1		0	receivers genes	F3E0BF
+FAU	1		0	receivers genes	F3E0BF
+ANXA2_receivers	1		0	receivers genes	F3E0BF
+OAZ1	1		0	receivers genes	F3E0BF
+S100A10_receivers	1		0	receivers genes	F3E0BF
+ACTG1_receivers	1		0	receivers genes	F3E0BF
+ARPC2	1		0	receivers genes	F3E0BF
+HLA-C	1		0	receivers genes	F3E0BF
+TMSB4X_receivers	1		0	receivers genes	F3E0BF
+UBA52	1		0	receivers genes	F3E0BF
+MYL6	1		0	receivers genes	F3E0BF
+EEF1G	1		0	receivers genes	F3E0BF
+YBX1	1		0	receivers genes	F3E0BF
+ATP5E	1		0	receivers genes	F3E0BF
+TPT1_receivers	1		0	receivers genes	F3E0BF
+B2M_receivers	1		0	receivers genes	F3E0BF
+S100A6_receivers	1		0	receivers genes	F3E0BF
+CST3_receivers	1		0	receivers genes	F3E0BF
+HLA-DQA1	1		0	receivers genes	F3E0BF
+SERF2_receivers	1		0	receivers genes	F3E0BF
+FTH1_receivers	1		0	receivers genes	F3E0BF
+GAPDH	1		0	receivers genes	F3E0BF

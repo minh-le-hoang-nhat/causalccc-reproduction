@@ -1,0 +1,43 @@
+2026-10-13 15:30:53 start results/benchmarks/miic/rebuilt/baseline_t1
+2026-10-13 17:00:30 end results/benchmarks/miic/rebuilt/baseline_t1: ok
+2026-10-13 17:00:31 start results/benchmarks/miic/rebuilt/baseline_t4
+2026-10-13 17:00:36 end results/benchmarks/miic/rebuilt/baseline_t4: failed (1)
+2026-10-13 17:00:36 start results/benchmarks/miic/rebuilt/no_rcout_t1
+2026-10-13 18:11:12 end results/benchmarks/miic/rebuilt/no_rcout_t1: ok
+2026-10-13 18:11:12 start results/benchmarks/miic/rebuilt/no_rcout_t4
+2026-10-13 18:40:46 end results/benchmarks/miic/rebuilt/no_rcout_t4: ok
+2026-10-13 18:40:46 start results/benchmarks/miic/rebuilt/no_rcout_t8
+2026-10-13 19:03:54 end results/benchmarks/miic/rebuilt/no_rcout_t8: ok
+2026-10-13 19:03:55 start results/benchmarks/miic/rebuilt/early_conf_t1
+2026-10-13 20:09:14 end results/benchmarks/miic/rebuilt/early_conf_t1: ok
+2026-10-13 20:09:14 start results/benchmarks/miic/rebuilt/combined_t8
+2026-10-13 20:31:39 end results/benchmarks/miic/rebuilt/combined_t8: ok
+2026-10-13 20:31:40 start results/benchmarks/miic/authors/baseline_t1
+2026-10-13 22:02:19 end results/benchmarks/miic/authors/baseline_t1: ok
+2026-10-13 22:02:19 start results/benchmarks/miic/authors/combined_t8
+Already done: results/benchmarks/miic/rebuilt/baseline_t1
+2026-10-14 02:04:26 start results/benchmarks/miic/rebuilt/baseline_t4
+2026-10-14 02:04:49 end results/benchmarks/miic/rebuilt/baseline_t4: failed (139)
+Already done: results/benchmarks/miic/rebuilt/no_rcout_t1
+Already done: results/benchmarks/miic/rebuilt/no_rcout_t4
+Already done: results/benchmarks/miic/rebuilt/no_rcout_t8
+Already done: results/benchmarks/miic/rebuilt/early_conf_t1
+Already done: results/benchmarks/miic/rebuilt/combined_t8
+Already done: results/benchmarks/miic/authors/baseline_t1
+2026-10-14 02:04:49 start results/benchmarks/miic/authors/combined_t8
+2026-10-14 02:35:42 end results/benchmarks/miic/authors/combined_t8: ok
+2026-10-14 02:35:42 all runs done
+2026-10-14 02:35:42 start results/benchmarks/mi/original_DCs_b100_r1
+2026-10-14 02:39:40 start results/benchmarks/mi/original_DCs_b100_r2
+2026-10-14 02:43:32 start results/benchmarks/mi/original_DCs_b100_r3
+2026-10-14 02:47:25 start results/benchmarks/mi/fast_DCs_b100_r1
+2026-10-14 02:50:32 start results/benchmarks/mi/fast_DCs_b500_r1
+2026-10-14 02:56:30 start results/benchmarks/mi/fast_DCs_b1000_r1
+2026-10-14 03:07:27 start results/benchmarks/mi/fast_DCs_b1000_r2
+Installed miic variant 'baseline_idle' in /root/R/miic_variants/baseline_idle
+2026-10-14 03:09:02 start results/benchmarks/miic/rebuilt/baseline_idle_t1
+2026-10-14 04:19:16 end results/benchmarks/miic/rebuilt/baseline_idle_t1: ok
+2026-10-14 04:19:16 after chain finished
+2026-10-14 04:20:53 start results/benchmarks/miic/authors/no_rcout_t8
+2026-10-14 04:53:55 end results/benchmarks/miic/authors/no_rcout_t8: ok
+2026-10-14 04:53:56 start results/benchmarks/miic/dedup/combined_t8

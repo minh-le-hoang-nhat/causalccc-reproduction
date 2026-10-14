@@ -1,0 +1,135 @@
+Patch for miic, branch causalccc, commit 5ca0b22 (notebook 10, change 2).
+The confidence cut computes the MI of every edge on 100 shuffled datasets. Since each shuffled term exp(-I'_shuffle)
+is in ]0, 1], bounds on their mean settle the cut decision early, often after one shuffle (or none when
+I' < ln(1 / conf_threshold)); the remaining shuffles of a decided edge are not computed. Decisions are unchanged; the
+exported confidence of an edge decided early is a bound. Shuffles are still drawn, so the random stream is unchanged.
+Apply with: patch -p1 -d <miic source> < 02_confidence_early_decision.patch (see scripts/benchmarks/build_miic_variant.sh)
+
+--- a/src/confidence_cut.cpp	2025-01-23 07:40:59.000000000 -0500
++++ b/src/confidence_cut.cpp	2026-10-13 15:23:36.705979794 -0400
+@@ -30,6 +30,45 @@
+   }
+ }
+ 
++// Early decision of the confidence cut.
++// confidenceCut() removes an edge when exp(-I') / E > conf_threshold, where
++// I' = Ixy_ui - kxy_ui and E = mean over the n shuffles of exp(-I'_shuffle).
++// Every term exp(-I'_shuffle) is in ]0, 1] (I'_shuffle is set to 0 when
++// negative), so after m shuffles summing to S:  S / n <= E <= (S + n - m) / n.
++// As soon as one of the two bounds settles the decision, the edge is decided
++// and its remaining shuffles are not computed. exp_shuffle then stores that
++// bound, so that confidenceCut() reaches the same decision as with all the
++// shuffles. Shuffles are still drawn for every edge, so the random number
++// stream is unchanged.
++namespace {
++
++struct ShuffleSum {
++  double sum{0};      // sum of exp(-I'_shuffle) over the shuffles done
++  int n_done{0};      // number of shuffles done
++  bool decided{false};
++  double value{0};    // exp_shuffle stored once decided
++};
++
++// The same expression as in confidenceCut()
++bool isCut(double I_prime_original, double exp_shuffle, double threshold) {
++  return exp(-I_prime_original) / exp_shuffle > threshold;
++}
++
++void tryToDecide(ShuffleSum& s, double I_prime_original, int n_shuffles,
++    double threshold) {
++  double lower = s.sum / n_shuffles;
++  double upper = (s.sum + n_shuffles - s.n_done) / n_shuffles;
++  if (s.n_done > 0 && !isCut(I_prime_original, lower, threshold)) {
++    s.decided = true;  // kept whatever the remaining shuffles give
++    s.value = lower;
++  } else if (isCut(I_prime_original, upper, threshold)) {
++    s.decided = true;  // cut whatever the remaining shuffles give
++    s.value = upper;
++  }
++}
++
++}  // anonymous namespace
++
+ void setConfidence(Environment& environment) {
+   vector<EdgeID> edge_list;
+   std::set<int> columns_to_shuffle;
+@@ -44,6 +83,17 @@
+     }
+   }
+ 
++  const int n_shuffles = environment.n_shuffles;
++  const double threshold = environment.conf_threshold;
++  vector<ShuffleSum> sums(edge_list.size());
++  vector<double> I_prime_original(edge_list.size());
++  for (size_t e = 0; e < edge_list.size(); ++e) {
++    auto info = edge_list[e].getEdge().shared_info;
++    I_prime_original[e] = info->Ixy_ui - info->kxy_ui;
++    // Edges with I' < ln(1 / conf_threshold) are cut without any shuffle
++    tryToDecide(sums[e], I_prime_original[e], n_shuffles, threshold);
++  }
++
+ #ifdef _OPENMP
+ #pragma omp parallel
+ #endif
+@@ -54,7 +104,7 @@
+ #ifdef _OPENMP
+ #pragma omp for schedule(static)
+ #endif
+-    for (int nb = 0; nb < environment.n_shuffles; nb++) {
++    for (int nb = 0; nb < n_shuffles; nb++) {
+       // Shuffle the dataset for selected columns
+       for (auto col : columns_to_shuffle) {
+         // [0, 1, ..., n_samples - 1]
+@@ -73,9 +123,16 @@
+         }
+       }
+       double NIxy_ui, k_xy_ui;
+-      // evaluate the mutual information for every edge
+-      for (const auto& edge : edge_list) {
+-        int X = edge.X, Y = edge.Y;
++      // evaluate the mutual information for every edge not yet decided
++      for (size_t e = 0; e < edge_list.size(); ++e) {
++        bool decided;
++#ifdef _OPENMP
++#pragma omp critical(confidence_sums)
++#endif
++        decided = sums[e].decided;
++        if (decided) continue;
++
++        int X = edge_list[e].X, Y = edge_list[e].Y;
+         auto xy_ui = getCondMutualInfo(
+             X, Y, vector<int>(), shuffled_data, shuffled_data_idx, environment);
+         NIxy_ui = xy_ui.I;
+@@ -85,17 +142,26 @@
+         if (I_prime_shuffle < 0) {
+           I_prime_shuffle = 0;
+         }
+-        // n_shuffles times
+ #ifdef _OPENMP
+-#pragma omp atomic
++#pragma omp critical(confidence_sums)
+ #endif
+-        edge.getEdge().shared_info->exp_shuffle += exp(-I_prime_shuffle);
++        {
++          auto& s = sums[e];
++          if (!s.decided) {
++            s.sum += exp(-I_prime_shuffle);
++            ++s.n_done;
++            tryToDecide(s, I_prime_original[e], n_shuffles, threshold);
++          }
++        }
+       }
+     }
+   }  // omp parallel
+-  // evaluate average
+-  for (const auto& edge : edge_list)
+-    edge.getEdge().shared_info->exp_shuffle /= environment.n_shuffles;
++  // After all the shuffles, lower and upper bounds are equal (sum / n), so
++  // every edge is decided; an undecided edge would only come from n_shuffles = 0
++  for (size_t e = 0; e < edge_list.size(); ++e) {
++    edge_list[e].getEdge().shared_info->exp_shuffle =
++        sums[e].decided ? sums[e].value : sums[e].sum / n_shuffles;
++  }
+ }
+ 
+ void confidenceCut(Environment& environment) {

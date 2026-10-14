@@ -1,0 +1,943 @@
+---
+title: "CausalCCC step by step"
+subtitle: "From a raw count matrix to a causal network around ligand–receptor pairs: preprocessing, pitfalls, and how to choose the settings of each function"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-fold: false
+execute:
+  warning: true
+---
+
+## Goal and running example
+
+[CausalCCC](https://miic.curie.fr/causalCCC.php) (Dupuis *et al.*, *NAR* 2025) learns, with the causal network method
+MIIC, the intracellular genes linked to the ligands of sender cells and to the receptors of receiver cells. This
+tutorial goes through every step, says what to check at each one, and measures what each setting changes.
+
+The running example is **case study 2 of the paper**: fibroblasts, T cells and dendritic cells (DCs) from the skin of
+atopic dermatitis patients (He *et al.* 2020), with 43 ligand–receptor (L-R) pairs from CellChat. We use it because we
+know the answer: notebooks `case2/03` to `case2/09` rebuilt the authors' input exactly, so every setting can be scored
+against the published one.
+
+```
+raw counts ─► QC, annotation ─► L-R pairs ─► gene selection (MI) ─► mosaic table + state order ─► MIIC ─► reading
+ section 1      sections 2–3      section 4      section 5               sections 6–7                section 8   section 9
+```
+
+The package has six functions, all used below; the paper describes none of their settings in detail.
+
+| Function | Role | Section |
+| --- | --- | --- |
+| `causalCCC.links()` | L-R pairs with LIANA | 4 |
+| `causalCCC.MIselection()` | genes sharing the most mutual information (MI) with features of interest | 5 |
+| `causalCCC.mosaic()` | the cells × variables table, `NA` outside each cell type's genes | 6–7 |
+| `causalCCC.state_order()` | type (discrete / continuous) and group of each variable | 6–7 |
+| `causalCCC.layout()` | drawing layout for the web server (cosmetic) | 6 |
+| `causalCCC.wrapper()` | all the above for **one** sender and **one** receiver population | 6 |
+| `miic()` (package `miic`, branch `causalccc`) | the causal network | 8 |
+
+::: {.callout-note}
+## Running time
+First rendering: about 15 minutes for the gene selection (section 6) and about 40 minutes for the nine MIIC runs (section
+8). Every result is saved in `results/tutorial/` and reloaded afterwards; delete a file to recompute it. The full
+three-population network (section 7) takes 1 to 3 hours and is not run here (command given).
+:::
+
+## Setup
+
+Three traps before starting:
+
+- **`miic` must be attached before `causalCCC`.** `causalCCC.MIselection()` calls `miic()` without importing it.
+- **SeuratObject ≥ 5.3.** `causalCCC.MIselection()` and `causalCCC.mosaic()` read the counts with
+  `GetAssayData(slot = "counts")`, which is now an error (`slot` became `layer`). `patch_causalccc_all()` makes
+  corrected copies of these two functions *and of the wrapper*, so that the wrapper calls the corrected copies. The
+  installed package is not modified.
+- **A bug of the wrapper with two or more metadata.** `causalCCC.MIselection()` computes MI with every column of its
+  table, metadata included, so a metadata column (here `labels`, which shares a lot of MI with `condition`) can come
+  back among the selected "genes". The wrapper then looks for it in the count matrix and stops with
+  `column not found: [labels]`, after the whole MI computation. The patched wrapper removes the metadata from the
+  selected genes. When you call `causalCCC.MIselection()` yourself, do the same (`setdiff(genes, metadata)`).
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(miic)
+library(causalCCC)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))                       # select_genes(), link_name(), drawings ...
+source(file.path(root, "scripts", "tutorial", "tutorial_helpers.R"))   # functions of this tutorial
+
+patch_causalccc_all()
+
+job_dir     <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")   # the authors' files
+results_dir <- file.path(root, "results", "tutorial")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+cell_types <- c("Fibroblasts", "T_cell", "DCs")
+```
+
+# Part 1 – Preparing the data
+
+## 1. CausalCCC needs raw counts
+
+**Why.** `causalCCC.MIselection()` and `causalCCC.mosaic()` read the `counts` layer, and MIIC computes mutual
+information on these values (it discretises continuous variables itself). Normalised, scaled, SCTransform or
+integrated values must not be used: they are not what the method was designed for, and log-normalisation
+introduces a dependence on library size that differs between genes.
+
+Our data is CellChat's `data_humanSkin`. Is it raw?
+
+```{r}
+#| label: load-data
+
+load(file.path(root, "data", "case2", "cellchat", "data_humanSkin_CellChat.rda"))
+norm <- data_humanSkin$data
+meta <- data_humanSkin$meta
+
+dim(norm)
+summary(norm@x)                         # non-zero values
+all(norm@x == round(norm@x))            # whole numbers?
+```
+
+No: the values are log(1 + 10,000 × count / library size). **Check this on any dataset before going further.**
+
+**Recovering counts.** In each cell, the smallest non-zero value is almost surely a count of 1. That gives the
+library size, then every count. `recover_counts()` does it (method of notebook `case2/05`).
+
+```{r}
+#| label: recover-counts
+
+counts <- recover_counts(norm, scale = 1e4)
+attr(counts, "max_rounding_error")      # distance to the nearest whole number before rounding
+summary(colSums(counts))                # library sizes
+```
+
+The values become whole numbers to within rounding noise, so the normalisation is exactly undone. This only works if
+(1) the scale factor is known (1e4 for Seurat and CellChat, 1e5 in some atlases, for example the thymus atlas of Park
+*et al.* 2020), (2) all the genes used for the normalisation are still in the matrix, and (3) the values were not
+scaled, regressed or integrated. Check that the maximum rounding error is tiny; if it is not, the counts cannot be
+recovered and the raw matrix must be found (GEO, the authors, or re-quantification from FASTQ files).
+
+::: {.callout-tip}
+## Starting from a real raw matrix (10x, kallisto|bustools, AnnData)
+The skeleton below (not run) keeps the raw counts untouched while normalising only for clustering and annotation.
+:::
+
+```{r}
+#| label: raw-skeleton
+#| eval: false
+
+# 10x / kallisto|bustools output
+raw <- Read10X("path/to/filtered_feature_bc_matrix")
+so  <- CreateSeuratObject(raw, min.cells = 3, min.features = 200)
+# ... QC (section 2), doublets, then:
+so <- NormalizeData(so) |> FindVariableFeatures() |> ScaleData() |> RunPCA()   # for clustering only
+# After IntegrateLayers() (Seurat 5), counts are split into one layer per sample: join them before CausalCCC,
+# otherwise GetAssayData(layer = "counts") does not return all cells.
+so <- JoinLayers(so)
+# AnnData from scanpy: keep adata.layers["counts"] = adata.X.copy() BEFORE normalize_total(), and export that layer.
+```
+
+**Gene names.** CausalCCC matches L-R genes to the row names of the count matrix by exact name, and drops silently
+those it does not find (section 4). Check for duplicated names, `make.unique()` suffixes (`.1`), and that the matrix
+and the L-R resource use the same annotation: in case study 1, four genes had been renamed between annotations
+(for example Gnb2l1 → Rack1), and our kallisto run of case study 2 had ATP5F1E instead of ATP5E.
+
+```{r}
+#| label: gene-names
+
+c(genes = nrow(counts),
+  duplicated_names = sum(duplicated(rownames(counts))),
+  make_unique_suffix = sum(str_detect(rownames(counts), "\\.[0-9]+$")))
+str_subset(rownames(counts), "\\.[0-9]+$")
+```
+
+Names ending in `.1`, `.2`... are either genuine names or the trace of `make.unique()` applied to duplicated symbols,
+in which case two genes shared one symbol upstream. Here all seven are genuine clone-based lncRNA names
+(such as CTD-2201I18.1), and none is an L-R gene.
+
+## 2. Quality control on raw counts
+
+CausalCCC has no QC of its own: every cell of the selected types enters the network. Cells that are empty droplets,
+doublets or damaged add spurious dependencies (a doublet expresses the genes of two cell types).
+
+```{r}
+#| label: seurat-object
+#| warning: false
+
+meta$cell_type <- recode(as.character(meta$labels),
+  "APOE+ FIB" = "Fibroblasts", "FBN1+ FIB" = "Fibroblasts", "COL11A1+ FIB" = "Fibroblasts", "Inflam. FIB" = "Fibroblasts",
+  "TC" = "T_cell", "Inflam. TC" = "T_cell", "CD40LG+ TC" = "T_cell", "NKT" = "T_cell",
+  "cDC1" = "DCs", "cDC2" = "DCs", "LC" = "DCs", "Inflam. DC" = "DCs")
+meta$labels <- as.character(meta$labels)
+
+so <- CreateSeuratObject(counts = counts, meta.data = meta)
+
+# Are the mitochondrial and ribosomal genes in the matrix?
+c(mitochondrial_genes = sum(str_detect(rownames(so), "^MT-")), ribosomal_genes = sum(str_detect(rownames(so), "^RP[SL]")))
+
+so@meta.data |>
+  group_by(cell_type) |>
+  summarise(cells = n(),
+            median_counts = median(nCount_RNA), min_counts = min(nCount_RNA),
+            median_genes = median(nFeature_RNA), min_genes = min(nFeature_RNA), max_genes = max(nFeature_RNA)) |>
+  knitr::kable(digits = 1)
+```
+
+```{r}
+#| label: qc-plot
+#| fig-width: 10
+#| fig-height: 3.5
+
+so@meta.data |>
+  select(cell_type, nCount_RNA, nFeature_RNA) |>
+  pivot_longer(-cell_type) |>
+  ggplot(aes(cell_type, value, fill = cell_type)) +
+  geom_violin(scale = "width", show.legend = FALSE) +
+  scale_fill_manual(values = cell_type_colours) +
+  facet_wrap(~name, scales = "free_y") +
+  labs(x = NULL, y = NULL) +
+  theme_minimal()
+```
+
+**The matrix has no mitochondrial and no ribosomal genes**: they were removed before CellChat normalised the data, so
+the library sizes recovered in section 1 exclude them. The mitochondrial filter cannot be checked on this dataset, and
+a `PercentageFeatureSet(pattern = "^MT-")` of 0 would mean missing genes, not healthy cells. Check that these genes are
+present before computing QC metrics.
+
+This dataset was already filtered by its authors, so we only look. On a new dataset, typical filters are:
+
+| Filter | Typical threshold | Our kallisto run of case study 2 | Comment |
+| --- | --- | --- | --- |
+| genes per cell | > 200 (empty droplets) | 200 < genes < 6,000 | Park 2020: > 500 genes and > 2,000 counts |
+| upper bound on genes or counts | > 6,000–7,000 genes removed | 6,000 | a crude doublet filter |
+| mitochondrial % | < 5–20 %, tissue dependent | < 15 % (skin) | dissociated tissues tolerate more |
+| doublets | Scrublet (Python) or scDblFinder (R), per sample | Scrublet | not installed here, so not run |
+| genes | detected in ≥ 3 cells | 3 | |
+
+Set the thresholds **per cell type** when the types differ a lot in size (DCs have about four times the counts of T cells
+here), and filter **before** recovering or storing the counts layer that CausalCCC will read.
+
+**Detection of the L-R genes.** MI needs variation: a gene detected in a handful of cells carries almost no
+information, and its links will rest on few cells. Check the fraction of cells expressing each ligand and receptor
+in its own cell type.
+
+```{r}
+#| label: detection
+
+lr_pairs <- read_tsv(file.path(job_dir, "clean_interact_edges.tsv"),
+                     col_names = c("ligand", "receptor"), show_col_types = FALSE)
+split_var <- function(v) tibble(variable = v, gene = str_remove(v, "_(Fibroblasts|T_cell|DCs)$"),
+                                cell_type = str_extract(v, "(Fibroblasts|T_cell|DCs)$"))
+lr_roles <- bind_rows(split_var(lr_pairs$ligand) |> mutate(role = "ligand"),
+                      split_var(lr_pairs$receptor) |> mutate(role = "receptor")) |>
+  distinct()
+
+detection <- lr_roles |>
+  mutate(detected_in = map2_dbl(gene, cell_type, \(g, t) mean(counts[g, meta$cell_type == t] > 0))) |>
+  arrange(detected_in)
+detection |> mutate(detected_in = scales::percent(detected_in, 1)) |> head(10)
+```
+
+`r sum(detection$detected_in < 0.1)` of the `r nrow(detection)` L-R genes are detected in fewer than 10 % of the cells
+of their type (for example CCL19 in fibroblasts). They are kept because the L-R pair needs them, but links around them
+deserve caution. In fibroblasts, CCL19 is detected in `r sum(counts["CCL19", meta$cell_type == "Fibroblasts"] > 0)` cells.
+
+**Ribosomal and mitochondrial genes.** They are highly expressed in every cell and follow library size, so they share
+MI with almost any gene and invade the selection. In case study 1 the default selection contained 33 ribosomal genes,
+none of which the authors kept (notebook `case1/03`); removing them before the selection was needed to reproduce the
+authors' input (notebook `case1/04`). This dataset has none, so the question does not arise here. On your data, count
+them among the best-ranked genes of the MI tables (section 5) and decide **before** the selection.
+
+## 3. Populations and metadata
+
+`interact_ident` is the metadata column that names the populations; senders and receivers are levels of it. Two
+properties of the populations matter.
+
+**Size.** MIIC needs enough cells to detect dependencies: with few cells, only strong links survive. The paper's
+smallest population has 151 cells (case study 3). Here:
+
+```{r}
+#| label: populations
+
+table(meta$cell_type, meta$condition)
+```
+
+**Confounders.** Cells were pooled across conditions (LS = lesional, NL = non-lesional) and subtypes. Genes that
+differ between conditions or subtypes are then dependent through them; giving the condition and the subtype to MIIC
+as **metadata variables** lets it explain those dependencies instead of linking genes directly. The DCs are 90 %
+lesional, so in DCs the condition is nearly constant and carries little information; this also means DC links
+mostly describe lesional skin. When a metadata column is almost confounded with the cell type (for example the
+developmental stages of the thymus atlas), it cannot be separated from it.
+
+**Library size.** Raw counts of most genes increase with the number of counts of the cell. That shared factor
+creates dependencies between genes that are not regulation. MIIC does not correct for it. We measure it on the genes
+the authors selected for DCs:
+
+```{r}
+#| label: library-size
+
+authors_mosaic <- read_tsv(file.path(job_dir, "input.tsv"), guess_max = Inf, show_col_types = FALSE)
+row_type <- case_when(!is.na(authors_mosaic$labels_Fibroblasts) ~ "Fibroblasts",
+                      !is.na(authors_mosaic$labels_T_cell)      ~ "T_cell",
+                      !is.na(authors_mosaic$labels_DCs)         ~ "DCs")
+col_type <- column_cell_type(authors_mosaic, row_type)
+strip    <- function(v) str_remove_all(v, "_(Fibroblasts|T_cell|DCs)")
+
+# The authors' genes of each cell type (without metadata, suffixes and duplicated copies)
+authors_genes <- map(set_names(cell_types), \(t) {
+  unique(strip(names(authors_mosaic)[col_type == t & !str_detect(names(authors_mosaic), "^(labels|condition)_")]))
+})
+
+dc_cells <- which(meta$cell_type == "DCs")
+cor_with_depth <- map_dbl(authors_genes$DCs, \(g) cor(counts[g, dc_cells], so$nCount_RNA[dc_cells], method = "spearman"))
+summary(cor_with_depth)
+```
+
+Most selected genes correlate positively with library size (median Spearman correlation
+`r round(median(cor_with_depth), 2)`). The published analyses do not correct for it. A possible safeguard, not used by
+the authors, is to add a discretised library size (for example its tertiles) as a metadata variable, so that MIIC can
+use it as a common cause.
+
+## 4. Ligand–receptor pairs
+
+CausalCCC does not infer communication itself: it takes L-R pairs as given. Two options:
+
+1. **`causalCCC.links()`**, which calls LIANA on the Seurat object (not run here, because the case study used
+   CellChat):
+
+```{r}
+#| label: links-example
+#| eval: false
+
+causalCCC.links(so, species = "human", assay_name = "RNA", interact_ident = "cell_type",
+                senders = "Fibroblasts", receivers = "DCs",
+                CCC_method = "cellphonedb",  # or connectome, logfc, natmi, sca
+                n_CCClinks = 30)             # pairs kept, ranked by the method's score
+```
+
+| Argument | Effect | Advice |
+| --- | --- | --- |
+| `CCC_method` | ranking score: `lr.mean` (cellphonedb), `prod_weight` (natmi), `LRscore` (sca), `weight_sc` (connectome), `logfc_comb` (logfc) | only cellphonedb and natmi also filter on p ≤ 0.05; the other three keep the top pairs whatever their significance |
+| `n_CCClinks` | number of pairs kept (default 30 here, **20** when called through the wrapper) | each extra ligand or receptor adds MI computations (about one minute each) and genes to the network |
+| `species` | `"mouse"` converts the resource to mouse orthologues | failed inside OmnipathR for case study 1 (mouse); give the pairs yourself then |
+
+2. **Your own pairs** (CellChat, CellPhoneDB, NicheNet...), as a data frame with columns `ligands` and `receptors`.
+
+Checks before using them:
+
+- **Gene names.** The wrapper keeps only the ligands and receptors found in the row names of the count matrix, without
+  a warning. Complexes must be split into their subunits (the wrapper does it for LIANA receptors, separated by `_`,
+  but not for ligands).
+- **One table per direction.** The wrapper handles one sender and one receiver. Here the 43 pairs span six directions:
+
+```{r}
+#| label: directions
+
+directions <- lr_pairs |>
+  transmute(sender = str_extract(ligand, "(Fibroblasts|T_cell|DCs)$"),
+            receiver = str_extract(receptor, "(Fibroblasts|T_cell|DCs)$"),
+            ligand = strip(ligand), receptor = strip(receptor))
+
+directions |>
+  group_by(sender, receiver) |>
+  summarise(pairs = n(), ligands = n_distinct(ligand), receptors = n_distinct(receptor),
+            receptor_order = paste(unique(receptor), collapse = " "), .groups = "drop")
+
+# Every L-R gene is in the matrix
+all(c(directions$ligand, directions$receptor) %in% rownames(counts))
+```
+
+Note the **order** of the receptors: the wrapper uses only the first 8 ligands and the first 8 receptors of a direction
+as features of interest (section 5). Fibroblasts → DCs and T cells → DCs have more than 8 receptors.
+
+# Part 2 – Choosing the genes
+
+## 5. Gene selection: `causalCCC.MIselection()`
+
+### What it computes
+
+For one population (`oneinteract`), with a list of **features of interest** (`goi`, the ligands or receptors, plus the
+metadata of `metadata_list`):
+
+1. MI between each feature of interest and **every gene** of the matrix, computed by `miic()` without orientation, in
+   blocks of 100 genes (the `info_shifted` value of each pair). A variable with 5 or fewer distinct values is treated as
+   discrete. At most 30 features of interest. `n_threads = 8` is fixed inside the function.
+2. The **3 genes with the highest MI with each feature of interest**.
+3. The **`n_genes` genes with the highest MI with any feature of interest**. Default:
+   `max(15, min(4 × length(goi), 100))`.
+4. Only genes with MI above `bit_thresold` (sic, default 0.001).
+
+Step 1 takes about a minute per feature of interest; steps 2–4 are instant. So the efficient way to explore settings
+is to compute the MI table once (`return_full = TRUE`, or `save = TRUE` which writes `<population>_MI_table.csv`) and
+redo steps 2–4, which `select_genes()` (in `scripts/helpers.R`) reproduces line by line.
+
+One subtlety: the MI table contains a row for **every column** of the population's table, metadata included. The MI
+tables reused here were computed with both metadata, so `labels` is a candidate "gene" in them; in a call with
+`condition` only, it is not. We check `select_genes()` on one small call, removing `labels` from the candidates to
+match it:
+
+```{r}
+#| label: mi-selection-live
+
+# MI tables of every gene with every ligand, receptor and metadata of each cell type (notebook case2/05, 30 minutes)
+mi_tables <- readRDS(file.path(root, "results", "case2", "05_rebuild_input", "mi_tables.rds"))
+
+check_file <- file.path(results_dir, "miselection_check.rds")
+if (!file.exists(check_file)) {
+  invisible(capture.output(suppressMessages(
+    package_genes <- causalCCC.MIselection(so, assay_name = "RNA", interact_ident = "cell_type", oneinteract = "DCs",
+                                           goi = "CXCR4", metadata_list = "condition"))))
+  saveRDS(package_genes, check_file)
+}
+package_genes <- readRDS(check_file)
+
+our_genes <- select_genes(filter(mi_tables, cell_type == "DCs", variables != "labels"), foi = c("CXCR4", "condition"),
+                          n_genes = default_n_genes("CXCR4"))
+identical(package_genes, our_genes)
+package_genes
+
+# With labels left among the candidates, it is selected as if it were a gene
+setdiff(select_genes(filter(mi_tables, cell_type == "DCs"), foi = c("CXCR4", "condition"), n_genes = 15), package_genes)
+```
+
+This is the origin of the wrapper bug patched in the Setup: a metadata column selected as a gene. Always remove the
+metadata from the selected genes (`setdiff(genes, metadata)`).
+
+### How many genes? (`n_genes`)
+
+The MI of the best genes falls quickly, then flattens. The curve of each feature of interest shows where the
+informative genes end:
+
+```{r}
+#| label: mi-curves
+#| fig-width: 10
+#| fig-height: 4
+
+mi_tables |>
+  filter(cell_type == "DCs", foi %in% c("CXCR4", "CD74", "CCR7", "ITGAX", "labels", "condition")) |>
+  group_by(foi) |>
+  slice_max(value, n = 100, with_ties = FALSE) |>
+  mutate(rank = row_number()) |>
+  ggplot(aes(rank, value, colour = foi)) +
+  geom_line() +
+  geom_vline(xintercept = 25, linetype = "dashed", colour = "grey50") +
+  labs(x = "rank of the gene", y = "MI with the feature of interest (info_shifted)", colour = "feature",
+       title = "DCs: MI of the 100 best genes of each feature of interest") +
+  theme_minimal()
+```
+
+The subtype `labels` shares more MI with genes than most ligands and receptors (it ranks 3rd or 4th in each cell type,
+behind highly expressed genes such as CD74, MIF or PPIA): as a feature of interest, it pulls in subtype markers.
+`condition` shares little MI with any gene (it ranks near the bottom in each cell type). The selection takes the top
+`n_genes` by their **highest** MI over all features, so it is dominated by the features with the largest MI.
+
+### Scoring the settings
+
+We now vary one setting at a time, in the protocol that reproduces the authors' input exactly (notebook `case2/07`):
+one selection per sender → receiver direction, pooled per cell type. Each setting is scored against the authors'
+selected genes (L-R genes excluded, since they are always kept): `missing` = authors' genes not selected, `extra` =
+genes selected but not used by the authors.
+
+```{r}
+#| label: settings-grid
+
+lr_genes  <- map(set_names(cell_types), \(t) lr_roles$gene[lr_roles$cell_type == t])
+both_meta <- c("labels", "condition")
+fixed     <- function(n) \(goi) n
+
+settings <- tribble(
+  ~setting,                                ~meta_s,     ~meta_r,     ~cap, ~n_genes,            ~drop,
+  "exact (authors): 25 genes, no cap, both metadata", both_meta, both_meta, Inf, list(fixed(25)), NA,
+  "n_genes = 15",                          both_meta,   both_meta,   Inf,  list(fixed(15)),     NA,
+  "n_genes = 50",                          both_meta,   both_meta,   Inf,  list(fixed(50)),     NA,
+  "n_genes = 100",                         both_meta,   both_meta,   Inf,  list(fixed(100)),    NA,
+  "n_genes = default formula",             both_meta,   both_meta,   Inf,  list(default_n_genes), NA,
+  "cap of 8 (wrapper)",                    both_meta,   both_meta,   8,    list(fixed(25)),     NA,
+  "no metadata",                           NULL,        NULL,        Inf,  list(fixed(25)),     NA,
+  "labels only",                           "labels",    "labels",    Inf,  list(fixed(25)),     NA,
+  "condition only",                        "condition", "condition", Inf,  list(fixed(25)),     NA,
+  "ribosomal + mitochondrial removed",     both_meta,   both_meta,   Inf,  list(fixed(25)),     "^(RP[SL]|MT-)",
+  "wrapper defaults (cap 8, default n_genes)", both_meta, both_meta, 8,    list(default_n_genes), NA)
+
+selections <- pmap(settings, \(setting, meta_s, meta_r, cap, n_genes, drop) {
+  if (!is.function(n_genes)) n_genes <- n_genes[[1]]   # tribble() keeps the function inside a list
+  select_by_direction(mi_tables, directions, meta_s, meta_r, cap = cap, n_genes = n_genes,
+                      drop = if (is.na(drop)) NULL else drop)
+}) |> set_names(settings$setting)
+
+authors_selected <- map(set_names(cell_types), \(t) setdiff(authors_genes[[t]], lr_genes[[t]]))
+
+imap(selections, \(s, name) score_selection(s, authors_selected, lr_genes) |> mutate(setting = name)) |>
+  list_rbind() |>
+  group_by(setting) |>
+  summarise(genes = sum(selected), missing = sum(missing), extra = sum(extra), jaccard = round(mean(jaccard), 2)) |>
+  arrange(match(setting, settings$setting)) |>
+  knitr::kable()
+```
+
+**One selection per direction or per cell type?** The alternative is a single selection per cell type with all its
+ligands and receptors together:
+
+```{r}
+#| label: per-cell-type
+
+per_cell_type <- map(set_names(cell_types), \(t) {
+  goi <- unique(lr_genes[[t]])
+  setdiff(select_genes(filter(mi_tables, cell_type == t), foi = c(goi, both_meta), n_genes = 25), both_meta)
+})
+score_selection(per_cell_type, authors_selected, lr_genes)
+```
+
+### What to retain
+
+- **`n_genes` is the main size knob.** Below 25, the authors' genes go missing; above, genes are added quickly (50
+  genes per run nearly doubles the network with no gain). Every gene costs MIIC time and adds weaker candidates.
+  With 3 to 10 genes of interest per run here, the default formula gives 15 to 40 genes per run. Pick `n_genes` from the
+  MI curves (where they flatten) and from the network size MIIC can handle (about 200 variables in 1–3 hours on one
+  thread; 51 variables in about 4 minutes, section 8).
+- **The cap of 8 is silent.** With more than 8 ligands or receptors in a direction, the extra ones get no selected
+  genes of their own: their top genes (for example those of TMEM219 and TNFRSF14 in DCs) disappear. Their order in
+  the L-R table decides which are dropped. Call `causalCCC.MIselection()` directly to avoid it (at most 30 features).
+- **Metadata as features of interest change the selection** (they bring subtype and condition markers). Without
+  them, about a fifth of the authors' genes are lost; `labels` carries most of the effect, `condition` adds a few genes. Keeping
+  them is what the authors did; it makes the network describe subtype structure as well as signalling.
+- **One selection per direction, not per cell type.** A single selection per cell type with all its ligands and
+  receptors keeps fewer genes per L-R gene, and loses up to 18 of the authors' genes in fibroblasts.
+- **Removing ribosomal and mitochondrial genes** changes nothing here, because the matrix has none (section 2); in
+  case study 1 it was essential.
+- **`bit_thresold`** only removes genes with essentially no MI; it never mattered in our tests.
+
+## 6. The wrapper, `causalCCC.wrapper()`, on one direction
+
+The wrapper chains sections 4 and 5 and builds the files for MIIC, for **one sender and one receiver**. Its arguments:
+
+| Argument | Default | What it does | Advice |
+| --- | --- | --- | --- |
+| `data_input` | | Seurat object with the raw counts in `assay_name` (the documentation also allows a data frame) | use a Seurat object (`CreateSeuratObject(counts, meta.data = meta)`): the data-frame path is broken, the wrapper looks for the L-R genes in `row.names(data_input)`, which are cell names, so it drops every pair (notebook `case2/05`) |
+| `interact_ident`, `senders_name`, `receivers_name` | `NULL` | population column and levels | always give all three (otherwise the first two levels of the active identity are taken) |
+| `do_CCC`, `CCC_method`, `n_CCClinks` | `FALSE`, cellphonedb, 20 | run `causalCCC.links()` (section 4); `do_CCC = TRUE` forces `do_MIselect = TRUE` | cellphonedb is used only with `do_CCC = TRUE`; by default no pair is inferred and `interact_edges` must be given (as below) |
+| `interact_edges` | `NULL` | data frame with columns `ligands`, `receptors` | required if `do_CCC = FALSE`; order matters (cap of 8) |
+| `do_MIselect` | `FALSE` | run the MI selection | otherwise give `genes_senders` and `genes_receivers` |
+| `n_genes_senders`, `n_genes_receivers` | `NULL` = default formula | `n_genes` of each selection (≤ 500) | section 5 |
+| `goi_senders`, `goi_receivers` | `NULL` | extra features of interest (a transcription factor, a marker...): genes are selected around them as around the ligands / receptors; they are added **before** the first 8 ligands / receptors | each one takes a place among the 8 |
+| `metadata_senders`, `metadata_receivers` | `list()` | **named list**: names = metadata columns, values = their levels in increasing order (written to the state order). The metadata are features of interest of the selection (they pull in their markers) and nodes of the network (a dependence due to the condition or the subtype goes through them instead of a direct gene–gene link, section 3) | a character vector is not accepted by `causalCCC.state_order()` |
+| `genes_senders`, `genes_receivers` | `NULL` | genes added to the selection, or the full lists if `do_MIselect = FALSE` | |
+| `save`, `plot` | `TRUE` | MI tables and heatmaps in `wd_path/MI_tables/` | keep `save = TRUE`: the tables let you redo the selection with other settings in seconds |
+| `do_layout`, `wd_path` | `FALSE`, working dir | layout for the web server; output folder `CausalCCC_files/` | |
+
+Hidden behaviours to know: the cap of 8; with two metadata or more it stops after the MI computation unless patched (see Setup); ligands and receptors missing from the matrix are dropped silently; a gene
+selected in both the sender and the receiver population of the run (for example B2M in fibroblasts and in DCs) is
+written as two columns, `B2M_senders` and `B2M_receivers`, while a gene selected on one side only keeps its plain name;
+metadata given on both sides are suffixed the same way; cells are shuffled with `sample()`, so set a seed.
+
+We run it on fibroblasts → DCs, the direction of CXCL12–CXCR4 (Figure 3 of the paper), with the default settings and
+both metadata.
+
+```{r}
+#| label: wrapper-run
+#| message: false
+
+pairs_fib_dc <- directions |> filter(sender == "Fibroblasts", receiver == "DCs") |>
+  transmute(ligands = ligand, receptors = receptor) |> as.data.frame()
+levels_of <- function(t) list(labels = sort(unique(meta$labels[meta$cell_type == t])), condition = c("NL", "LS"))
+
+wrapper_dir  <- file.path(results_dir, "wrapper_fibroblasts_dcs")
+wrapper_file <- file.path(wrapper_dir, "wrapper_output.rds")
+if (!file.exists(wrapper_file)) {
+  dir.create(wrapper_dir, showWarnings = FALSE)
+  set.seed(2026)
+  invisible(capture.output(suppressMessages(
+    wrapper_out <- causalCCC.wrapper(so, assay_name = "RNA", interact_ident = "cell_type",
+                                     senders_name = "Fibroblasts", receivers_name = "DCs",
+                                     interact_edges = pairs_fib_dc, do_MIselect = TRUE,
+                                     metadata_senders = levels_of("Fibroblasts"),
+                                     metadata_receivers = levels_of("DCs"),
+                                     save = TRUE, plot = TRUE, wd_path = wrapper_dir))))
+  saveRDS(wrapper_out, wrapper_file)
+}
+wrapper_out <- readRDS(wrapper_file)
+
+dim(wrapper_out$mosaic_table)
+count(wrapper_out$state_order, group, var_type)
+```
+
+What the cap of 8 did: the receptors used as features of interest are those of the MI table of DCs.
+
+```{r}
+#| label: wrapper-cap
+
+wrapper_mi <- map(c(Fibroblasts = "Fibroblasts", DCs = "DCs"), \(t)
+  read_tsv(file.path(wrapper_dir, "MI_tables", paste0(t, "_MI_table.csv")), show_col_types = FALSE))
+list(receptors_of_the_direction = unique(pairs_fib_dc$receptors),
+     receptors_used_for_selection = intersect(unique(pairs_fib_dc$receptors), unique(wrapper_mi$DCs$foi)))
+```
+
+BSG and TMEM219 (the 9th and 10th receptors) are in the network, but no gene was selected for them.
+
+```{r}
+#| label: wrapper-heatmap
+#| out-width: 100%
+
+knitr::include_graphics(file.path(wrapper_dir, "MI_tables", "DCs_MI_heatmap_filtered.png"))
+```
+
+How to read it. Rows: the features of interest of DCs (the receptors kept by the cap of 8, plus `labels` and
+`condition`). Columns: the genes selected for DCs. Colour: MI between the feature and the gene across DC cells (miic's
+`info_shifted`, which grows with the number of cells: compare colours within one figure, not across datasets). CD74
+dominates, through the MHC-II genes (HLA-DRA, HLA-DPB1, HLA-DQB1); CCR7, ITGAX and ITGAM bring almost no genes of their
+own, and `condition` shares almost no MI with any gene. `labels` appears as a column: this is the metadata selected as
+a gene, which the patched wrapper then removes.
+
+Suffixes and the variable names of the output:
+
+```{r}
+#| label: wrapper-names
+
+str_subset(names(wrapper_out$mosaic_table), "_(senders|receivers)$")
+wrapper_out$interact_edges
+```
+
+## 7. Mosaic table and state order, for more than two populations
+
+### The mosaic table
+
+One row per cell, one column per variable; a sender gene is `NA` in receiver cells and the reverse. MIIC uses, for each
+pair of variables, the cells where both are observed: two genes of different populations are never observed together,
+so they can only be linked through the L-R pairs given in `interact_edges`.
+
+```{r}
+#| label: mosaic-structure
+
+mosaic_w <- wrapper_out$mosaic_table
+is_sender_row <- !is.na(mosaic_w$labels_senders)
+# a ligand and a receptor, with the names the wrapper gave them
+ligand_col   <- str_subset(wrapper_out$interact_edges$ligands, "^CXCL12")[1]
+receptor_col <- str_subset(wrapper_out$interact_edges$receptors, "^CXCR4")[1]
+tibble(rows = c("sender cells", "receiver cells"),
+       n = c(sum(is_sender_row), sum(!is_sender_row)),
+       !!paste(ligand_col, "observed")   := c(mean(!is.na(mosaic_w[[ligand_col]][is_sender_row])),
+                                              mean(!is.na(mosaic_w[[ligand_col]][!is_sender_row]))),
+       !!paste(receptor_col, "observed") := c(mean(!is.na(mosaic_w[[receptor_col]][is_sender_row])),
+                                              mean(!is.na(mosaic_w[[receptor_col]][!is_sender_row]))))
+```
+
+### The state order and the discrete rule
+
+`causalCCC.state_order()` declares a variable **discrete if it has 5 or fewer distinct values, counting `NA`**. In a
+mosaic table every gene has `NA` in the other population, so a gene with 4 or fewer observed values (mostly 0) becomes
+discrete. This decides how MIIC treats it. To estimate MI with a continuous variable, MIIC cuts its values into
+intervals, choosing the number and the bounds of the intervals itself (not necessarily two, and not 0/1 by design). A
+discrete variable is not cut: each of its values (0, 1, 2, 3...) is a category of its own. Here:
+
+```{r}
+#| label: discrete-genes
+
+wrapper_out$state_order |>
+  filter(var_type == 0, group != "metadata") |>
+  mutate(observed_values = map_chr(var_names, \(v) paste(sort(unique(na.omit(mosaic_w[[v]]))), collapse = ",")))
+```
+
+No gene is discrete in this direction: the selected genes are well expressed. The rule matters for rare genes: in case
+study 1, Tgfb1 was discrete on the sender side only (notebook `case1/02`). Apply the same rule when you build the table
+yourself (as below), otherwise the network changes.
+
+### Several directions
+
+The case study has six directions. Running the wrapper six times and pooling the tables by column name is how the
+authors' input was probably built, and the most likely origin of its **14 duplicated columns** (notebook `case2/05`,
+section 10). In one run, a gene selected in both populations gets a suffix and otherwise keeps its plain name, so the
+same gene of the same cell type can be suffixed in one run and plain in another. With the authors' selection, S100A6
+of fibroblasts is plain in the two directions with DCs, but suffixed in the two directions with T cells, which select
+it too. The authors' table holds two identical copies of it, `S100A6_Fibroblasts` and
+`S100A6_Fibroblasts_Fibroblasts`. All 14 duplicated genes are in this situation, but so are 25 genes that are not
+duplicated: the naming explains which genes *can* be duplicated, not exactly which ones are. The name also depends on
+the settings: with the wrapper's defaults (section 6), S100A6 is suffixed in fibroblasts → DCs too. Duplicates do
+not change the gene–gene links, but the two copies of a gene get contradictory orientations (87 of their 111 links),
+and the strength given to all L-R links is set by the duplicate pair (11,579 instead of 3,050; notebook `case2/09`).
+
+The safe way: select the genes per direction, pool them **per cell type**, and name every variable
+`<gene>_<cell type>`. `build_mosaic()` and `build_state_order()` do that with the rules of the package.
+
+```{r}
+#| label: three-populations
+
+exact <- selections[["exact (authors): 25 genes, no cap, both metadata"]]
+genes_per_type <- map(set_names(cell_types), \(t) unique(c(lr_genes[[t]], exact[[t]])))
+lengths(genes_per_type)
+
+set.seed(2026)
+mosaic3 <- build_mosaic(counts, meta, genes_per_type)
+roles3  <- lr_roles |> transmute(variable = paste0(gene, "_", cell_type), role)
+state3  <- build_state_order(mosaic3, roles3,
+                             levels = list(labels = sort(unique(meta$labels)), condition = c("NL", "LS")))
+edges3  <- lr_pairs   # names are already <gene>_<cell type>
+
+# Checks before MIIC
+row_type3 <- attr(mosaic3, "row_type")
+col_type3 <- column_cell_type(mosaic3, row_type3)
+c(variables                 = ncol(mosaic3),
+  duplicated_columns        = length(duplicated_columns(mosaic3, row_type3, col_type3)),
+  lr_genes_missing          = sum(!c(edges3$ligand, edges3$receptor) %in% names(mosaic3)),
+  authors_variables_missing = sum(!paste0(unlist(authors_genes), "_", rep(names(authors_genes), lengths(authors_genes))) %in% names(mosaic3)))
+count(state3, group, var_type)
+```
+
+The table has the authors' genes, each once (the authors' table has 238 columns: these 224 variables plus their 14
+duplicates). The three files are written in the server's format; MIIC on them takes 1–3 hours on one thread:
+
+```{r}
+#| label: write-three-populations
+
+files3 <- file.path(results_dir, "three_populations", c("input.tsv", "state_order.tsv", "interact_edges.tsv"))
+dir.create(dirname(files3[1]), showWarnings = FALSE)
+write_tsv(mosaic3, files3[1], na = "NA")
+write_tsv(state3, files3[2], na = "NA")
+write_tsv(edges3, files3[3], col_names = FALSE)
+```
+
+```bash
+Rscript scripts/run_miic.R results/tutorial/three_populations/input.tsv \
+  results/tutorial/three_populations/state_order.tsv results/tutorial/three_populations/interact_edges.tsv \
+  results/tutorial/three_populations
+```
+
+# Part 3 – The causal network
+
+## 8. MIIC settings, on a small network
+
+To compare MIIC settings in minutes, we build a small network around CXCL12–CXCR4: fibroblasts → DCs, the ligands
+CXCL12 and MIF, the receptors CXCR4, CD74 and CD44, and 12 genes per side selected from the wrapper's MI tables. We call
+the wrapper again with `do_MIselect = FALSE` and our gene lists (no MI computation).
+
+```{r}
+#| label: small-network
+#| warning: false
+#| message: false
+
+pairs_small <- data.frame(ligands   = c("MIF", "MIF", "MIF", "CXCL12"),
+                          receptors = c("CD74", "CD44", "CXCR4", "CXCR4"))
+small_genes <- list(
+  senders   = setdiff(select_genes(wrapper_mi$Fibroblasts, c("CXCL12", "MIF", both_meta), n_genes = 12), both_meta),
+  receivers = setdiff(select_genes(wrapper_mi$DCs, c("CXCR4", "CD74", "CD44", both_meta), n_genes = 12), both_meta))
+
+small_dir <- file.path(results_dir, "small_network")
+dir.create(small_dir, showWarnings = FALSE)
+set.seed(2026)
+invisible(capture.output(suppressMessages(
+  small <- causalCCC.wrapper(so, assay_name = "RNA", interact_ident = "cell_type",
+                             senders_name = "Fibroblasts", receivers_name = "DCs",
+                             interact_edges = pairs_small, do_MIselect = FALSE,
+                             genes_senders = small_genes$senders, genes_receivers = small_genes$receivers,
+                             metadata_senders = levels_of("Fibroblasts"), metadata_receivers = levels_of("DCs"),
+                             wd_path = small_dir))))
+
+# miic() reads interact_edges$ligand and interact_edges$receptor: rename the wrapper's columns
+small_edges <- small$interact_edges |> transmute(ligand = ligands, receptor = receptors)
+dim(small$mosaic_table)
+small_edges
+```
+
+::: {.callout-warning}
+## Column names of `interact_edges`
+`miic()` reads `interact_edges$ligand` and `interact_edges$receptor`. The wrapper writes `ligands` / `receptors`
+(which still works through R's partial matching of `$`, with a warning); any other names (`from`/`to`, `l`/`r`) make
+the run fail **at the very end**, after the whole computation.
+:::
+
+### The settings
+
+The web server runs MIIC with settings that differ from `miic()`'s defaults on three points (server job `script.sh`,
+notebooks `case1/02` and `case2/04`):
+
+| `miic()` argument | Default | Authors' server job | Meaning |
+| --- | --- | --- | --- |
+| `ori_proba_ratio` | 1 | **0.01** | an arrowhead is kept only if its probability is above 1/(1 + ratio): 0.5 by default, 0.99 on the server |
+| `n_shuffles` | 0 | **100** | number of permutations to measure the confidence of each link |
+| `conf_threshold` | 0 | **0.01** | links whose confidence ratio is above this are removed (needs `n_shuffles` > 0) |
+| `cplx` | `"nml"` | `"nml"` | complexity penalty: `"nml"` (normalised maximum likelihood) or `"mdl"` (minimum description length, close to BIC). **Any other value (for example `"bic"`) is replaced by the default with only a warning** |
+| `latent` | `"orientation"` | `"orientation"` | allow latent common causes when orienting (bidirected links `<->`); `"no"` forbids them, `"yes"` also uses them when removing links |
+| `consistent` | `"no"` | `"no"` | `"orientation"` / `"skeleton"` iterate until separating sets are consistent with the graph (slower) |
+| `test_mar`, `n_eff` | `TRUE`, -1 | same | missing-at-random test for `NA`; effective number of samples (-1 = automatic) |
+| `n_threads` | 1 | 1 | **keep 1**: 2 and 4 threads crashed with C stack errors on our inputs |
+| seed | none | none | only the permutations are random |
+
+We run the small network with the authors' settings, then change one setting at a time. Two runs test what should not
+matter: another seed (other permutations), and another order of the cells (the mosaic is shuffled by `sample()`).
+
+```{r}
+#| label: miic-runs
+#| message: false
+
+small_mosaic <- small$mosaic_table
+small_state  <- small$state_order
+run_file <- function(name) file.path(small_dir, paste0("miic_", name, ".rds"))
+run <- function(name, mosaic = small_mosaic, seed = 2026, ...)
+  run_miic_cached(run_file(name), mosaic, small_state, small_edges, seed = seed, ...)
+
+set.seed(7)
+shuffled_rows <- small_mosaic[sample(nrow(small_mosaic)), ]
+
+runs <- list(
+  "authors' settings (reference)"     = run("reference"),
+  "miic() defaults"                    = run("defaults", ori_proba_ratio = 1, n_shuffles = 0, conf_threshold = 0),
+  "no confidence filter"               = run("no_shuffles", n_shuffles = 0, conf_threshold = 0),
+  "ori_proba_ratio = 1"                = run("ori_ratio_1", ori_proba_ratio = 1),
+  "latent = no"                        = run("latent_no", latent = "no"),
+  "cplx = mdl"                         = run("mdl", cplx = "mdl"),
+  "consistent = orientation"           = run("consistent", consistent = "orientation"),
+  "other seed"                         = run("seed_7", seed = 7),
+  "other cell order"                   = run("rows_shuffled", mosaic = shuffled_rows))
+
+compare_runs(runs, "authors' settings (reference)", small_edges) |>
+  mutate(across(c(jaccard_links, same_orientation, same_causal), \(v) round(v, 2))) |>
+  knitr::kable()
+```
+
+`jaccard_links` = shared links / links in either network; `same_orientation` and `same_causal` are computed on the links
+shared with the reference. L-R links are excluded (they are imposed).
+
+`genuine_causes` is `NA` with `latent = "no"`: this version of `miic` reports no genuine causation in that mode.
+
+**What changes the network, and what does not:**
+
+- **Seed and cell order: nothing.** Another seed (other permutations) and another order of the cells give exactly the
+  reference network. The random parts of the pipeline do not matter at this size; the settings do.
+- **The confidence filter removes weak links.** Without permutations (`n_shuffles = 0`), MIIC keeps 9 more links,
+  all weak; the orientations of the shared links barely change.
+- **`ori_proba_ratio` sets how many arrows are drawn.** At 1 (the default, arrowhead probability > 0.5) more links are
+  oriented and genuine causations nearly double; at 0.01 (the server, > 0.99) only the clearest arrows remain.
+- **`miic()` with its defaults** combines both effects: more links, more arrows, more than twice the genuine causations.
+  A network run with the defaults (in R or with the server's default form) is therefore not comparable with the
+  published ones: always report these three settings.
+- **`latent = "no"`** turns the bidirected links (shared hidden causes) into ordinary ones and stops reporting genuine
+  causation.
+- **`consistent = "orientation"`** changes the links most here (Jaccard 0.85) and keeps a single genuine causation:
+  results obtained with and without it should not be mixed.
+- **`cplx = "mdl"` changes the network most**: it is four times faster, but it shares only half of the reference
+  links and turns many links into bidirected ones. NML is the penalty CausalCCC was published with; keep it.
+- **Invalid values are ignored.** A first version of this run used `cplx = "bic"`, which this version of `miic` does
+  not know: it silently ran with `"nml"` and returned the reference network. `run_miic_cached()` now stops when the
+  settings used differ from those requested; check `result$params` in your own runs.
+
+**Rule of thumb.** Fix the settings before looking at the network, use the server's (they are what the papers used),
+and treat any oriented link that depends on `ori_proba_ratio` as fragile.
+
+## 9. Reading the network
+
+The edge list (`all.edges.summary`) has one row per pair of variables examined. The columns that matter:
+
+| Column | Meaning |
+| --- | --- |
+| `type` | `P` = retained link; `N` = removed |
+| `info_shifted` | strength of the link (MI × number of cells, minus the complexity cost) |
+| `infOrt` | 1 = not oriented, 2 = x → y, -2 = y → x, 6 = bidirected (latent common cause) |
+| `is_causal` | `Y` = **genuine causation**: the arrow is supported by a downstream v-structure, not only by an arrowhead |
+| `proba` | arrowhead probabilities, written "x-side;y-side" (the opposite of the documentation) |
+| `confidence` | confidence ratio from the permutations (lower = more confident) |
+
+Two artefacts of the `causalccc` branch of `miic`:
+
+- **L-R placeholder rows.** Each L-R pair appears twice: a placeholder (strength 0, `Nxy_ai = 0`) and the imposed link.
+  `retained_links()` drops the placeholders (`Nxy_ai %in% 0`: use `%in%`, not `==`, because of `NA`).
+- **L-R strengths are not measured.** Every L-R link gets the strength of the strongest link of the network:
+
+```{r}
+#| label: lr-strength
+
+reference <- runs[["authors' settings (reference)"]]
+ref_links <- retained_links(reference, small_edges)
+ref_links |> filter(is_lr) |> select(x, y, info_shifted)
+max(ref_links$info_shifted[!ref_links$is_lr])
+```
+
+**"Upstream" and "downstream"** in the paper mean the position relative to the L-R link (sender side, receiver side),
+not a direction found by MIIC: links next to the receptor are often unoriented.
+
+The neighbourhood of the L-R pairs (diamonds), two links deep:
+
+```{r}
+#| label: neighbourhood
+
+side_of <- set_names(if_else(small_state$group %in% c("ligands", "senders genes") |
+                               str_detect(small_state$var_names, "_senders$"), "Fibroblasts", "DCs"),
+                     small_state$var_names)
+plot_neighbourhood(reference$all.edges.summary |> filter(!(link_name(x, y) %in% ref_links$link[ref_links$is_lr] & Nxy_ai %in% 0)),
+                   lr_links = ref_links$link[ref_links$is_lr],
+                   centres  = unique(c(small_edges$ligand, small_edges$receptor)),
+                   cell_type_of = side_of,
+                   label_of = \(v) str_remove(v, "_(senders|receivers)$"),
+                   max_distance = 2, title = "Fibroblasts → DCs, around CXCL12/MIF and CXCR4/CD74/CD44")
+```
+
+The direct neighbours of CXCL12 and CXCR4 (`direction` seen from the centre: `out` = centre → neighbour):
+
+```{r}
+#| label: neighbours
+
+intracellular <- ref_links |> filter(!is_lr)
+bind_rows(neighbors_of("CXCL12", intracellular), neighbors_of("CXCR4", intracellular)) |>
+  select(node, neighbor, direction, is_causal) |>
+  knitr::kable()
+```
+
+Even on this 51-variable network, CXCL12 is linked to CXCL14, CFH and CFD (oriented CXCL12 → CFD), and CXCR4 to RGS1
+and NR4A3: the neighbours the paper names for Figure 3 (notebook `case2/03`).
+
+CXCL12 also points to `labels_senders`, the fibroblast subtype. An arrow from a gene to a metadata variable is not a
+biological statement: CXCL12 is a marker of a subtype. Metadata that genes cannot cause (condition, patient, batch) can
+be declared **contextual** in the state order (`is_contextual = 1`), so that MIIC never orients links towards them.
+The published case studies did not do it (all variables have `is_contextual = 0`).
+
+**How much to trust what.** From the reproduction of case study 2 (notebooks `case2/06` and `case2/07`): with the
+same cells and slightly different gene selections, links are robust (Jaccard 0.85–0.92 per cell type), orientations of
+shared links mostly agree (96 %), but genuine causations are not (8 shared of 14 and 12). Read links first,
+orientations with care, and treat a single genuine causation as a hypothesis.
+
+## 10. Checklist
+
+| Step | Check / setting | Why |
+| --- | --- | --- |
+| Raw data | integer counts in the `counts` layer; recover them if only log-normalised values exist (known scale factor) | MI is computed on counts |
+| Raw data | `JoinLayers()` after Seurat 5 integration; never SCT, scaled or integrated values | the functions read one `counts` layer |
+| Raw data | unique gene names, same annotation as the L-R resource | unmatched L-R genes are dropped silently |
+| QC | filter empty droplets, damaged cells and doublets **per cell type** before building the table | every cell enters the network |
+| QC | detection rate of each L-R gene in its cell type (< 10 % = weak) | MI needs variation |
+| Populations | enough cells (hundreds), and metadata (condition, subtype, possibly binned library size) for pooled data | confounders create links |
+| L-R pairs | one table per sender → receiver direction; check the order (cap of 8) | the wrapper handles one direction |
+| Selection | `n_genes` from the MI curves and the network size you can afford (~25 per run here) | size and run time |
+| Selection | more than 8 ligands or receptors: call `causalCCC.MIselection()` directly | the wrapper drops the extra ones silently |
+| Selection | remove the metadata from the selected genes; patch the wrapper with two metadata or more | a metadata column can be selected as a gene |
+| Selection | remove ribosomal / mitochondrial genes from the candidates if they dominate the MI ranking | they follow library size |
+| Selection | keep the MI tables (`save = TRUE`) and redo the selection with `select_genes()` | seconds instead of hours |
+| Mosaic | several directions: pool per cell type, name `<gene>_<cell type>`, check for duplicated columns | duplicates make contradictory orientations |
+| Mosaic | discrete rule "≤ 5 values counting `NA`"; `set.seed()` before building | same rules as the package, reproducible order |
+| MIIC | `interact_edges` with columns `ligand`, `receptor`; `n_threads = 1` | late failure; crashes |
+| MIIC | check `result$params`: invalid values (`cplx = "bic"`) are replaced by the defaults | silent change of settings |
+| MIIC | metadata that genes cannot cause: `is_contextual = 1` | no arrows towards condition or batch |
+| MIIC | state the settings: `ori_proba_ratio`, `n_shuffles`, `conf_threshold` (server: 0.01, 100, 0.01) | they change orientations and the number of links |
+| Reading | drop L-R placeholder rows; ignore L-R strengths | artefacts of the `causalccc` branch |
+| Reading | trust links > orientations > genuine causations | robustness measured in case study 2 |
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

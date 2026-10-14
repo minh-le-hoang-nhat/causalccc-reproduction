@@ -1,0 +1,16 @@
+Patch for miic, branch causalccc, commit 5ca0b22 (notebook 10, change 1).
+initializeEdge() runs inside an OpenMP parallel loop (initializeSkeleton()), but the causalccc branch added a console
+print (Rcout) to it. R's API may only be called from the main thread; this print is the likely cause of the
+"C stack usage is too close to the limit" crashes with several threads. The print is removed; nothing else changes.
+Apply with: patch -p1 -d <miic source> < 01_no_rcout_in_omp.patch (see scripts/benchmarks/build_miic_variant.sh)
+
+--- a/src/skeleton.cpp	2025-01-23 07:40:59.000000000 -0500
++++ b/src/skeleton.cpp	2026-10-13 15:23:36.693998317 -0400
+@@ -61,7 +61,6 @@
+   }
+ 
+   if (environment.interactEdges(X, Y).status == 1) {
+-    Rcout << "Did not remove " << X << "---" << Y << "edge in initializeEdges() because status is " << environment.interactEdges(X, Y).status << "\n";
+     environment.edges(X, Y).status = 1;
+     environment.edges(Y, X).status = 1;
+     environment.edges(X, Y).status_init = 1;

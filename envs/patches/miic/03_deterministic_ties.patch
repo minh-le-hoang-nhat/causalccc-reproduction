@@ -1,0 +1,42 @@
+Patch for miic, branch causalccc, commit 5ca0b22 (notebook 10, change 3b).
+searchForBestContributingNode() compares candidate contributing nodes in parallel. When two candidates tie
+exactly (same score and same entropy, e.g. two identical columns), the original code keeps the one processed
+last (or first), so with several threads the choice depends on which thread finishes first. Exact ties are
+now broken by the position of the candidate in zi_list, as the sequential loop does: multithreaded runs then
+choose the same node as a one-thread run. Nothing changes with one thread.
+Apply with: patch -p1 -d <miic source> < 03_deterministic_ties.patch (see scripts/benchmarks/build_miic_variant.sh)
+
+--- a/src/get_information.cpp	2025-01-23 07:40:59.000000000 -0500
++++ b/src/get_information.cpp	2026-10-14 04:55:23.645434225 -0400
+@@ -317,6 +317,11 @@
+   // zero corresponds to 1/2 as the full score as defined in Verny et al., 2017
+   // (Supplementary Text)
+   info->Rxyz_ui = 0;
++  // Position in zi_list of the current top_z. With several threads, candidates
++  // are not compared in the order of zi_list; exact ties are then broken by
++  // this position, as the sequential loop would do (it keeps the last of the
++  // tied candidates if noise_vec[0] > 0, the first one otherwise).
++  int top_position = -1;
+ #ifdef _OPENMP
+ #pragma omp parallel for if (parallel && n_zi > environment.n_threads)
+ #endif
+@@ -331,15 +336,18 @@
+ {
+     if (score > info->Rxyz_ui) {
+       info->top_z = Z;
++      top_position = i;
+       info->Rxyz_ui = score;
+       info->top_raw_contribution = info3p / (info->Ixy - info->kxy);
+       info->top_contribution = info3p / (block.Ixy_ui - block.kxy_ui);
+     } else if (info->top_z != -1 && fabs(score - info->Rxyz_ui) < kEpsScore) {
+       double H_old = getEntropy(environment, info->top_z, X, Y);
+       double H_new = getEntropy(environment, Z, X, Y);
++      bool keep_later = environment.noise_vec[0] > 0;
+       if (H_new > H_old ||
+-          (fabs(H_new - H_old) < kEpsScore && environment.noise_vec[0] > 0)) {
++          (fabs(H_new - H_old) < kEpsScore && (i > top_position) == keep_later)) {
+         info->top_z = Z;
++        top_position = i;
+         info->Rxyz_ui = score;
+         info->top_raw_contribution = info3p / (info->Ixy - info->kxy);
+         info->top_contribution = info3p / (block.Ixy_ui - block.kxy_ui);

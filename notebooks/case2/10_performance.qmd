@@ -1,0 +1,301 @@
+---
+title: "10 – Making CausalCCC faster without changing its results (case study 2)"
+subtitle: "Each change to the code tested on humanSkin: are the outputs changed, and how much time is saved?"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+The thymus dataset (255,901 cells) is much larger than the case studies, so before running CausalCCC on it we looked
+for ways to make it faster. We read the code of the pinned versions (`causalCCC` commit `0aa8586`, `miic` branch
+`causalccc` commit `5ca0b22`, C++ included) and implemented the changes that should give **exactly the same results**.
+
+Every change is tested on the humanSkin data of case study 2 in two ways:
+
+1. **Are the outputs changed?** Same retained links, orientations and genuine causations (MIIC); same MI values and
+   same selected genes (gene selection). Verdict: *identical*, *same decisions, values differ* (and which), or
+   *different network*.
+2. **What is the time delta?** Against a baseline run **on the same machine**, with GNU `time` (wall clock and peak
+   memory) and the time of each MIIC step recorded by `miic` itself.
+
+The runs are made outside this notebook, by scripts in `scripts/benchmarks/` (WSL Ubuntu 24.04, R 4.6.1, 12 cores,
+7.8 GB of memory), one after another so that timings are comparable:
+
+```bash
+# miic variants, each in its own library (~/R/miic_variants/<name>); the unpatched one is built the same way
+bash scripts/benchmarks/build_miic_variant.sh baseline
+bash scripts/benchmarks/build_miic_variant.sh no_rcout   envs/patches/miic/01_no_rcout_in_omp.patch
+bash scripts/benchmarks/build_miic_variant.sh early_conf envs/patches/miic/02_confidence_early_decision.patch
+bash scripts/benchmarks/build_miic_variant.sh combined   envs/patches/miic/01_no_rcout_in_omp.patch \
+                                                          envs/patches/miic/02_confidence_early_decision.patch
+bash scripts/benchmarks/run_benchmarks.sh      # MIIC runs (scripts/run_miic.R, settings of the server)
+bash scripts/benchmarks/run_mi_benchmarks.sh   # gene selection runs
+```
+
+**Inputs:** `results/benchmarks/` (written by these scripts), the stored results of notebooks 04 to 06, and the
+authors' server job. **Output:** `results/benchmarks/benchmarks.tsv`, one row per test.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found. Open the repository folder in Positron.")
+  root <- dirname(root)
+}
+source(file.path(root, "scripts", "helpers.R"))
+source(file.path(root, "scripts", "benchmarks", "compare_outputs.R"))
+
+bench_dir <- file.path(root, "results", "benchmarks")
+job_dir   <- file.path(root, "data", "case2", "causalccc_server_w0788tM1wzXGHLzNaKKa")
+
+# Wall-clock time (seconds) and peak memory (MB) from a GNU time -v report
+read_gnu_time <- function(file) {
+  lines <- readLines(file)
+  wall  <- str_match(lines, "Elapsed \\(wall clock\\) time \\(h:mm:ss or m:ss\\): (.*)$")[, 2] |> na.omit()
+  parts <- as.numeric(str_split_1(wall, ":"))
+  rss   <- str_match(lines, "Maximum resident set size \\(kbytes\\): ([0-9]+)")[, 2] |> na.omit()
+  tibble(wall_s = sum(parts * 60^rev(seq_along(parts) - 1)), peak_mb = as.numeric(rss) / 1024)
+}
+```
+
+## 1. Where does MIIC spend its time?
+
+`miic` records the time of its four steps: `init` (MI of every pair of variables), `iter` (search for conditional
+independences, i.e. for the genes that explain away a link), `cut` (confidence of each link, 100 shuffles), `ori`
+(orientations). The three networks already computed for case study 2:
+
+```{r}
+#| label: stored-steps
+
+stored <- c("04 authors' input"        = "04_rerun_miic",
+            "06 rebuilt input"          = "06_rebuilt_network",
+            "09 with the duplicates"    = "09_duplicates_experiment")
+imap(stored, \(dir, run) {
+  res <- readRDS(file.path(root, "results", "case2", dir, "miic_result.rds"))
+  as_tibble(as.list(round(res$time))) |> mutate(run = run, .before = 1)
+}) |> list_rbind() |>
+  mutate(iter_share = scales::percent(iter / total, accuracy = 1))
+```
+
+**`iter` takes 97–98 % of the time; the confidence cut, which we expected to be expensive, less than 0.5 %.**
+To see what inside `iter` costs, we sampled the call stack of a run 120 times (every 5 seconds, with `gdb`, on a
+separate copy of the baseline run): every sample was in `setBestContributingNode()`, 91 % in
+`computeInfo3PointAndScore()` (the optimal discretisation of 3-point information, the heart of MIIC), and only 5 % in
+the filtering of missing values (`filterNA()`). Skipping the pairs of genes of different cell types, which share no cell
+in a mosaic table (planned as an optional change), could therefore save at most about 5 %: we did not implement it.
+
+The one exact way left to speed up `iter` is to use several threads, which `miic` supports (OpenMP) but which crashed
+on our inputs. That is change 1.
+
+## 2. MIIC runs
+
+```{r}
+#| label: miic-runs
+
+miic_runs <- tibble(dir = list.dirs(file.path(bench_dir, "miic"), recursive = TRUE)) |>
+  filter(file.exists(file.path(dir, "status.txt"))) |>
+  mutate(dataset = basename(dirname(dir)),
+         run     = basename(dir),
+         variant = str_remove(run, "_t[0-9]+$"),
+         threads = as.integer(str_extract(run, "[0-9]+$")),
+         status  = map_chr(file.path(dir, "status.txt"), readLines)) |>
+  mutate(gnu_time = map(file.path(dir, "time.txt"), \(f) if (file.exists(f)) read_gnu_time(f) else tibble()),
+         steps    = map2(dir, status, \(d, s) {
+           if (s != "ok") return(tibble())
+           as_tibble(as.list(readRDS(file.path(d, "miic_result.rds"))$time))
+         })) |>
+  unnest_wider(c(gnu_time, steps))
+
+miic_runs |>
+  select(dataset, variant, threads, status, wall_s, peak_mb, init, iter, cut, ori, total) |>
+  mutate(across(where(is.double), round))
+```
+
+**Was the machine busy?** Another session rendered a notebook on the same machine during some runs.
+`scripts/benchmarks/log_load.sh` recorded the load every minute (from the end of the first run on); for each run, the
+share of minutes with another R process running, and the mean load (1-minute average):
+
+```{r}
+#| label: machine-load
+
+load <- read_lines(file.path(bench_dir, "load.log")) |>
+  str_match("^(\\S+ \\S+) (\\S+) \\S+ \\S+ R_processes=(\\d+) other_R=(\\d+)$") |>
+  as_tibble(.name_repair = ~ c("line", "time", "load1", "r_all", "other_r")) |>
+  transmute(time = ymd_hms(time, tz = "America/New_York"), load1 = as.numeric(load1), other_r = as.integer(other_r))
+
+queue <- read_lines(file.path(bench_dir, "queue.log")) |>
+  str_match("^(\\S+ \\S+) (start|end) results/benchmarks/miic/(\\w+)/(\\w+)") |>
+  as_tibble(.name_repair = ~ c("line", "time", "event", "dataset", "run")) |>
+  filter(!is.na(line)) |>
+  mutate(time = ymd_hms(time, tz = "America/New_York")) |>
+  select(-line) |>
+  pivot_wider(names_from = event, values_from = time, values_fn = last)
+
+run_load <- queue |>
+  mutate(minutes_logged = map2_int(start, end, \(s, e) sum(load$time >= s & load$time <= e)),
+         busy_share     = map2_dbl(start, end, \(s, e) mean(load$other_r[load$time >= s & load$time <= e] > 0)),
+         mean_load      = map2_dbl(start, end, \(s, e) mean(load$load1[load$time >= s & load$time <= e])))
+run_load |> mutate(busy_share = scales::percent(busy_share, accuracy = 1), mean_load = round(mean_load, 1))
+```
+
+**Stock `miic` with 4 threads** stops after a few seconds, in the middle of a "Did not remove …" message printed from a
+worker thread:
+
+```{r}
+#| label: crash-log
+
+tail(read_lines(file.path(bench_dir, "miic", "rebuilt", "baseline_t4", "run.log")), 6)
+```
+
+```{r}
+#| label: miic-tests
+
+result_of <- function(dataset, run) readRDS(file.path(bench_dir, "miic", dataset, run, "miic_result.rds"))
+ok        <- function(dataset, run) any(miic_runs$dataset == dataset & miic_runs$run == run & miic_runs$status == "ok")
+
+# The authors' published network, in the same form as a miic result
+authors_published <- list(all.edges.summary = read_tsv(file.path(job_dir, "edgesList.miic.summary.txt"),
+                                                         show_col_types = FALSE))
+
+# The first baseline run on the rebuilt input shared the machine with a notebook render (section 2): the reference is
+# the second baseline run, made on an idle machine, when it exists
+ref <- if (ok("rebuilt", "baseline_idle_t1")) "baseline_idle_t1" else "baseline_t1"
+
+tests <- tribble(
+  ~change,                         ~dataset,  ~reference,     ~new,
+  "stock miic, run again",         "rebuilt", "baseline_t1",  "baseline_idle_t1",
+  "stock miic, 4 threads",         "rebuilt", ref,            "baseline_t4",
+  "1: no Rcout in threads",        "rebuilt", ref,            "no_rcout_t1",
+  "1: no Rcout in threads",        "rebuilt", ref,            "no_rcout_t4",
+  "1: no Rcout in threads",        "rebuilt", ref,            "no_rcout_t8",
+  "2: early confidence decision",  "rebuilt", ref,            "early_conf_t1",
+  "1 + 2 combined",                "rebuilt", ref,            "combined_t8",
+  "1 + 2 combined",                "authors", "baseline_t1",  "combined_t8",
+  "stock miic vs published",       "authors", "published",    "baseline_t1",
+  "1 + 2 combined vs published",   "authors", "published",    "combined_t8") |>
+  filter(map2_lgl(dataset, new, ok), reference == "published" | map2_lgl(dataset, reference, ok))
+
+miic_tests <- tests |>
+  mutate(comparison = pmap(list(dataset, reference, new), \(d, r, n) {
+    ref <- if (r == "published") authors_published else result_of(d, r)
+    compare_miic(ref, result_of(d, n))
+  })) |>
+  unnest_wider(comparison) |>
+  left_join(select(miic_runs, dataset, new = run, new_s = wall_s, new_peak_mb = peak_mb), by = c("dataset", "new")) |>
+  left_join(select(miic_runs, dataset, reference = run, reference_s = wall_s), by = c("dataset", "reference")) |>
+  mutate(time_delta = if_else(is.na(reference_s), NA_character_,
+                              scales::percent(new_s / reference_s - 1, accuracy = 1)))
+
+miic_tests |>
+  select(change, dataset, reference, new, verdict, links_jaccard, orientations_changed, causal_changed,
+         links_confidence_diff, max_diff_confidence, reference_s, new_s, time_delta) |>
+  mutate(across(c(reference_s, new_s), round), links_jaccard = round(links_jaccard, 3)) |>
+  knitr::kable()
+```
+
+The comparisons with the authors' **published** file can only give "same decisions, values differ": the file stores
+values rounded to 6 decimals.
+
+## 3. Gene selection runs (change 3)
+
+`causalCCC.MIselection()` (original, with the Seurat 5 fix of notebook 05) against `compute_mi_table()`
+(`scripts/helpers.R`), on dendritic cells (629 cells, 3 repeats) and on the three cell types (as in notebook 05). The
+`fast` runs vary the block size; `original` always uses blocks of 100 genes.
+
+```{r}
+#| label: mi-runs
+
+mi_runs <- tibble(file = list.files(file.path(bench_dir, "mi"), pattern = "\\.rds$", full.names = TRUE)) |>
+  mutate(name      = str_remove(basename(file), "\\.rds$"),
+         method    = str_extract(name, "^[a-z]+"),
+         cell_type = str_match(name, "^[a-z]+_(.+)_b[0-9]+_r[0-9]+$")[, 2],
+         block     = as.integer(str_match(name, "_b([0-9]+)_")[, 2]),
+         repeat_   = as.integer(str_match(name, "_r([0-9]+)$")[, 2]),
+         mi_s      = map_dbl(file, \(f) attr(readRDS(f), "seconds"))) |>
+  mutate(gnu_time = map(str_replace(file, "\\.rds$", ".time.txt"), read_gnu_time)) |>
+  unnest_wider(gnu_time)
+
+mi_summary <- mi_runs |>
+  group_by(cell_type, method, block) |>
+  summarise(repeats = n(), mi_s = median(mi_s), wall_s = median(wall_s), peak_mb = max(peak_mb), .groups = "drop")
+
+# Test 1: every fast run against the first original run of the same cell type
+reference_mi <- mi_runs |> filter(method == "original", repeat_ == 1) |> select(cell_type, ref_file = file)
+mi_tests <- mi_runs |>
+  filter(method == "fast", repeat_ == 1) |>
+  inner_join(reference_mi, by = "cell_type") |>
+  mutate(comparison = map2(ref_file, file, \(r, n) compare_mi(readRDS(r), readRDS(n)))) |>
+  unnest_wider(comparison) |>
+  select(cell_type, block, verdict, rows_missing, max_diff_value, selected_genes_same)
+
+mi_summary |>
+  left_join(mi_tests, by = c("cell_type", "block")) |>
+  group_by(cell_type) |>
+  mutate(time_delta = scales::percent(wall_s / wall_s[method == "original"] - 1, accuracy = 1)) |>
+  ungroup() |>
+  mutate(across(c(mi_s, wall_s, peak_mb), round)) |>
+  knitr::kable()
+```
+
+**Against the MI tables of notebook 05.** The original run of the three cell types should give exactly the stored
+tables (computed on another machine), and so should the fast one:
+
+```{r}
+#| label: mi-vs-nb05
+
+nb05 <- readRDS(file.path(root, "results", "case2", "05_rebuild_input", "mi_tables.rds")) |>
+  mutate(foi = as.character(foi))
+mi_runs |>
+  filter(cell_type == "all", repeat_ == 1) |>
+  mutate(comparison = map(file, \(f) compare_mi(nb05, readRDS(f)))) |>
+  unnest_wider(comparison) |>
+  select(method, block, verdict, rows_missing, max_diff_value, selected_genes_same)
+```
+
+## 4. Summary table
+
+```{r}
+#| label: summary
+
+benchmarks <- bind_rows(
+  miic_tests |>
+    transmute(step = "MIIC", change, dataset, reference, new, verdict,
+              reference_s = round(reference_s), new_s = round(new_s), time_delta, peak_mb = round(new_peak_mb)),
+  mi_summary |>
+    filter(method == "fast") |>
+    left_join(mi_tests, by = c("cell_type", "block")) |>
+    left_join(filter(mi_summary, method == "original") |> select(cell_type, reference_s = wall_s), by = "cell_type") |>
+    transmute(step = "gene selection", change = "3: compute_mi_table()", dataset = paste("humanSkin", cell_type),
+              reference = "MIselection, block 100", new = paste("block", block), verdict,
+              reference_s = round(reference_s), new_s = round(wall_s),
+              time_delta = scales::percent(new_s / reference_s - 1, accuracy = 1), peak_mb = round(peak_mb)))
+
+write_tsv(benchmarks, file.path(bench_dir, "benchmarks.tsv"))
+knitr::kable(benchmarks)
+```
+
+## What we learned
+
+*(to be written once all the runs are done)*
+
+## Session information
+
+```{r}
+#| label: session-info
+
+sessionInfo()
+```

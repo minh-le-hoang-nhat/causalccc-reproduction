@@ -96,6 +96,62 @@ select_genes <- function(mi, foi, n_genes, bit_threshold = 0.001) {
 # Default number of genes of causalCCC.MIselection()
 default_n_genes <- function(goi) max(15, min(length(goi) * 4, 100))
 
+# The MI table of causalCCC.MIselection(return_full = TRUE) for one cell type, computed faster (notebook 10).
+# Each block of genes goes through the same miic() call as in MIselection (causalCCC commit 0aa8586, l. 556-630), so
+# the values are identical, but:
+# - the counts stay sparse and only one block of genes at a time is made dense (MIselection makes the whole matrix
+#   dense, then copies it again for every feature of interest);
+# - genes never detected in these cells are not computed: MIselection gives them 0;
+# - blocks of block_size genes instead of 100, so fewer miic() calls (the MI of a gene with a feature does not depend on
+#   the other genes of its block, notebook 07);
+# - with cache_dir (one folder per cell type), the table of each feature is saved, and reused by later calls.
+# counts: genes x cells sparse matrix of raw counts; meta: one row per cell, same order; cells: the cells of the type
+# (logical or indices); goi: genes of interest; metadata: columns of meta used both as features of interest and as
+# variables, like metadata_list in MIselection. Requires miic to be loaded.
+# Returns a tibble (variables, foi, value) with the rows of MIselection(return_full = TRUE) in the same order.
+compute_mi_table <- function(counts, meta, cells, goi, metadata = NULL, block_size = 1000, n_threads = 8,
+                             cache_dir = NULL) {
+  counts    <- counts[, cells, drop = FALSE]
+  meta      <- meta[cells, , drop = FALSE]
+  metadata  <- metadata[!map_lgl(metadata, \(m) all(is.na(meta[[m]])))]   # as MIselection, skip all-NA metadata
+  variables <- c(rownames(counts), metadata)
+  detected  <- c(rownames(counts)[Matrix::rowSums(counts != 0) > 0], metadata)
+  if (!is.null(cache_dir)) dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+
+  one_feature <- function(f) {
+    cache_file <- if (!is.null(cache_dir)) file.path(cache_dir, paste0(make.names(f), ".rds"))
+    if (!is.null(cache_file) && file.exists(cache_file)) return(readRDS(cache_file))
+
+    values <- if (f %in% metadata) meta[[f]] else as.numeric(counts[f, ])
+    todo   <- setdiff(detected, f)
+    mi     <- setNames(rep(0, length(variables)), variables)
+    for (block in split(todo, ceiling(seq_along(todo) / block_size))) {
+      genes   <- setdiff(block, metadata)
+      df_loop <- as.data.frame(as.matrix(Matrix::t(counts[genes, , drop = FALSE])))
+      for (m in intersect(block, metadata)) df_loop[[m]] <- meta[[m]]
+      df_loop <- df_loop[, block, drop = FALSE]
+      df_loop$onefoi <- values
+      # as in MIselection: discrete if not numeric or 5 distinct values or fewer; genes are consequences only, so
+      # miic computes the gene-feature pairs only
+      df_st <- data.frame(var_names      = names(df_loop),
+                          var_type       = map_dbl(df_loop, \(v) if (!is.numeric(v) || n_distinct(v) <= 5) 0 else 1),
+                          is_contextual  = 0,
+                          is_consequence = c(rep(1, length(block)), 0))
+      invisible(capture.output(capture.output(suppressMessages(suppressWarnings(
+        res <- miic(input_data = df_loop, state_order = df_st, orientation = FALSE, latent = "no",
+                    n_threads = n_threads))), type = "message")))
+      res <- res$all.edges.summary
+      mi[if_else(res$x == "onefoi", res$y, res$x)] <- round(res$info_shifted, 6)
+    }
+    mi[is.na(mi)] <- 0
+    table <- tibble(variables = variables, foi = f, value = unname(mi))
+    if (!is.null(cache_file)) saveRDS(table, cache_file)
+    table
+  }
+
+  map(unique(c(goi, metadata)), one_feature) |> list_rbind()
+}
+
 # ---- Drawing networks -------------------------------------------------------------------------------------------
 # Three functions: network_data() chooses the nodes and links to draw; plot_network_interactive() draws them with
 # visNetwork (in the HTML notebooks); plot_network_static() draws them with ggplot2 (PNG files for slides).
