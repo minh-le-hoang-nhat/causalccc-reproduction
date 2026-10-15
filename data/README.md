@@ -12,11 +12,13 @@ and how to obtain it, so that `data/` can be rebuilt from scratch.
 | Case study 1 | `bash scripts/case1/download_case1.sh`            | about 770 MB                             |
 |              | `bash scripts/case1/download_case1.sh --with-geo` | also GEO raw data, about 860 MB in total |
 | Case study 2 | `bash scripts/case2/download_case2.sh`            | about 5 MB                               |
+| Thymus       | `bash scripts/thymus/download_thymus.sh`          | about 4.2 GB, plus the unzipped archives |
+|              | `bash scripts/thymus/download_thymus.sh --skip-zenodo` | table S5 check and CellPhoneDB files only, < 1 MB |
 
 Run the scripts from the root of the repository. They can be run again at any time: complete files are skipped,
 interrupted downloads resume, and files that were modified since the last run are reported. Each download is recorded
-in `download_log.tsv` (date, file, URL) and all checksums in `checksums.md5` (case study 1) or `checksums_case2.md5`
-(case study 2). Check by hand with `cd data && md5sum -c checksums.md5`.
+in `download_log.tsv` (date, file, URL) and all checksums in `checksums.md5` (case study 1), `checksums_case2.md5`
+(case study 2) or `checksums_thymus.md5` (thymus). Check by hand with `cd data && md5sum -c checksums.md5`.
 
 ## Layout
 
@@ -26,6 +28,7 @@ data/
 ├── download_log.tsv                             when and where each file was downloaded
 ├── checksums.md5                                md5 checksums of the case study 1 files
 ├── checksums_case2.md5                          md5 checksums of the case study 2 files
+├── checksums_thymus.md5                         md5 checksums of the thymus files
 ├── case1/
 │   ├── causalccc_server_eaP9Br0llvzxN07zZZEC/   files of the authors' web server job
 │   ├── causalccc_server_ours_*_params/          our own server jobs (not needed, see below)
@@ -36,7 +39,11 @@ data/
 │   ├── causalccc_server_<code>/                 other server jobs, downloaded by the tutorial (section 8b)
 │   ├── cellchat/data_humanSkin_CellChat.rda     CellChat example dataset (copied by hand, see below)
 │   └── preprocessing/                           raw reads (fastq/), kallisto|bustools output (kb_out/), write/, cache/ – see notebooks/case2/preprocessing/README.md
-└── nichenet_v2/                                 NicheNet v2 mouse prior-knowledge networks
+├── nichenet_v2/                                 NicheNet v2 mouse prior-knowledge networks
+└── thymus/
+    ├── zenodo_5500511/                          atlas (raw counts, annotated matrices), sample metadata, authors' code
+    ├── park2020_supplement/                     supplementary tables of Park et al. (copied by hand, see below)
+    └── cellphonedb_v2_db/db_2019-09/, db_2019-07/   CellPhoneDB v2 database files (two versions, see below)
 ```
 
 ## Sources – case study 1
@@ -110,6 +117,40 @@ Fibroblasts, dendritic cells and T cells in atopic dermatitis skin (He *et al.*,
   (md5 of our copy: `9d31f4c88be64912b937b5d6a2cb6c2d`). Its matrix is log-normalised; notebook 05 recovers the raw
   counts exactly and shows that they are the authors' counts.
 - 14 genes appear twice in the same cell type as identical columns (notebook 03, section 3).
+
+## Sources – thymus
+
+Human thymus cell atlas, 7 post-conception weeks (PCW) to adult (Park *et al.*, *Science* 2020,
+[doi:10.1126/science.aay3224](https://doi.org/10.1126/science.aay3224), open text
+[PMC7611066](https://pmc.ncbi.nlm.nih.gov/articles/PMC7611066/)). Used for the early thymic niche
+(`notebooks/thymus_early/`: stromal cells ↔ early lymphoid cells at 7–11 PCW, CausalCCC in both directions), with the
+ligand–receptor pairs of the authors' CellPhoneDB analysis (table S5).
+
+| Folder                              | Source                                                                                     | Content                                                                                                                       | Size    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `thymus/zenodo_5500511/`            | Zenodo [10.5281/zenodo.5500511](https://doi.org/10.5281/zenodo.5500511) (version 1.0.2, 2021-09-11) | `HTA07.A01.v02.entire_data_raw_count.h5ad` (raw counts, 272,554 cells), `thymus_annotated_matrix_files.zip` (annotated matrices; `HTA08.v01.A05.Science_human_fig1.h5ad` is the Fig. 1 atlas, 255,901 cells, log-normalised), `sample_metadata_fix.xlsx` (table S1: per-sample QC, sort, sex, chemistry, enzyme; no age), `thymus_code_package.zip` (authors' code). The archives are unzipped into folders of the same name. `thymus_vdj.zip` (TCR data, 0.5 GB) is not downloaded. | 4.2 GB  |
+| `thymus/park2020_supplement/`       | Supplementary material of Park *et al.* (Science website)                                 | `aay3224_table-s5.csv`: CellPhoneDB means, 710 interactions × 53 × 53 cell-type pairs (no p-values). Copied by hand (the Science supplement refuses scripted downloads); the script checks its md5 (`f2b5c69fa8468414a9db1df93e3aad5f`). Tables S1–S4 and data S1 are copied by hand too and not used by the notebooks. | 17 MB   |
+| `thymus/cellphonedb_v2_db/db_2019-09/` | GitHub [ventolab/cellphonedb-data](https://github.com/ventolab/cellphonedb-data), tag `v2.0.0`, commit `05d95ad` (2019-09-05) | `protein_input.csv` (receptor flags), `complex_input.csv` (subunits), `gene_input.csv` (UniProt → gene), `interaction_input.csv`. Same files as in CellPhoneDB code releases v2.1.0 to v2.1.7. | < 1 MB  |
+| `thymus/cellphonedb_v2_db/db_2019-07/` | GitHub [ventolab/CellphoneDB](https://github.com/ventolab/CellphoneDB), tag `v2.0.6`, commit `095d4ae` (2019-07-23), `cellphonedb/src/core/data/` | Same four files, as bundled with code releases v2.0.0 to v2.0.6. | < 1 MB  |
+
+Checksums of the Zenodo files are verified against the values published by Zenodo. GitHub publishes no checksums: ours
+are recorded at first download.
+
+### Notes and open questions
+
+- The expression values come from the raw-count file, the annotations and metadata from the `.obs` of the Fig. 1 atlas:
+  every atlas cell is in the raw-count file, with the same sample, donor, sort and chemistry (`notebooks/thymus_early/`,
+  notebook 01). The `.csv` next to each annotated `.h5ad` is a copy of its `.obs`.
+- The chemistry column (`Method`) of `sample_metadata_fix.xlsx` agrees with the atlas for only about half of the
+  samples; the atlas column `method` agrees with the sample names, so it is the one used (notebook 01).
+- Park *et al.* cite CellPhoneDB v2 but give no database version. The two v2 databases above give the same receptor
+  and integrin flags for all 519 partners of table S5, and `db_2019-09` is used. Table S5 was nevertheless computed with
+  neither: only 259 of its 710 interaction IDs are in them, and its 53 cell types differ from the published annotation
+  (e.g. `TEC_early`, `Fb_early`; notebook 01).
+- Only the CellPhoneDB database files are used by `notebooks/thymus_early/`; the `cellphonedb` package is not installed
+  in `envs/`. The CellPhoneDB re-run of `scripts/thymus/01_*.py` to `05_*.py` uses CellPhoneDB 5.0.1 with its own
+  database, and reads the atlas and table S5 from other paths (`data/thymus/HTA08_v01_A05_Science_human_fig1.h5ad`,
+  `data/thymus/aay3224_table-s5.csv`); the two layouts are still to be harmonised.
 
 ## Server jobs downloaded by the tutorial
 
