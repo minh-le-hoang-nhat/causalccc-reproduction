@@ -52,7 +52,8 @@ if (length(args) >= 6) {
 settings$n_threads <- n_threads
 
 mosaic         <- read_tsv(args[1], guess_max = Inf, show_col_types = FALSE)
-state_order    <- read_tsv(args[2], show_col_types = FALSE)
+# levels_increasing_order is text: guessed, "7,8,9" would be read as the number 789
+state_order    <- read_tsv(args[2], col_types = cols(levels_increasing_order = col_character(), .default = col_guess()))
 interact_edges <- read_tsv(args[3], col_names = c("ligand", "receptor"), show_col_types = FALSE)
 
 set.seed(2026)
