@@ -2,10 +2,15 @@
 data/*
 !data/README.md
 
+# Article PDFs (copyrighted, kept locally for reading)
+articles/
+
 # Large intermediate files
 *.h5ad
 *.rds
 *.RData
+# analysis matrices, rebuilt by the notebooks
+*.mtx.gz
 
 # Python
 __pycache__/

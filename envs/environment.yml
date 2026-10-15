@@ -14,5 +14,8 @@ dependencies:
   - python-igraph=1.0.0
   - matplotlib-base=3.11.2
   - h5py=3.16.0
+  - openpyxl=3.1.5     # pandas.read_excel (thymus sample metadata)
+  - nbformat=5.11.1    # nbformat and nbclient: running the Python .ipynb notebooks (thymus)
+  - nbclient=0.11.0
   - ipykernel        # required: Positron must use the environment's own ipykernel (see docs/INSTALL.md)
   - ipywidgets
