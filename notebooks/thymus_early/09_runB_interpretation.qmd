@@ -1,0 +1,336 @@
+---
+title: "09 – Run B: do the lymphoid → stroma claims hold, and how do both directions compare?"
+subtitle: "Reading the early lymphoid → stroma network around LTB → LTBR, RANKL → RANK and CD40LG → CD40"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Question
+
+Park *et al.* write that "lymphotoxin signaling (LTB:LTBR) comes from diverse immune cells and is received by most of
+the stromal cell states" and that "RANKL-RANK signaling is confined between ILC3 and mTEC(II)s"; CD40LG → CD40 is part
+of their early-stage dot plot. Run B (notebook 08) built a CausalCCC network with these pairs imposed between early
+lymphoid senders and stromal receivers, with the same cells and settings as run A. Here we ask:
+
+1. How strong is the depth module in this network (run B included depth from the start)?
+2. Sender side: what is the expression of the claimed ligands (LTB, TNFSF11 = RANKL, CD40LG) associated with?
+3. Receiver side: do the receptors (LTBR, TNFRSF11A = RANK, CD40) connect to their downstream targets (NFKB2, RELB,
+   CCL19, AIRE)?
+4. Claim by claim, what do runs A and B say together?
+
+The network is read as in notebook 06: each side's links are learnt from its own cells only, and the L–R links between
+the sides are imposed by CausalCCC. **In run B, the senders are the lymphoid cells**: `_senders` variables belong to
+them, `_receivers` variables to the stromal cells.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Matrix)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+root <- find_repo_root()
+source(file.path(root, "scripts", "helpers.R"))   # network drawing functions (case study 2)
+
+fig_dir <- file.path(root, "results", "figures", "thymus_early")
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+
+read_run <- function(dir) {
+  result <- readRDS(file.path(dir, "miic_result.rds"))
+  list(edges = result$all.edges.summary,
+       state_order = read_tsv(file.path(dir, "state_order.tsv"), show_col_types = FALSE),
+       lr = read_tsv(file.path(dir, "interact_edges.tsv"), col_names = c("ligand", "receptor"),
+                     show_col_types = FALSE))
+}
+run_b <- read_run(file.path(root, "results", "thymus_early", "08_runB_causalccc", "miic_input"))
+run_a <- read_run(file.path(root, "results", "thymus_early", "05_runA_causalccc", "miic_input"))
+
+# Retained links, one row per link (the empty placeholder of each L-R pair, Nxy_ai = 0, is dropped; notebook 06)
+retained <- function(run) {
+  run$edges |>
+    filter(type == "P") |>
+    arrange(Nxy_ai %in% 0) |>
+    distinct(link = link_name(x, y), .keep_all = TRUE) |>
+    mutate(is_lr = link %in% link_name(run$lr$ligand, run$lr$receptor))
+}
+net   <- retained(run_b)
+net_a <- retained(run_a)
+
+# Side of each variable. Run B: senders = early lymphoid, receivers = stroma (the reverse of run A).
+side_of <- function(state_order, sender_side, receiver_side) {
+  setNames(case_when(state_order$group == "metadata" ~ "metadata",
+                     state_order$group %in% c("ligands", "senders genes") ~ sender_side,
+                     .default = receiver_side),
+           state_order$var_names)
+}
+side   <- side_of(run_b$state_order, "early lymphoid", "stroma")
+side_a <- side_of(run_a$state_order, "stroma", "early lymphoid")
+
+label <- function(v) {
+  base <- str_remove(v, "_(senders|receivers)$")
+  case_when(str_ends(v, "_senders") & side[v] == "metadata" ~ paste(base, "(lymphoid)"),
+            str_ends(v, "_receivers") & side[v] == "metadata" ~ paste(base, "(stroma)"),
+            .default = base)
+}
+# Variable name of a gene on one side (genes selected on both sides carry a suffix)
+var_of <- function(gene, on_side, s = side) {
+  v <- names(s)[str_remove(names(s), "_(senders|receivers)$") == gene & s == on_side]
+  if (length(v) == 1) v else NA_character_
+}
+
+cell_type_colours <- c(stroma = "#b5d99c", `early lymphoid` = "#f2c57c", metadata = "#d9d9d9")
+cell_type_borders <- c(stroma = "#4f7a28", `early lymphoid` = "#a8742a", metadata = "#7f7f7f")
+
+claimed <- tribble(~ligand,   ~receptor,
+                   "LTB",     "LTBR",
+                   "TNFSF11", "TNFRSF11A",
+                   "CD40LG",  "CD40",
+                   "JAG1",    "NOTCH1",
+                   "DLL1",    "NOTCH1")
+targets <- c("NFKB2", "RELB", "CCL19", "AIRE")
+```
+
+## 1. Overview
+
+```{r}
+#| label: overview
+
+net |>
+  mutate(category = case_when(is_lr ~ "imposed L-R link",
+                              side[x] == "metadata" | side[y] == "metadata" ~ "link to a metadata variable",
+                              side[x] == "stroma" ~ "within stroma",
+                              .default = "within early lymphoid")) |>
+  count(category)
+
+net |>
+  filter(side[x] == "metadata" | side[y] == "metadata") |>
+  mutate(metadata = if_else(side[x] == "metadata", x, y)) |>
+  count(metadata, name = "linked_variables") |>
+  mutate(metadata = label(metadata)) |>
+  arrange(desc(linked_variables))
+```
+
+**Reading.** As in run A, the two `population` variables are the main hubs (52 stromal, 41 lymphoid variables),
+donor has few links (5–7) and chemistry (`method`) none. Depth is linked to 41 lymphoid variables, more than in run A
+(29): the lymphoid side now holds the ligand-side genes, many of them broadly expressed.
+
+## 2. Depth module
+
+The same measure as in notebook 06: genes whose counts follow the total count of the cell within populations (median
+Spearman ρ > 0.5), and the share of gene–gene links joining two of them.
+
+```{r}
+#| label: depth
+
+input_dir <- file.path(root, "results", "thymus_early", "04_runA_input")
+counts <- readMM(gzfile(file.path(input_dir, "counts.mtx.gz")))
+genes  <- read_csv(file.path(input_dir, "genes.csv"), show_col_types = FALSE)$gene
+cells  <- read_csv(file.path(input_dir, "cells.csv"), show_col_types = FALSE)
+group_of_side <- c(stroma = "stroma", `early lymphoid` = "early_lymphoid")
+
+gene_vars <- names(side)[side != "metadata"]
+depth_rho <- map_dbl(gene_vars, \(v) {
+  in_group <- cells$group == group_of_side[[side[[v]]]]
+  x <- counts[match(label(v), genes), ]
+  rhos <- map_dbl(unique(cells$population[in_group]), \(p) {
+    m <- in_group & cells$population == p
+    if (sd(x[m]) == 0) NA_real_ else cor(x[m], cells$n_counts[m], method = "spearman")
+  })
+  median(rhos, na.rm = TRUE)
+}) |> setNames(gene_vars)
+rm(counts)
+follows_depth <- names(depth_rho)[depth_rho > 0.5]
+
+gene_gene <- net |> filter(!is_lr, x %in% gene_vars, y %in% gene_vars)
+tibble(genes_following_depth = length(follows_depth), genes = length(gene_vars),
+       gene_gene_links = nrow(gene_gene),
+       share_both_follow_depth = round(mean(gene_gene$x %in% follows_depth & gene_gene$y %in% follows_depth), 3),
+       expected_by_chance = round((length(follows_depth) / length(gene_vars))^2, 3))
+```
+
+**Reading.** 110 of the 280 genes follow depth, and 32% of the gene–gene links join two of them, about twice the
+15% expected by chance. Run B included depth from the start, and the depth module is still clearly present – more
+than in run A with depth (24%). Links between two depth-following genes, and paths that go through them, are therefore
+weak evidence; the `depth_rho` column of the tables below flags them.
+
+## 3. Sender side: what is the expression of the claimed ligands associated with?
+
+```{r}
+#| label: ligand-neighbours
+
+orientation_from <- function(n, node) {
+  neighbors_of(node, n) |>
+    mutate(neighbor_side = side[neighbor],
+           depth_rho = round(depth_rho[neighbor], 2),
+           arrow = case_when(direction == "out" ~ paste(label(node), "->", label(neighbor)),
+                             direction == "in" ~ paste(label(neighbor), "->", label(node)),
+                             .default = direction),
+           node = label(node), neighbor = label(neighbor)) |>
+    select(node, neighbor, neighbor_side, arrow, is_causal, depth_rho)
+}
+ligand_vars   <- map_chr(unique(claimed$ligand), var_of, on_side = "early lymphoid")
+receptor_vars <- map_chr(unique(claimed$receptor), var_of, on_side = "stroma")
+map(ligand_vars, \(v) orientation_from(net, v)) |> bind_rows()
+```
+
+```{r}
+#| label: claim-plot
+#| fig-width: 10
+#| fig-height: 8
+
+target_vars <- map_chr(targets, var_of, on_side = "stroma")
+centres <- c(ligand_vars, receptor_vars, target_vars)
+claim_net <- network_data(net, link_name(run_b$lr$ligand, run_b$lr$receptor), side, label,
+                          centres = centres, max_distance = 1)
+plot_network_interactive(claim_net, title = "Claimed ligands, receptors and targets with their direct neighbours (run B)")
+static <- plot_network_static(claim_net, title = "Run B: claimed ligands, receptors and stromal targets, direct neighbours")
+ggsave(file.path(fig_dir, "09_runB_claims_neighbourhood.png"), static, width = 11, height = 9, dpi = 200)
+static
+```
+
+**Reading – sender side (lymphoid cells).**
+
+- **TNFSF11 (RANKL) is linked only to the lymphoid population**, besides its receptor. Its expression is explained by
+  which population a cell belongs to – mainly ILC3 (26% of cells detect it, notebook 03). This agrees with the paper's
+  "RANKL-RANK signaling is confined between ILC3 and mTEC(II)s", on the ligand side.
+- **CD40LG** is linked to the lymphoid population and to KLRB1 (CD161, an ILC/NK marker; oriented CD40LG → KLRB1) and
+  TNFRSF25. It is expressed mainly by ILC3 (13%).
+- **LTB is not linked to population**: it is linked to LTA, its partner in the membrane lymphotoxin (LTα1β2) that binds
+  LTβR, and to LST1, CD52 and TNFRSF25, genes of immune cells. This fits the paper's "comes from diverse immune
+  cells": LTB is expressed by 61–94% of every lymphoid population (notebook 03), so population does not explain it.
+- JAG1 and DLL1, as ligands of lymphoid cells in this direction, are linked to the lymphoid population (JAG1 also to
+  KIT).
+
+**Receiver side (stromal cells).** Each receptor has a single neighbour besides its ligands: LTBR – IFITM3,
+TNFRSF11A (RANK) – TYW3, CD40 – IL32, NOTCH1 – GNAS (a depth-following gene, ρ = 0.79).
+
+## 4. Receiver side: are the receptors connected to their targets?
+
+Shortest paths through stromal genes only (not through metadata variables), from each receptor to each target.
+
+```{r}
+#| label: receptor-paths
+
+stromal <- net |> filter(!is_lr, side[x] == "stroma", side[y] == "stroma")
+graph <- igraph::graph_from_data_frame(select(stromal, x, y), directed = FALSE)
+expand_grid(receptor = receptor_vars, target = target_vars) |>
+  pmap(\(receptor, target) {
+    if (!all(c(receptor, target) %in% igraph::V(graph)$name))
+      return(tibble(receptor = label(receptor), target = label(target), steps = NA, path = "not connected"))
+    p <- igraph::shortest_paths(graph, receptor, target)$vpath[[1]]$name
+    tibble(receptor = label(receptor), target = label(target), steps = if (length(p)) length(p) - 1 else NA,
+           path = if (length(p)) paste(label(p), collapse = " – ") else "not connected")
+  }) |>
+  bind_rows() |>
+  knitr::kable()
+```
+
+```{r}
+#| label: receptor-target-neighbours
+
+map(c(receptor_vars, target_vars), \(v) orientation_from(net, v)) |> bind_rows()
+```
+
+**Reading.**
+
+- **No receptor is directly linked to a target.**
+- **LTBR is far from every target** (7–9 steps): the network gives no support to LTβR signalling driving NF-κB or
+  CCL19 in these cells.
+- **RANK and CD40 are 2 steps from CCL19** (through TYW3 and IL32) and 4 steps from NFKB2; AIRE is 5–6 steps away,
+  through MHC class II genes. Short paths through a single, unannotated intermediate (TYW3 is a tRNA-modifying enzyme;
+  IL32 follows depth, ρ = 0.48) are weak evidence.
+- **The targets follow the stromal population**: CCL19 and AIRE are linked to it (both are mTEC(II)/cTEC-specific,
+  notebook 08), NFKB2 to epithelial genes (KRT19, SPINT2). As for the Notch targets in run A, they mark *which
+  cells* are mTEC-like, not how much receptor each cell has.
+- The same caveat as for Notch applies: LTβR, RANK and CD40 are activated by ligand binding, not by more receptor
+  mRNA, so a missing receptor → target link is not evidence against the signal.
+
+## 5. Both directions together
+
+For each claimed pair: was it in each run, what is the ligand linked to on its own side (besides its receptor), what
+is the receptor linked to, and how close is the receptor to a downstream target (stromal targets in run B, Notch
+targets in run A)?
+
+```{r}
+#| label: comparison
+
+neighbours <- function(n, v) setdiff(sort(c(n$y[n$x == v], n$x[n$y == v])), character())
+describe <- function(n, s, lig_side, rec_side, lig, rec, lab) {
+  lv <- var_of(lig, lig_side, s); rv <- var_of(rec, rec_side, s)
+  if (is.na(lv) || is.na(rv) || !(link_name(lv, rv) %in% n$link[n$is_lr]))
+    return(tibble(ligand_links = "not in this run", receptor_links = ""))
+  tibble(ligand_links   = paste(setdiff(lab(neighbours(n, lv)), lab(rv)), collapse = ", "),
+         receptor_links = paste(setdiff(lab(neighbours(n, rv)), lab(neighbours(n, rv)[side_of_any(n, rv, s)])),
+                                collapse = ", "))
+}
+# Neighbours of a receptor that are its imposed ligands are not listed
+side_of_any <- function(n, rv, s) neighbours(n, rv) %in% c(n$x[n$is_lr & n$y == rv], n$y[n$is_lr & n$x == rv])
+label_a <- function(v) {
+  base <- str_remove(v, "_(senders|receivers)$")
+  case_when(str_ends(v, "_senders") & side_a[v] == "metadata" ~ paste(base, "(stroma)"),
+            str_ends(v, "_receivers") & side_a[v] == "metadata" ~ paste(base, "(lymphoid)"),
+            .default = base)
+}
+all_pairs <- tribble(~ligand, ~receptor,
+                     "DLL4", "NOTCH1", "JAG2", "NOTCH1", "JAG1", "NOTCH1", "DLL1", "NOTCH1",
+                     "LTB", "LTBR", "TNFSF11", "TNFRSF11A", "CD40LG", "CD40")
+bind_rows(
+  all_pairs |> mutate(run = "A (stroma -> lymphoid)",
+                      d = map2(ligand, receptor, \(l, r) describe(net_a, side_a, "stroma", "early lymphoid", l, r, label_a))),
+  all_pairs |> mutate(run = "B (lymphoid -> stroma)",
+                      d = map2(ligand, receptor, \(l, r) describe(net, side, "early lymphoid", "stroma", l, r, label)))) |>
+  unnest(d) |>
+  filter(ligand_links != "not in this run") |>
+  arrange(ligand, run) |>
+  knitr::kable()
+```
+
+**Reading.** The two directions tell the same story:
+
+- **Sender side – who expresses the ligand: consistent with the paper in both runs.** The specific ligands depend on
+  population (DLL4, JAG2 in the stroma; RANKL, CD40LG in the lymphoid cells); the broadly expressed LTB does not, and is
+  linked to its partner LTA.
+- **Receiver side – the receptors have few links** (one or two genes, often depth-related), and none is directly linked
+  to its downstream targets; the targets follow the receiving population instead.
+
+## Summary
+
+| Claim (paper) | Run | Ligand side | Receptor side |
+|---|---|---|---|
+| JAG2 / DLL4 from cTEC and Endo → NOTCH1 on ETP | A | DLL4, JAG2 depend on stromal population ✓ | NOTCH1 linked to depth, CD99; targets not directly linked |
+| LTB from diverse immune cells → LTBR on most stromal cells | B | LTB broadly expressed, not population-specific, linked to LTA ✓ | LTBR linked to IFITM3 only; targets 7–9 steps away |
+| RANKL from ILC3 → RANK on mTEC(II) | B | RANKL depends on lymphoid population (ILC3) ✓ | RANK linked to TYW3 only; CCL19 2 steps, AIRE 6 |
+| CD40LG → CD40 (dot plot) | B | CD40LG depends on lymphoid population (ILC3), linked to KLRB1 | CD40 linked to IL32 only; CCL19 2 steps |
+
+**Conclusion for the early thymic niche (7–11 PCW).**
+
+1. **The expression side of every claim is reproduced** with CausalCCC in both directions: the networks explain the
+   expression of the specific ligands by the identity of the sending population, and the broadly expressed LTB by its
+   lymphotoxin partner – what the authors' dot plots and CellPhoneDB means showed.
+2. **The signalling side is not resolved.** No receptor is directly linked to its downstream targets; the targets follow
+   the identity of the receiving cells. For these receptors (Notch, LTβR, RANK, CD40), activation does not change the
+   receptor's mRNA, so this is a limit of what a gene-expression network can show, not evidence against the claims.
+3. **Confounders matter.** Sequencing depth still structures part of both networks (24% and 32% of gene–gene links
+   join depth-following genes, about twice chance), and in the stroma, population and donor are confounded (cTEC and
+   mTEC(II) come almost only from two donors).
+
+**Limits.** The L–R links are imposed by CausalCCC, not inferred; the claims are tested only within the 7–11 PCW window
+and the merged sender / receiver groups of notebook 04.

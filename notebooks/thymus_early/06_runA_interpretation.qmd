@@ -1,0 +1,284 @@
+---
+title: "06 – Run A: does the network support the paper's Notch claim?"
+subtitle: "Reading the stroma → early lymphoid network around DLL4/JAG2 → NOTCH1"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Question
+
+Park *et al.* write that "NOTCH1 is the main receptor expressed in early thymic progenitors (ETPs)" and that "cTECs and
+endothelial cells express both JAG2 and DLL4, and other TECs broadly express JAG1". Run A (notebook 05) built a
+CausalCCC network with these pairs imposed between stromal senders and early lymphoid receivers. Here we ask:
+
+1. Did adding sequencing depth as a variable remove the depth-driven links seen in the first run?
+2. On the sender side, what is the expression of the Notch ligands associated with – stromal population, donor, other
+   genes?
+3. On the receiver side, does NOTCH1 connect to its known targets (HES1, DTX1, NRARP, PTCRA)?
+
+**How to read the network.** Each side's links are learnt from its own cells only: stromal genes from the 1,555 stromal
+cells, lymphoid genes from the 2,622 lymphoid cells. The L–R links between the two sides are imposed by CausalCCC, not
+found. A retained link means the two variables stay dependent whatever other variables are taken into account; an
+arrow is an orientation inferred by MIIC; "genuine causation" (`is_causal`) marks orientations that MIIC considers
+free of hidden common causes.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Matrix)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+root <- find_repo_root()
+source(file.path(root, "scripts", "helpers.R"))   # network drawing functions (case study 2)
+
+run_dir  <- file.path(root, "results", "thymus_early", "05_runA_causalccc")
+fig_dir  <- file.path(root, "results", "figures", "thymus_early")
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+
+read_run <- function(dir) {
+  result <- readRDS(file.path(dir, "miic_result.rds"))
+  list(edges = result$all.edges.summary,
+       state_order = read_tsv(file.path(dir, "state_order.tsv"), show_col_types = FALSE),
+       lr = read_tsv(file.path(dir, "interact_edges.tsv"), col_names = c("ligand", "receptor"),
+                     show_col_types = FALSE))
+}
+with_depth    <- read_run(file.path(run_dir, "miic_input"))
+without_depth <- read_run(file.path(run_dir, "miic_input_without_depth"))
+
+# Retained links, one row per link. The L-R pairs appear twice in this miic version (an empty placeholder and the
+# imposed link, case study 1 notebook 02); the placeholder (Nxy_ai = 0) is dropped.
+retained <- function(run) {
+  run$edges |>
+    filter(type == "P") |>
+    arrange(Nxy_ai %in% 0) |>
+    distinct(link = link_name(x, y), .keep_all = TRUE) |>
+    mutate(is_lr = link %in% link_name(run$lr$ligand, run$lr$receptor))
+}
+net <- retained(with_depth)
+net_without <- retained(without_depth)
+
+# Side of each variable, for colours and for "within one side" statistics
+side_of <- function(state_order) {
+  setNames(case_when(state_order$group == "metadata" ~ "metadata",
+                     state_order$group %in% c("ligands", "senders genes") ~ "stroma",
+                     .default = "early lymphoid"),
+           state_order$var_names)
+}
+side <- side_of(with_depth$state_order)
+# Label: gene without suffix; metadata variables keep their side (population of the stromal or of the lymphoid cells)
+label <- function(v) {
+  base <- str_remove(v, "_(senders|receivers)$")
+  case_when(str_ends(v, "_senders") & side[v] == "metadata" ~ paste(base, "(stroma)"),
+            str_ends(v, "_receivers") & side[v] == "metadata" ~ paste(base, "(lymphoid)"),
+            .default = base)
+}
+
+# Colours of the drawing helpers, redefined for this analysis
+cell_type_colours <- c(stroma = "#b5d99c", `early lymphoid` = "#f2c57c", metadata = "#d9d9d9")
+cell_type_borders <- c(stroma = "#4f7a28", `early lymphoid` = "#a8742a", metadata = "#7f7f7f")
+
+notch_ligands <- c("DLL4", "JAG2", "JAG1", "DLL1")
+notch_targets <- c("HES1", "DTX1", "NRARP", "PTCRA")
+```
+
+## 1. Overview
+
+```{r}
+#| label: overview
+
+category <- function(n, side) {
+  n |> mutate(category = case_when(is_lr ~ "imposed L-R link",
+                                   side[x] == "metadata" | side[y] == "metadata" ~ "link to a metadata variable",
+                                   side[x] == "stroma" ~ "within stroma",
+                                   .default = "within early lymphoid"))
+}
+bind_rows(`without depth` = count(category(net_without, side_of(without_depth$state_order)), category),
+          `with depth`    = count(category(net, side), category), .id = "run") |>
+  pivot_wider(names_from = run, values_from = n)
+```
+
+```{r}
+#| label: metadata-degree
+
+# How many genes each metadata variable is directly linked to
+net |>
+  filter(side[x] == "metadata" | side[y] == "metadata") |>
+  mutate(metadata = if_else(side[x] == "metadata", x, y)) |>
+  count(metadata, name = "linked_variables") |>
+  arrange(desc(linked_variables))
+```
+
+**Reading.** With depth as a variable, links between genes of the same side decrease (stroma 181 → 158, lymphoid
+261 → 207) and links to metadata variables increase (122 → 166): part of what looked like gene–gene dependence is now
+attributed to a metadata variable. The two `population` variables are the largest hubs (58 and 48 variables): the
+groups merge several populations, so every gene that differs between populations links to them. Depth is linked to
+29 lymphoid and 15 stromal variables, donor to 8 on each side. Chemistry (`method`) has no direct link: what it
+explains is apparently already carried by donor and population.
+
+## 2. Did the depth variable remove the depth-driven links?
+
+For every gene of the network we compute, within each population, the Spearman correlation between its counts and the
+total counts of the cell, and keep the median over populations. Genes above 0.5 "follow depth". We then compare the
+two runs: how often a gene–gene link joins two such genes, and what NOTCH1 is linked to.
+
+```{r}
+#| label: depth-correlation
+
+input_dir <- file.path(root, "results", "thymus_early", "04_runA_input")
+counts <- readMM(gzfile(file.path(input_dir, "counts.mtx.gz")))
+genes  <- read_csv(file.path(input_dir, "genes.csv"), show_col_types = FALSE)$gene
+cells  <- read_csv(file.path(input_dir, "cells.csv"), show_col_types = FALSE)
+group_of_side <- c(stroma = "stroma", `early lymphoid` = "early_lymphoid")
+
+gene_vars <- names(side)[side != "metadata"]
+depth_rho <- map_dbl(gene_vars, \(v) {
+  in_group <- cells$group == group_of_side[[side[[v]]]]
+  x <- counts[match(label(v), genes), ]
+  rhos <- map_dbl(unique(cells$population[in_group]), \(p) {
+    m <- in_group & cells$population == p
+    if (sd(x[m]) == 0) NA_real_ else cor(x[m], cells$n_counts[m], method = "spearman")
+  })
+  median(rhos, na.rm = TRUE)
+}) |> setNames(gene_vars)
+rm(counts)
+follows_depth <- names(depth_rho)[depth_rho > 0.5]
+length(follows_depth)
+```
+
+```{r}
+#| label: depth-comparison
+
+depth_module <- function(n) {
+  gene_gene <- n |> filter(!is_lr, x %in% gene_vars, y %in% gene_vars)
+  tibble(gene_gene_links = nrow(gene_gene),
+         both_follow_depth = sum(gene_gene$x %in% follows_depth & gene_gene$y %in% follows_depth),
+         share = both_follow_depth / gene_gene_links,
+         expected_by_chance = (length(follows_depth) / length(gene_vars))^2)
+}
+bind_rows(`without depth` = depth_module(net_without), `with depth` = depth_module(net), .id = "run") |>
+  mutate(across(c(share, expected_by_chance), \(v) round(v, 3)))
+
+neighbours_in <- function(n, node) sort(c(n$y[n$x == node], n$x[n$y == node]))
+list(`NOTCH1, without depth` = neighbours_in(net_without, "NOTCH1"),
+     `NOTCH1, with depth`    = neighbours_in(net, "NOTCH1"))
+```
+
+**Reading.** The share of gene–gene links joining two depth-following genes falls from 34% to 24% (13.8% expected by
+chance): the depth variable removes part of the depth module, not all of it. NOTCH1's three housekeeping neighbours
+(H2AFY, MTF2, TFDP2) are gone; NOTCH1 is now linked to depth itself and to CD99, which also follows depth
+(ρ = 0.60). So part of the cell-to-cell variation of NOTCH1 counts reflects sequencing depth.
+
+## 3. Sender side: what is the expression of the Notch ligands associated with?
+
+```{r}
+#| label: ligand-neighbours
+
+orientation_from <- function(n, node) {
+  neighbors_of(node, n) |>
+    mutate(neighbor_side = side[neighbor],
+           depth_rho = round(depth_rho[neighbor], 2),
+           arrow = case_when(direction == "out" ~ paste(label(node), "->", label(neighbor)),
+                             direction == "in" ~ paste(label(neighbor), "->", label(node)),
+                             .default = direction)) |>
+    select(node, neighbor, neighbor_side, arrow, is_causal, depth_rho)
+}
+map(c(notch_ligands, "NOTCH1"), \(g) orientation_from(net, g)) |> bind_rows()
+```
+
+```{r}
+#| label: notch-plot
+#| fig-width: 9
+#| fig-height: 7
+
+centres <- c(notch_ligands, "NOTCH1", notch_targets)
+notch_net <- network_data(net, link_name(with_depth$lr$ligand, with_depth$lr$receptor), side, label,
+                          centres = centres, max_distance = 1)
+plot_network_interactive(notch_net, title = "Notch claim genes and their direct neighbours (run A)")
+static <- plot_network_static(notch_net, title = "Run A: Notch ligands, NOTCH1 and Notch targets, direct neighbours")
+ggsave(file.path(fig_dir, "06_notch_neighbourhood.png"), static, width = 10, height = 8, dpi = 200)
+static
+```
+
+**Reading – sender side.**
+
+- **DLL4 and JAG2 are linked to the stromal population** (and JAG2 to GNAS, a depth-following gene). Their expression is
+  explained by which population a stromal cell belongs to. This agrees with the paper's statement: in notebook 03,
+  JAG2 is detected in 56% of cTECs and 39% of endothelial cells, DLL4 in 34% and 49%, and both are almost absent from
+  Fb_1.
+- **JAG1** is linked to HES4 and IGFBP2, and **DLL1** to PLXND1. None of these links is oriented.
+- In the stroma, population and donor are strongly linked (cTEC come almost only from C40/C41, notebook 02), so "linked
+  to population" cannot be fully separated from "linked to donor".
+
+**Receiver side.** Besides the imposed links from its five ligands, NOTCH1 is linked only to depth and CD99.
+
+## 4. Receiver side: is NOTCH1 connected to its targets?
+
+The shortest path from NOTCH1 to each target through lymphoid genes only (paths through a metadata variable are not
+counted: two genes both linked to "population" are not connected biologically).
+
+```{r}
+#| label: notch-paths
+
+lymphoid <- net |> filter(!is_lr, side[x] == "early lymphoid", side[y] == "early lymphoid")
+graph <- igraph::graph_from_data_frame(select(lymphoid, x, y), directed = FALSE)
+map(notch_targets, \(t) {
+  if (!all(c("NOTCH1", t) %in% igraph::V(graph)$name)) return(tibble(target = t, steps = NA, path = "not connected"))
+  p <- igraph::shortest_paths(graph, "NOTCH1", t)$vpath[[1]]$name
+  tibble(target = t, steps = if (length(p)) length(p) - 1 else NA,
+         path = if (length(p)) paste(label(p), collapse = " – ") else "not connected")
+}) |> bind_rows()
+```
+
+```{r}
+#| label: target-neighbours
+
+map(notch_targets, \(g) orientation_from(net, g)) |> bind_rows()
+```
+
+**Reading.**
+
+- **NOTCH1 is not directly linked to any of its targets.** The shortest lymphoid paths go through CD99: PTCRA in 2
+  steps, HES1 and NRARP in 3, DTX1 in 4.
+- **The targets sit in a T-lineage module**: PTCRA is linked to HES1, RAG2, MAL and to the lymphoid population variable;
+  NRARP to IGLL1 (pre-B/pre-T receptor component). They vary with the developmental stage of the cells (ETP, DN(early),
+  DN(P/Q), versus ILC3/NK/γδT), which is what Notch signalling drives in early T-cell development.
+- **Why NOTCH1 itself may not connect:** Notch signalling is activated by ligand-induced cleavage of the receptor protein,
+  not by more receptor mRNA. Target genes report pathway activity; NOTCH1 counts mostly report receptor availability.
+  The absence of a direct NOTCH1 → target link is therefore not evidence against Notch signalling, but the network
+  does not give direct support for it either.
+
+## Summary
+
+| Question | Answer from run A |
+|---|---|
+| Did the depth variable help? | Partly: links within the depth module fall from 34% to 24% of gene–gene links (13.8% by chance); NOTCH1's housekeeping neighbours disappear |
+| Notch ligands, sender side | DLL4 and JAG2 depend on the stromal population, consistent with the paper (expressed by cTEC and Endo, not Fb_1); population and donor are confounded in the stroma |
+| NOTCH1, receiver side | Linked only to depth and CD99, besides the imposed ligands |
+| Notch targets | Not directly linked to NOTCH1; they form a T-lineage module (PTCRA, HES1, RAG2, IGLL1) that follows the lymphoid population |
+
+**What this means for the claim.** The network is consistent with the *expression* part of the claim (who expresses
+the ligands), which is what the paper's dot plot showed. It does not add causal support for the *signalling* part: the
+receptor's mRNA is not connected to its targets, which is expected given how Notch is activated, and which a gene
+expression network cannot resolve.
+
+**Limits.** The L–R links are imposed, not inferred. In the stroma, population and donor are confounded. The
+depth module is reduced but not removed. Run B (lymphoid → stroma) tests the claims in the other direction.

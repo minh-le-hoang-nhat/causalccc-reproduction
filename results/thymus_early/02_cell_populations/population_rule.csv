@@ -1,0 +1,49 @@
+Anno_level_1,Anno_level_5,n_cells,lineage,a_lineage,b_named,c_enough,decision,quote
+T,DN(P),5700,early lymphoid,True,True,True,keep,Differentiating T cells were mostly found at DN stage in 7 PCW samples
+T,DN(Q),5329,early lymphoid,True,True,True,keep,Differentiating T cells were mostly found at DN stage in 7 PCW samples
+Innate_T,γδT,1518,early lymphoid,True,True,True,keep,"In the early fetal samples (7 to 8 PCW), the lymphoid compartment contained NK cells, γδ T cells, and ILC3s"
+Innate_lymphoid,NK,995,early lymphoid,True,True,True,keep,"In the early fetal samples (7 to 8 PCW), the lymphoid compartment contained NK cells, γδ T cells, and ILC3s"
+Innate_lymphoid,ILC3,294,early lymphoid,True,True,True,keep,"In the early fetal samples (7 to 8 PCW), the lymphoid compartment contained NK cells, γδ T cells, and ILC3s"
+T,DN(early),201,early lymphoid,True,True,True,keep,Differentiating T cells were mostly found at DN stage in 7 PCW samples
+HSC,ETP,127,early lymphoid,True,True,True,keep,NOTCH1 is the main receptor expressed in early thymic progenitors (ETPs)
+TEC,cTEC,9030,stroma,True,True,True,keep,cTECs were more abundant during early development (7 to 8 PCW)
+Mesen,Fb_1,822,stroma,True,True,True,keep,The Fb1 population mentioned above dominated early development
+TEC,mTEC(II),322,stroma,True,True,True,keep,RANKL-RANK ... signaling is confined between ILC3 and mTEC(II)s
+Mesen,Endo,233,stroma,True,True,True,keep,cTECs and endothelial cells express both JAG2 and DLL4
+T,DP(P),11108,other,False,False,True,drop,
+T,DP(Q),8634,other,False,False,True,drop,
+T,αβT(entry),946,other,False,False,True,drop,
+Myeloid,Mac,585,other,False,False,True,drop,
+Myeloid,DC1,400,other,False,False,True,drop,
+T,CD4+T,369,other,False,False,True,drop,
+T,CD8αα(I),360,other,False,False,True,drop,
+Ery,Ery,304,other,False,False,True,drop,
+T,CD8+T,298,other,False,False,True,drop,
+Myeloid,DC2,267,other,False,False,True,drop,
+T,CD8αα(II),207,other,False,False,True,drop,
+T,T(agonist),131,other,False,False,True,drop,
+Innate_T,NKT,101,other,False,False,True,drop,
+T,Th17,92,other,False,False,True,drop,
+HSC,NMP,89,other,False,False,True,drop,
+Mast,Mast,57,other,False,False,True,drop,
+Myeloid,Mono,51,other,False,False,True,drop,
+B,B_pro/pre,42,other,False,False,False,drop,
+T,Treg(diff),30,other,False,False,False,drop,
+T,Treg,21,other,False,False,False,drop,
+Myeloid,aDC1,20,other,False,False,False,drop,
+Myeloid,pDC,19,other,False,False,False,drop,
+Endo,Lymph,18,other,False,False,False,drop,
+B,B_naive,15,other,False,False,False,drop,
+Mgk,Mgk,10,other,False,False,False,drop,
+Myeloid,aDC2,10,other,False,False,False,drop,
+Myeloid,aDC3,10,other,False,False,False,drop,
+TEC,mTEC(III),37,stroma,True,False,False,drop,
+TEC,mcTEC,32,stroma,True,False,False,drop,
+TEC,TEC(myo),7,stroma,True,False,False,drop,
+TEC,mTEC(I),4,stroma,True,False,False,drop,
+TEC,mTEC(IV),3,stroma,True,False,False,drop,
+Mesen,Fb_2,372,stroma,True,False,True,borderline,
+Mesen,VSMC,280,stroma,True,False,True,borderline,
+Mesen,Fb_cycling,225,stroma,True,False,True,borderline,
+TEC,TEC(neuro),81,stroma,True,False,True,borderline,
+TEC,Epi_GCM2,74,stroma,True,False,True,borderline,

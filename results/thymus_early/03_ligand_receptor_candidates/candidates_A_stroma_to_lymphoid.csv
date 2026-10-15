@@ -1,0 +1,133 @@
+direction,pair,ligand,receptor,orientation_rule,ligand_is_partner_a,max_ligand_frac,ligand_pops,max_receptor_frac,receptor_pops,s5_max_mean,s5_best_pair
+A: stroma -> lymphoid,CXCL12_CXCR3,CXCL12,CXCR3,receptor flag,True,0.9148394241417497,"cTEC, mTEC(II), Fb_1, Endo",0.2422110552763819,NK,0.758,cTEC -> NK
+A: stroma -> lymphoid,CCL19_CXCR3,CCL19,CXCR3,receptor flag,True,0.9316770186335404,"cTEC, mTEC(II)",0.2422110552763819,NK,1.958,mTEC(II) -> NK
+A: stroma -> lymphoid,CXCL10_CXCR3,CXCL10,CXCR3,receptor flag,True,0.2701863354037267,mTEC(II),0.2422110552763819,NK,0.249,mTEC(II) -> NK
+A: stroma -> lymphoid,CXCL12_CXCR4,CXCL12,CXCR4,receptor flag,True,0.9148394241417497,"cTEC, mTEC(II), Fb_1, Endo",0.7112280701754385,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.337,cTEC -> ILC3
+A: stroma -> lymphoid,CXCL12_DPP4,CXCL12,DPP4,receptor flag,True,0.9148394241417497,"cTEC, mTEC(II), Fb_1, Endo",0.4867705010320886,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.849,cTEC -> DN(Q)
+A: stroma -> lymphoid,CXCL10_DPP4,CXCL10,DPP4,receptor flag,True,0.2701863354037267,mTEC(II),0.4867705010320886,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.34,mTEC(II) -> DN(Q)
+A: stroma -> lymphoid,CXCL2_DPP4,CXCL2,DPP4,receptor flag,True,0.37577639751552794,"cTEC, mTEC(II), Endo",0.4867705010320886,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.421,Endo -> DN(Q)
+A: stroma -> lymphoid,CCL19_CCR7,CCL19,CCR7,receptor flag,True,0.9316770186335404,"cTEC, mTEC(II)",0.17587939698492464,"ETP, NK, γδT",1.988,mTEC(II) -> γδT
+A: stroma -> lymphoid,IGF2_IDE,IGF2,IDE,receptor flag,True,0.9987834549878345,"mTEC(II), Fb_1, Endo",0.20398009950248755,"ETP, DN(early), DN(P), γδT",1.783,Fb_1 -> γδT
+A: stroma -> lymphoid,CCL25_CCR9,CCL25,CCR9,receptor flag,True,0.984828349944629,"cTEC, mTEC(II)",0.37483530961791833,"ETP, DN(Q), ILC3, γδT",1.813,cTEC -> γδT
+A: stroma -> lymphoid,CCL5_CCR1,CCL5,CCR1,receptor flag,True,0.11960132890365449,cTEC,0.3085427135678392,NK,0.242,mTEC(II) -> NK
+A: stroma -> lymphoid,CCL14_CCR1,CCL14,CCR1,receptor flag,True,0.3261802575107296,Endo,0.3085427135678392,NK,0.62,Endo -> NK
+A: stroma -> lymphoid,KLRG1_CDH1,CDH1,KLRG1,receptor flag,False,0.6105204872646733,"cTEC, mTEC(II)",0.16205533596837945,"DN(early), γδT",0.476,mTEC(II) -> NK
+A: stroma -> lymphoid,HBEGF_CD44,HBEGF,CD44,manual,True,0.4678111587982833,Endo,0.9251700680272109,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.872,Endo -> ILC3
+A: stroma -> lymphoid,LGALS9_CD44,LGALS9,CD44,receptor flag,True,0.4334763948497854,"mTEC(II), Endo",0.9251700680272109,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.868,Endo -> ILC3
+A: stroma -> lymphoid,SPP1_CD44,SPP1,CD44,receptor flag,True,0.21030042918454936,Endo,0.9251700680272109,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.14,Endo -> ILC3
+A: stroma -> lymphoid,SELE_CD44,SELE,CD44,receptor flag,True,0.33476394849785407,Endo,0.9251700680272109,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.928,Endo -> ILC3
+A: stroma -> lymphoid,LGALS9_HAVCR2,LGALS9,HAVCR2,receptor flag,True,0.4334763948497854,"mTEC(II), Endo",0.2371859296482412,"DN(early), NK",0.454,Endo -> NK
+A: stroma -> lymphoid,TGFBR3_TGFB1,TGFB1,TGFBR3,receptor flag,False,0.6394849785407726,"cTEC, mTEC(II), Fb_1, Endo",0.4904522613065327,"ILC3, NK",0.397,Endo -> NK
+A: stroma -> lymphoid,TGFBR3_TGFB3,TGFB3,TGFBR3,receptor flag,False,0.23357664233576642,Fb_1,0.4904522613065327,"ILC3, NK",0.33,Fb_1 -> NK
+A: stroma -> lymphoid,APP_CD74,APP,CD74,receptor flag,True,0.8927038626609443,"cTEC, mTEC(II), Fb_1, Endo",0.736318407960199,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.986,Endo -> ETP
+A: stroma -> lymphoid,FLT1_VEGFA,VEGFA,FLT1,receptor flag,False,0.6170542635658914,"cTEC, mTEC(II), Endo",0.15920398009950248,DN(early),0.126,cTEC -> DN(early)
+A: stroma -> lymphoid,FLT1_PGF,PGF,FLT1,receptor flag,False,0.6893687707641196,"cTEC, mTEC(II), Fb_1, Endo",0.15920398009950248,DN(early),0.254,mTEC(II) -> DN(early)
+A: stroma -> lymphoid,FLT1_VEGFB,VEGFB,FLT1,receptor flag,False,0.65703211517165,"cTEC, mTEC(II), Fb_1, Endo",0.15920398009950248,DN(early),0.079,cTEC -> DN(early)
+A: stroma -> lymphoid,ADRB2_VEGFB,VEGFB,ADRB2,receptor flag,False,0.65703211517165,"cTEC, mTEC(II), Fb_1, Endo",0.21608040201005024,"ILC3, NK",0.259,cTEC -> NK
+A: stroma -> lymphoid,FGF2_FGFR1,FGF2,FGFR1,receptor flag,True,0.2950310559006211,"cTEC, mTEC(II)",0.11923583662714098,γδT,0.122,Fb_1 -> γδT
+A: stroma -> lymphoid,RIPK1_TNFSF10,TNFSF10,RIPK1,receptor flag,False,0.4291845493562232,Endo,0.16417910447761194,"DN(early), DN(P)",0.79,Endo -> NK
+A: stroma -> lymphoid,SELPLG_SELE,SELE,SELPLG,receptor flag,False,0.33476394849785407,Endo,0.39088009007318447,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.498,Endo -> NK
+A: stroma -> lymphoid,TNF_TNFRSF1A,TNF,TNFRSF1A,receptor flag,True,0.14629014396456258,"cTEC, mTEC(II)",0.5920398009950248,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.303,mTEC(II) -> NK
+A: stroma -> lymphoid,GRN_TNFRSF1A,GRN,TNFRSF1A,receptor flag,True,0.8240343347639485,"cTEC, mTEC(II), Fb_1, Endo",0.5920398009950248,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.75,Endo -> NK
+A: stroma -> lymphoid,TNF_RIPK1,TNF,RIPK1,receptor flag,True,0.14629014396456258,"cTEC, mTEC(II)",0.16417910447761194,"DN(early), DN(P)",0.119,mTEC(II) -> NK
+A: stroma -> lymphoid,TNF_TNFRSF1B,TNF,TNFRSF1B,receptor flag,True,0.14629014396456258,"cTEC, mTEC(II)",0.22388059701492538,"ETP, DN(early), ILC3, NK",0.253,mTEC(II) -> NK
+A: stroma -> lymphoid,GRN_TNFRSF1B,GRN,TNFRSF1B,receptor flag,True,0.8240343347639485,"cTEC, mTEC(II), Fb_1, Endo",0.22388059701492538,"ETP, DN(early), ILC3, NK",0.7,Endo -> NK
+A: stroma -> lymphoid,TNF_LTBR,TNF,LTBR,receptor flag,True,0.14629014396456258,"cTEC, mTEC(II)",0.21393034825870647,"ETP, DN(early)",0.135,mTEC(II) -> ETP
+A: stroma -> lymphoid,LTB_LTBR,LTB,LTBR,receptor flag,True,0.5,"cTEC, mTEC(II), Fb_1, Endo",0.21393034825870647,"ETP, DN(early)",0.527,mTEC(II) -> ETP
+A: stroma -> lymphoid,MIF_TNFRSF14,MIF,TNFRSF14,receptor flag,True,0.9416058394160584,"cTEC, mTEC(II), Fb_1, Endo",0.39800995024875624,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.331,cTEC -> NK
+A: stroma -> lymphoid,CD160_TNFRSF14,TNFRSF14,CD160,ambiguous,False,0.6086956521739131,"cTEC, mTEC(II), Endo",0.17688442211055277,NK,0.615,mTEC(II) -> NK
+A: stroma -> lymphoid,JAG1_NOTCH1,JAG1,NOTCH1,receptor flag,True,0.27896995708154504,"cTEC, mTEC(II), Endo",0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.319,Endo -> DN(early)
+A: stroma -> lymphoid,NOV_NOTCH1,NOV,NOTCH1,receptor flag,True,0.37577639751552794,mTEC(II),0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.258,mTEC(II) -> DN(early)
+A: stroma -> lymphoid,DLL1_NOTCH1,DLL1,NOTCH1,receptor flag,True,0.24892703862660945,Endo,0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.263,Endo -> DN(early)
+A: stroma -> lymphoid,DLK1_NOTCH1,DLK1,NOTCH1,receptor flag,True,0.9695863746958637,"cTEC, mTEC(II), Fb_1",0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",1.591,Fb_1 -> DN(early)
+A: stroma -> lymphoid,JAG2_NOTCH1,JAG2,NOTCH1,receptor flag,True,0.5584717607973422,"cTEC, mTEC(II), Endo",0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.291,cTEC -> DN(early)
+A: stroma -> lymphoid,DLL4_NOTCH1,DLL4,NOTCH1,receptor flag,True,0.49356223175965663,"cTEC, Endo",0.5771144278606966,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.375,Endo -> DN(early)
+A: stroma -> lymphoid,JAG1_NOTCH3,JAG1,NOTCH3,receptor flag,True,0.27896995708154504,"cTEC, mTEC(II), Endo",0.32649122807017544,"DN(early), DN(P), DN(Q), γδT",0.275,Endo -> DN(Q)
+A: stroma -> lymphoid,DLL1_NOTCH3,DLL1,NOTCH3,receptor flag,True,0.24892703862660945,Endo,0.32649122807017544,"DN(early), DN(P), DN(Q), γδT",0.219,Endo -> DN(Q)
+A: stroma -> lymphoid,DLK1_NOTCH3,DLK1,NOTCH3,receptor flag,True,0.9695863746958637,"cTEC, mTEC(II), Fb_1",0.32649122807017544,"DN(early), DN(P), DN(Q), γδT",1.547,Fb_1 -> DN(Q)
+A: stroma -> lymphoid,JAG2_NOTCH3,JAG2,NOTCH3,receptor flag,True,0.5584717607973422,"cTEC, mTEC(II), Endo",0.32649122807017544,"DN(early), DN(P), DN(Q), γδT",0.247,cTEC -> DN(Q)
+A: stroma -> lymphoid,DLL4_NOTCH3,DLL4,NOTCH3,receptor flag,True,0.49356223175965663,"cTEC, Endo",0.32649122807017544,"DN(early), DN(P), DN(Q), γδT",0.332,Endo -> DN(Q)
+A: stroma -> lymphoid,JAG1_CD46,JAG1,CD46,receptor flag,True,0.27896995708154504,"cTEC, mTEC(II), Endo",0.5882740447957839,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.285,Endo -> DN(P)
+A: stroma -> lymphoid,JAG1_NOTCH2,JAG1,NOTCH2,receptor flag,True,0.27896995708154504,"cTEC, mTEC(II), Endo",0.13930348258706468,"DN(early), DN(P), ILC3, γδT",0.221,Endo -> ILC3
+A: stroma -> lymphoid,DLK1_NOTCH2,DLK1,NOTCH2,receptor flag,True,0.9695863746958637,"cTEC, mTEC(II), Fb_1",0.13930348258706468,"DN(early), DN(P), ILC3, γδT",1.493,Fb_1 -> ILC3
+A: stroma -> lymphoid,JAG2_NOTCH2,JAG2,NOTCH2,receptor flag,True,0.5584717607973422,"cTEC, mTEC(II), Endo",0.13930348258706468,"DN(early), DN(P), ILC3, γδT",0.193,cTEC -> ILC3
+A: stroma -> lymphoid,DLL4_NOTCH2,DLL4,NOTCH2,receptor flag,True,0.49356223175965663,"cTEC, Endo",0.13930348258706468,"DN(early), DN(P), ILC3, γδT",0.277,Endo -> ILC3
+A: stroma -> lymphoid,CD74_MIF,MIF,CD74,receptor flag,False,0.9416058394160584,"cTEC, mTEC(II), Fb_1, Endo",0.736318407960199,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",2.385,cTEC -> ETP
+A: stroma -> lymphoid,EFNA3_EPHA1,EFNA3,EPHA1,receptor flag,True,0.18571428571428572,cTEC,0.152832674571805,"DN(early), DN(P), γδT",0.062,mTEC(II) -> γδT
+A: stroma -> lymphoid,EFNA5_EPHA1,EFNA5,EPHA1,receptor flag,True,0.15658914728682172,"cTEC, mTEC(II), Fb_1",0.152832674571805,"DN(early), DN(P), γδT",0.123,cTEC -> γδT
+A: stroma -> lymphoid,EFNA1_EPHA1,EFNA1,EPHA1,receptor flag,True,0.7296137339055794,"cTEC, mTEC(II), Endo",0.152832674571805,"DN(early), DN(P), γδT",0.381,Endo -> γδT
+A: stroma -> lymphoid,EFNA4_EPHA1,EFNA4,EPHA1,receptor flag,True,0.16854928017718715,"cTEC, mTEC(II), Fb_1, Endo",0.152832674571805,"DN(early), DN(P), γδT",0.077,Fb_1 -> γδT
+A: stroma -> lymphoid,EFNA3_EPHA4,EFNA3,EPHA4,receptor flag,True,0.18571428571428572,cTEC,0.1326530612244898,"ILC3, NK",0.091,mTEC(II) -> ILC3
+A: stroma -> lymphoid,EFNA5_EPHA4,EFNA5,EPHA4,receptor flag,True,0.15658914728682172,"cTEC, mTEC(II), Fb_1",0.1326530612244898,"ILC3, NK",0.152,cTEC -> ILC3
+A: stroma -> lymphoid,EFNA1_EPHA4,EFNA1,EPHA4,receptor flag,True,0.7296137339055794,"cTEC, mTEC(II), Endo",0.1326530612244898,"ILC3, NK",0.41,Endo -> ILC3
+A: stroma -> lymphoid,EFNA4_EPHA4,EFNA4,EPHA4,receptor flag,True,0.16854928017718715,"cTEC, mTEC(II), Fb_1, Endo",0.1326530612244898,"ILC3, NK",0.105,Fb_1 -> ILC3
+A: stroma -> lymphoid,EFNB1_EPHA4,EFNB1,EPHA4,receptor flag,True,0.3648068669527897,"cTEC, mTEC(II), Fb_1, Endo",0.1326530612244898,"ILC3, NK",0.186,Endo -> ILC3
+A: stroma -> lymphoid,EFNB2_EPHA4,EPHA4,EFNB2,ambiguous,False,0.4335548172757475,"cTEC, mTEC(II), Fb_1",0.14965986394557823,"DN(P), ILC3, γδT",0.202,mTEC(II) -> ILC3
+A: stroma -> lymphoid,IGF2_IGF2R,IGF2,IGF2R,receptor flag,True,0.9987834549878345,"mTEC(II), Fb_1, Endo",0.2711578157252768,"DN(early), DN(P), DN(Q), NK, γδT",1.857,Fb_1 -> NK
+A: stroma -> lymphoid,EFNB2_EPHB4,EPHB4,EFNB2,ambiguous,False,0.5278969957081545,"cTEC, Fb_1, Endo",0.14965986394557823,"DN(P), ILC3, γδT",0.193,Endo -> ILC3
+A: stroma -> lymphoid,EFNB2_EPHB1,EPHB1,EFNB2,ambiguous,False,0.13304721030042918,Endo,0.14965986394557823,"DN(P), ILC3, γδT",0.069,Endo -> ILC3
+A: stroma -> lymphoid,EFNB2_EPHB3,EPHB3,EFNB2,ambiguous,False,0.1867109634551495,"cTEC, Fb_1",0.14965986394557823,"DN(P), ILC3, γδT",0.111,Fb_1 -> ILC3
+A: stroma -> lymphoid,EFNB1_EPHB6,EFNB1,EPHB6,receptor flag,True,0.3648068669527897,"cTEC, mTEC(II), Fb_1, Endo",0.39303482587064675,"ETP, DN(early), DN(P), DN(Q), γδT",0.262,Endo -> γδT
+A: stroma -> lymphoid,EFNB2_EPHB6,EPHB6,EFNB2,ambiguous,False,0.1812846068660022,cTEC,0.14965986394557823,"DN(P), ILC3, γδT",0.12,cTEC -> ILC3
+A: stroma -> lymphoid,EFNB2_EPHB2,EPHB2,EFNB2,ambiguous,False,0.2484472049689441,"mTEC(II), Fb_1",0.14965986394557823,"DN(P), ILC3, γδT",0.1,Fb_1 -> ILC3
+A: stroma -> lymphoid,PTN_PLXNB2,PTN,PLXNB2,receptor flag,True,0.9902676399026764,"cTEC, mTEC(II), Fb_1",0.208955223880597,"ETP, DN(early)",1.478,Fb_1 -> ETP
+A: stroma -> lymphoid,SEMA4C_PLXNB2,SEMA4C,PLXNB2,manual,True,0.34334763948497854,"cTEC, mTEC(II), Endo",0.208955223880597,"ETP, DN(early)",0.119,Endo -> ETP
+A: stroma -> lymphoid,NECTIN2_NECTIN3,PVRL3,PVRL2,receptor flag,False,0.2614617940199336,"cTEC, mTEC(II), Fb_1, Endo",0.11564625850340136,"DN(early), ILC3",0.092,Fb_1 -> ILC3
+A: stroma -> lymphoid,NECTIN2_PRR3,PVRL3,PVRL2,receptor flag,False,0.2614617940199336,"cTEC, mTEC(II), Fb_1, Endo",0.11564625850340136,"DN(early), ILC3",0.135,Fb_1 -> ILC3
+A: stroma -> lymphoid,NECTIN1_NECTIN3,PVRL3,PVRL1,receptor flag,False,0.2614617940199336,"cTEC, mTEC(II), Fb_1, Endo",0.11442786069651742,DN(early),0.048,Fb_1 -> ETP
+A: stroma -> lymphoid,NECTIN1_PRR3,PVRL3,PVRL1,receptor flag,False,0.2614617940199336,"cTEC, mTEC(II), Fb_1, Endo",0.11442786069651742,DN(early),0.091,Fb_1 -> ETP
+A: stroma -> lymphoid,CD96_PVR,PVR,CD96,ambiguous,False,0.19742489270386265,Endo,0.5,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.411,cTEC -> ILC3
+A: stroma -> lymphoid,CD96_NECTIN1,PVRL1,CD96,ambiguous,False,0.5590062111801242,"cTEC, mTEC(II)",0.5,"DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.504,mTEC(II) -> ILC3
+A: stroma -> lymphoid,DSG2_DSC3,DSC3,DSG2,ambiguous,False,0.21428571428571427,"cTEC, mTEC(II)",0.208955223880597,"DN(early), DN(P)",0.169,mTEC(II) -> DN(P)
+A: stroma -> lymphoid,IGF1R_IGF2,IGF2,IGF1R,receptor flag,False,0.9987834549878345,"mTEC(II), Fb_1, Endo",0.4079601990049751,"ETP, DN(early), DN(P), DN(Q), ILC3, γδT",1.857,Fb_1 -> DN(P)
+A: stroma -> lymphoid,IGF1R_IGF1,IGF1,IGF1R,receptor flag,False,0.45498783454987834,Fb_1,0.4079601990049751,"ETP, DN(early), DN(P), DN(Q), ILC3, γδT",0.442,Fb_1 -> DN(P)
+A: stroma -> lymphoid,NOTCH2_DLL1,DLL1,NOTCH2,receptor flag,False,0.24892703862660945,Endo,0.13930348258706468,"DN(early), DN(P), ILC3, γδT",0.165,Endo -> ILC3
+A: stroma -> lymphoid,SORT1_GRN,GRN,SORT1,receptor flag,False,0.8240343347639485,"cTEC, mTEC(II), Fb_1, Endo",0.11442786069651742,DN(early),0.525,Endo -> ILC3
+A: stroma -> lymphoid,SORT1_COPA,COPA,SORT1,receptor flag,False,0.5387596899224806,"cTEC, mTEC(II), Fb_1, Endo",0.11442786069651742,DN(early),0.202,Fb_1 -> ILC3
+A: stroma -> lymphoid,PLXNC1_SEMA7A,SEMA7A,PLXNC1,receptor flag,False,0.34782608695652173,"mTEC(II), Endo",0.13945578231292516,ILC3,0.061,Endo -> ETP
+A: stroma -> lymphoid,CLEC2D_FAM3C,FAM3C,CLEC2D,receptor flag,False,0.537712895377129,"cTEC, mTEC(II), Fb_1, Endo",0.25984251968503935,"ETP, DN(early), DN(P), ILC3, NK, γδT",0.509,Fb_1 -> γδT
+A: stroma -> lymphoid,FGFR1_NCAM1,NCAM1,FGFR1,ambiguous,False,0.12165450121654502,Fb_1,0.11923583662714098,γδT,0.13,Fb_1 -> γδT
+A: stroma -> lymphoid,WNT5A_FZD6,WNT5A,FZD6,receptor flag,True,0.2236024844720497,mTEC(II),0.1691542288557214,"DN(early), DN(P), DN(Q), γδT",0.061,Fb_1 -> DN(P)
+A: stroma -> lymphoid,CXCL16_CXCR6,CXCL16,CXCR6,manual,True,0.15838509316770186,"cTEC, mTEC(II)",0.15306122448979592,ILC3,0.209,mTEC(II) -> NK
+A: stroma -> lymphoid,PDGFB_PDGFRB,PDGFB,PDGFRB,receptor flag,True,0.5021459227467812,Endo,0.2537313432835821,"ETP, DN(early), DN(P)",0.201,Endo -> DN(Q)
+A: stroma -> lymphoid,CD44_HGF,HGF,CD44,receptor flag,False,0.20194647201946472,Fb_1,0.9251700680272109,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.802,Fb_1 -> ILC3
+A: stroma -> lymphoid,CD58_CD2,CD58,CD2,receptor flag,True,0.1759656652360515,"mTEC(II), Fb_1, Endo",0.2602108036890646,"DN(early), DN(P), DN(Q), ILC3, γδT",0.432,Endo -> NK
+A: stroma -> lymphoid,SELL_CD34,CD34,SELL,ambiguous,False,0.9141630901287554,"Fb_1, Endo",0.9210526315789473,"ETP, DN(early), DN(P), DN(Q), NK, γδT",1.496,Endo -> DN(early)
+A: stroma -> lymphoid,SELL_PODXL,PODXL,SELL,ambiguous,False,0.6909871244635193,"mTEC(II), Endo",0.9210526315789473,"ETP, DN(early), DN(P), DN(Q), NK, γδT",0.962,Endo -> DN(early)
+A: stroma -> lymphoid,KITLG_KIT,KITLG,KIT,receptor flag,True,0.5064377682403434,"cTEC, mTEC(II), Endo",0.5272108843537415,ILC3,0.467,mTEC(II) -> ILC3
+A: stroma -> lymphoid,NCR3_BAG6,BAG6,NCR3,receptor flag,False,0.575107296137339,"cTEC, mTEC(II), Fb_1, Endo",0.4217687074829932,"DN(early), ILC3, NK, γδT",0.522,Endo -> NK
+A: stroma -> lymphoid,CD70_CD27,CD70,CD27,receptor flag,True,0.40683229813664595,mTEC(II),0.31752305665349145,"DN(early), DN(P), DN(Q), NK, γδT",0.28,mTEC(II) -> γδT
+A: stroma -> lymphoid,HLAE_HUMAN_KLRC1,HLA-E,KLRC1,receptor flag,True,0.9313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.8130653266331658,"ILC3, NK",1.838,Endo -> NK
+A: stroma -> lymphoid,IL15_IL15RA,IL15,IL15RA,receptor flag,True,0.36645962732919257,"cTEC, mTEC(II)",0.10945273631840796,DN(early),0.167,mTEC(II) -> NK
+A: stroma -> lymphoid,ICOS_ICOSLG,ICOSLG,ICOS,receptor flag,False,0.3416149068322981,mTEC(II),0.4228855721393035,"DN(early), DN(P), DN(Q), ILC3, γδT",0.21,mTEC(II) -> ILC3
+A: stroma -> lymphoid,KLRB1_CLEC2D,CLEC2D,KLRB1,ambiguous,False,0.12875536480686695,Endo,0.9678391959798995,"ETP, ILC3, NK, γδT",1.361,cTEC -> NK
+A: stroma -> lymphoid,KLRC2_HLAE_HUMAN,HLA-E,KLRC2,receptor flag,False,0.9313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.17386934673366833,"DN(Q), NK",1.389,Endo -> NK
+A: stroma -> lymphoid,aEb7 complex_CDH1,CDH1,aEb7 complex,integrin,False,0.6105204872646733,"cTEC, mTEC(II)",0.3700787401574803,"ETP, DN(early), ILC3, NK, γδT",0.542,mTEC(II) -> NK
+A: stroma -> lymphoid,aVb1 complex_FN1,FN1,aVb1 complex,integrin,False,0.8408637873754152,"cTEC, mTEC(II), Fb_1, Endo",0.13930348258706468,DN(early),0.671,mTEC(II) -> DN(P)
+A: stroma -> lymphoid,a4b7 complex_FN1,FN1,a4b7 complex,integrin,False,0.8408637873754152,"cTEC, mTEC(II), Fb_1, Endo",0.3700787401574803,"ETP, DN(early), ILC3, NK, γδT",0.818,mTEC(II) -> NK
+A: stroma -> lymphoid,a4b1 complex_FN1,FN1,a4b1 complex,integrin,False,0.8408637873754152,"cTEC, mTEC(II), Fb_1, Endo",0.6965174129353234,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.076,mTEC(II) -> γδT
+A: stroma -> lymphoid,a5b1 complex_FN1,FN1,a5b1 complex,integrin,False,0.8408637873754152,"cTEC, mTEC(II), Fb_1, Endo",0.29850746268656714,"DN(early), DN(P), NK, γδT",0.709,mTEC(II) -> DN(early)
+A: stroma -> lymphoid,a6b1 complex_LAMC1,LAMC1,a6b1 complex,integrin,False,0.8111587982832618,"cTEC, mTEC(II), Fb_1, Endo",0.26877470355731226,"DN(early), DN(P), DN(Q), γδT",0.616,Fb_1 -> γδT
+A: stroma -> lymphoid,a4b1 complex_SPP1,SPP1,a4b1 complex,integrin,False,0.21030042918454936,Endo,0.6965174129353234,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.89,Endo -> γδT
+A: stroma -> lymphoid,a4b1 complex_TNC,TNC,a4b1 complex,integrin,False,0.33540372670807456,mTEC(II),0.6965174129353234,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.571,mTEC(II) -> γδT
+A: stroma -> lymphoid,a4b7 complex_VCAM1,VCAM1,a4b7 complex,integrin,False,0.5559006211180124,"cTEC, mTEC(II), Fb_1",0.3700787401574803,"ETP, DN(early), ILC3, NK, γδT",0.556,mTEC(II) -> NK
+A: stroma -> lymphoid,a4b7 complex_MADCAM1,MADCAM1,a4b7 complex,integrin,False,0.7682403433476395,"mTEC(II), Endo",0.3700787401574803,"ETP, DN(early), ILC3, NK, γδT",0.341,Endo -> NK
+A: stroma -> lymphoid,a5b1 complex_FBN1,FBN1,a5b1 complex,integrin,False,0.5793991416309013,"cTEC, mTEC(II), Fb_1, Endo",0.29850746268656714,"DN(early), DN(P), NK, γδT",0.312,Fb_1 -> DN(early)
+A: stroma -> lymphoid,aLb2 complex_ICAM3,ICAM3,aLb2 complex,integrin,False,0.2703862660944206,Endo,0.4505928853754941,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.334,Endo -> NK
+A: stroma -> lymphoid,TGFbeta receptor1_TGFB1,TGFB1,TGFbeta receptor1,receptor flag,False,0.6394849785407726,"cTEC, mTEC(II), Fb_1, Endo",0.15422885572139303,"DN(early), ILC3",0.256,Endo -> NK
+A: stroma -> lymphoid,TGFbeta receptor1_TGFB3,TGFB3,TGFbeta receptor1,receptor flag,False,0.23357664233576642,Fb_1,0.15422885572139303,"DN(early), ILC3",0.188,Fb_1 -> NK
+A: stroma -> lymphoid,CD8 receptor_LCK,LCK,CD8 receptor,receptor flag,False,0.14233576642335766,"Fb_1, Endo",0.4488647025708388,"DN(P), DN(Q), γδT",0.356,cTEC -> DN(Q)
+A: stroma -> lymphoid,JAM2_a4b1 complex,JAM2,a4b1 complex,integrin,True,0.5836909871244635,"Fb_1, Endo",0.6965174129353234,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.933,Endo -> γδT
+A: stroma -> lymphoid,VCAM1_a4b1 complex,VCAM1,a4b1 complex,integrin,True,0.5559006211180124,"cTEC, mTEC(II), Fb_1",0.6965174129353234,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.814,mTEC(II) -> γδT
+A: stroma -> lymphoid,aLb2 complex_ICAM4,ICAM4,aLb2 complex,integrin,False,0.3447204968944099,mTEC(II),0.4505928853754941,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.317,Endo -> NK
+A: stroma -> lymphoid,aLb2 complex_ICAM2,ICAM2,aLb2 complex,integrin,False,0.8755364806866953,Endo,0.4505928853754941,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",0.803,Endo -> NK
+A: stroma -> lymphoid,IL15 receptor_IL15,IL15,IL15 receptor,receptor flag,False,0.36645962732919257,"cTEC, mTEC(II)",0.6090452261306533,"ILC3, NK",0.953,mTEC(II) -> NK
+A: stroma -> lymphoid,IL7 receptor_IL7,IL7,IL7 receptor,receptor flag,False,0.16600221483942415,cTEC,0.8299319727891157,"ETP, DN(early), DN(P), DN(Q), ILC3, NK, γδT",1.44,cTEC -> ILC3
+A: stroma -> lymphoid,GDF11_ACVR_1B2B receptor,GDF11,ACVR_1B2B receptor,receptor flag,True,0.19313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.20398009950248755,"DN(early), DN(P), γδT",0.086,Fb_1 -> γδT
+A: stroma -> lymphoid,GDF10_ACVR_1B2B receptor,GDF10,ACVR_1B2B receptor,receptor flag,True,0.694647201946472,Fb_1,0.20398009950248755,"DN(early), DN(P), γδT",0.343,Fb_1 -> γδT
+A: stroma -> lymphoid,GDF11_TGFR_AVR2B,GDF11,TGFR_AVR2B,receptor flag,True,0.19313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.15422885572139303,"DN(early), ILC3",0.104,Fb_1 -> NK
+A: stroma -> lymphoid,BMP2_BMR1B_AVR2B,BMP2,BMR1B_AVR2B,receptor flag,True,0.1888412017167382,"cTEC, mTEC(II), Endo",0.11390504785137924,DN(Q),0.065,Endo -> DN(Q)
+A: stroma -> lymphoid,BMP7_BMR1B_AVR2B,BMP7,BMR1B_AVR2B,receptor flag,True,0.418936877076412,"cTEC, mTEC(II)",0.11390504785137924,DN(Q),0.126,cTEC -> DN(Q)
+A: stroma -> lymphoid,BMP4_BMR1B_AVR2B,BMP4,BMR1B_AVR2B,receptor flag,True,0.1678832116788321,"mTEC(II), Fb_1",0.11390504785137924,DN(Q),0.124,Fb_1 -> DN(Q)
+A: stroma -> lymphoid,CD94:NKG2A_HLAE_HUMAN,HLA-E,CD94:NKG2A,receptor flag,False,0.9313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.7618090452261307,NK,1.838,Endo -> NK
+A: stroma -> lymphoid,CD94:NKG2C_HLAE_HUMAN,HLA-E,CD94:NKG2C,receptor flag,False,0.9313304721030042,"cTEC, mTEC(II), Fb_1, Endo",0.17386934673366833,NK,1.389,Endo -> NK
