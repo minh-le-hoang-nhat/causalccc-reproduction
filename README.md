@@ -19,6 +19,21 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
       network, with the pitfalls of each step and the measured effect of the settings of each function and of MIIC.
 - [ ] Assess the preprocessing of the input data used in the case studies.
 - [ ] Extensions of the published analyses (to be defined with the teaching team).
+  - [x] **Early thymic niche** – stromal cells (cTEC, mTEC(II), Fb_1, endothelium) and early lymphoid cells (ETP, DN,
+        ILC3, NK, γδT) of the prenatal human thymus at 7–11 post-conception weeks, with the CellPhoneDB ligand–receptor
+        pairs of the authors (data: Park *et al.*, *Science* 2020, [doi:10.1126/science.aay3224](https://doi.org/10.1126/science.aay3224)).
+        `notebooks/thymus_early/`: 01 (data inventory), 02 (cell populations), 03 (candidate ligand–receptor pairs),
+        04–06 (run A, stroma → lymphoid: input, CausalCCC, interpretation of the Notch claim), 07–09 (run B,
+        lymphoid → stroma: links, CausalCCC, interpretation of the LTB, RANKL and CD40LG claims, comparison of both runs).
+        Notebooks 01–04 and 07 are Python (`.ipynb`), 05, 06, 08 and 09 R (Quarto `.qmd`).
+  - [ ] CellPhoneDB re-run on the thymus atlas, overall and by stage (`scripts/thymus/01_*.py` to `05_*.py`,
+        `results/thymus/`).
+  - [ ] Medullary niche of the same atlas (Fig. 4 of Park *et al.*).
+
+  **Limits of the thymus analysis.** Sender and receiver cells are unpaired: the ligand → receptor links come from
+  CellPhoneDB and are imposed in the network, and the causal inference is within each group of cells. In the stroma,
+  cell population and donor are confounded (cTEC and mTEC(II) come almost only from two donors), and sequencing depth
+  still structures part of the networks (notebooks 06 and 09).
 - [ ] Analysis of a dataset shared with the BoNesis team, and comparison of the two approaches.
 
 ## Repository structure
@@ -28,19 +43,23 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 ├── .Rprofile            # pins the CRAN snapshot used by this project
 ├── docs/INSTALL.md      # how to build the computing environment
 ├── envs/                # environment definitions and recorded package versions
-├── data/                # not tracked by Git – see data/README.md; subfolders case1/, case2/
+├── data/                # not tracked by Git – see data/README.md; subfolders case1/, case2/, thymus/
 ├── notebooks/           # one folder per case study, notebooks numbered in execution order
 │   ├── case1/           # case study 1: 01_* to 04_*
 │   ├── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
-│   └── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
+│   ├── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
+│   └── thymus_early/    # early thymic niche: 01_* to 09_* (Python .ipynb and R Quarto .qmd)
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── case1/           # download_case1.sh, case1_helpers.R (functions of notebooks 03 and 04)
 │   ├── tutorial/        # tutorial_helpers.R (functions of the tutorial)
-│   └── case2/           # download_case2.sh, MIIC job, preprocessing/ (kallisto|bustools)
+│   ├── case2/           # download_case2.sh, MIIC job, preprocessing/ (kallisto|bustools)
+│   └── thymus/          # download_thymus.sh; CellPhoneDB re-run (01_*.py to 05_*.py)
 └── results/
     ├── case1/           # one folder per notebook, same name
     ├── case2/           # one folder per notebook, same name
+    ├── thymus_early/    # one folder per notebook, same name (exported count matrix *.mtx.gz not tracked by Git)
+    ├── thymus/          # CellPhoneDB re-run
     └── figures/
 ```
 
