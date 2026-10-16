@@ -1,0 +1,311 @@
+---
+title: "04 – CausalCCC run: XCL1 relay, CD8αα(I)/NK → DC1/aDC1"
+subtitle: "Building the CausalCCC input from the cells and L–R links of notebook 03, and running MIIC"
+author: "Jeanne Leclerc, Minh Le"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 03 fixed the cells (1,000 CD8αα(I)/NK senders, 635 DC1/aDC1 receivers, at most 500 per population) and the
+L–R links (25 S5 pairs = 28 gene–gene links: XCL1 → XCR1 and XCL2 → XCR1, plus the highest S5 means). The steps are
+those of thymus case 1 (notebook 05):
+
+1. build a Seurat object from the exported counts;
+2. select, in each group, the genes sharing the most mutual information (MI) with the genes of interest: the ligands
+   (senders), the receptors and three DC activation / migration genes (receivers) – `causalCCC.MIselection()`;
+3. build the mosaic table and the state order (`causalCCC.mosaic()`, `causalCCC.state_order()`), with population,
+   donor, chemistry and stage as metadata variables;
+4. run MIIC with the settings of the CausalCCC web server (`scripts/run_miic.R`), on 8 threads.
+
+**What the claim predicts in this network.** XCL1 (and XCL2) in the senders, linked to XCR1 in the receivers; in the
+receiver network, XCR1 (resting DC1) and CCR7 / LAMP3 (activated DC1) connected through the DC1 / aDC1 `population`
+variable, since activation is a change of state between the two populations (notebook 01).
+
+**Inputs:** `results/thymus_case2_xcl1/03_run_input/`.
+**Outputs** in `results/thymus_case2_xcl1/04_causalccc/`: MI tables, selected genes, the four files that the web server
+takes (`causalccc_files/`), and the MIIC result (`miic_input/miic_result.rds`).
+
+::: {.callout-note}
+## Running time
+Gene selection: about 10 to 20 minutes per group. MIIC: several minutes to half an hour on 8 threads. Both are saved the
+first time and reloaded afterwards; delete `selected_genes.rds` or `miic_input/miic_result.rds` to recompute them.
+:::
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Matrix)
+library(Seurat)
+library(miic)        # load miic before causalCCC
+library(causalCCC)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+
+root <- find_repo_root()
+# SeuratObject >= 5.3 fix for causalCCC.MIselection() and causalCCC.mosaic(), written for case study 1
+source(file.path(root, "scripts", "case1", "case1_helpers.R"))
+patch_causalccc()
+
+input_dir   <- file.path(root, "results", "thymus_case2_xcl1", "03_run_input")
+results_dir <- file.path(root, "results", "thymus_case2_xcl1", "04_causalccc")
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+
+senders   <- "cd8aa_nk"
+receivers <- "dc1"
+metadata  <- c("population", "donor", "method", "stage")
+# DC1 activation / migration genes (aDC1 markers, notebook 01), added as genes of interest on the receiver side
+activation_genes <- c("CCR7", "LAMP3", "CD40", "CD80", "CD86", "IL12B")
+n_threads <- 8
+set.seed(2026)
+```
+
+## 1. Seurat object
+
+```{r}
+#| label: seurat
+
+counts <- readMM(gzfile(file.path(input_dir, "counts.mtx.gz")))
+genes  <- read_csv(file.path(input_dir, "genes.csv"), show_col_types = FALSE)$gene
+cells  <- read_csv(file.path(input_dir, "cells.csv"), show_col_types = FALSE) |> column_to_rownames("cell")
+dimnames(counts) <- list(genes, rownames(cells))
+
+thymus <- CreateSeuratObject(counts = as(counts, "CsparseMatrix"), meta.data = cells)
+rm(counts)
+thymus
+table(thymus$group, thymus$population)
+```
+
+```{r}
+#| label: links
+
+interact_edges <- read_tsv(file.path(input_dir, "interact_edges.tsv"), show_col_types = FALSE)
+ligands   <- unique(interact_edges$ligands)
+receptors <- unique(interact_edges$receptors)
+stopifnot(all(c(ligands, receptors) %in% rownames(thymus)),
+          all(c("XCL1", "XCL2") %in% ligands), "XCR1" %in% receptors)
+interact_edges
+```
+
+## 2. Gene selection
+
+For each group, `causalCCC.MIselection()` computes the MI between every gene and each gene of interest (the "pivots")
+and keeps the genes with the highest MI; the number kept is the package default, `max(15, min(4 × pivots, 100))`.
+The choices are those of thymus case 1:
+
+- **Pivots: the ligands (senders); the receptors plus the activation genes (receivers).** CD40, CD80 and CD86 are
+  already receptors; CCR7, LAMP3 and IL12B are added. They are kept in the network whatever the selection gives.
+- **The metadata are not pivots.** They enter the network as variables (section 3) but do not choose the genes (with
+  donor as a pivot, the selection would add sex-chromosome genes that separate donors).
+- **Ribosomal and mitochondrial genes are excluded from the selection** (high MI with almost any gene, or cell quality).
+
+```{r}
+#| label: selection-input
+
+is_ribo <- grepl("^RP[SL]", rownames(thymus)) & !grepl("^RPS6K", rownames(thymus))   # RPS6K*: kinases, not ribosomal
+is_mito <- grepl("^MT-", rownames(thymus))
+c(ribosomal = sum(is_ribo), mitochondrial = sum(is_mito))
+stopifnot(all(activation_genes %in% rownames(thymus)),
+          !any(c(ligands, receptors, activation_genes) %in% rownames(thymus)[is_ribo | is_mito]))
+goi <- list(senders = ligands, receivers = unique(c(receptors, activation_genes)))
+lengths(goi)   # at most 30 pivots per group
+selection_input <- thymus[!(is_ribo | is_mito), ]
+```
+
+```{r}
+#| label: selection
+#| message: false
+
+selected_file <- file.path(results_dir, "selected_genes.rds")
+if (file.exists(selected_file)) {
+  selected <- readRDS(selected_file)
+} else {
+  # n_genes is left at its default
+  select_for <- function(group, pivots, colour) {
+    causalCCC.MIselection(data_input = selection_input, assay_name = "RNA", interact_ident = "group",
+                          oneinteract = group, goi = pivots, metadata_list = NULL,
+                          save = TRUE, plot = TRUE, output_dir = file.path(results_dir, "MI_tables"),
+                          color_heatmap = colour)
+  }
+  selected <- list(senders   = select_for(senders, goi$senders, "darkgreen"),
+                   receivers = select_for(receivers, goi$receivers, "darkorange"))
+  saveRDS(selected, selected_file)
+}
+rm(selection_input)
+
+genes_senders   <- unique(c(goi$senders, selected$senders))
+genes_receivers <- unique(c(goi$receivers, selected$receivers))
+c(sender_genes = length(genes_senders), receiver_genes = length(genes_receivers),
+  in_both = length(intersect(genes_senders, genes_receivers)))
+```
+
+```{r}
+#| label: selected-genes
+
+# Genes added by the selection (in addition to the pivots)
+list(senders   = setdiff(genes_senders, goi$senders),
+     receivers = setdiff(genes_receivers, goi$receivers))
+```
+
+## 3. Mosaic table and state order
+
+One row per cell: sender genes are filled in the CD8αα(I)/NK cells and empty (NA) in the DC cells, and the other way
+round. Genes selected in both groups (at least ITGAL and ITGB2, notebook 03) and the metadata, which are on both sides,
+get a `_senders` / `_receivers` suffix. The metadata are unordered categories, so no level order is given.
+
+```{r}
+#| label: mosaic
+#| message: false
+
+mosaic <- causalCCC.mosaic(data_input = thymus, assay_name = "RNA", interact_ident = "group",
+                           senders_name = senders, receivers_name = receivers,
+                           genes_senders = genes_senders, genes_receivers = genes_receivers,
+                           metadata_senders = metadata, metadata_receivers = metadata)
+
+no_order <- setNames(rep(list(NULL), length(metadata)), metadata)
+state_order <- causalCCC.state_order(mosaic_data_table = mosaic,
+                                     metadata_senders = no_order, metadata_receivers = no_order,
+                                     genes_senders = genes_senders, genes_receivers = genes_receivers,
+                                     ligands = ligands, receptors = receptors)
+
+# L-R links with the same (suffixed) names as the mosaic table
+edges_out <- interact_edges |>
+  mutate(ligands   = if_else(ligands %in% genes_receivers, paste0(ligands, "_senders"), ligands),
+         receptors = if_else(receptors %in% genes_senders, paste0(receptors, "_receivers"), receptors))
+stopifnot(all(c(edges_out$ligands, edges_out$receptors) %in% names(mosaic)))
+
+dim(mosaic)
+count(state_order, group, var_type)
+```
+
+The four files taken by the CausalCCC web server are saved as well, so the same run can be repeated there.
+
+```{r}
+#| label: save-files
+
+files_dir <- file.path(results_dir, "causalccc_files")
+dir.create(files_dir, showWarnings = FALSE)
+write.table(mosaic, file.path(files_dir, "causalCCC_df.csv"), quote = FALSE, sep = ",", row.names = FALSE)
+write.table(state_order, file.path(files_dir, "causalCCC_st.tsv"), quote = FALSE, sep = "\t", row.names = FALSE)
+write.table(edges_out, file.path(files_dir, "causalCCC_interactEdges.tsv"), quote = FALSE, sep = "\t", row.names = FALSE)
+writeLines(causalCCC.layout(state_order, network_height = 8), file.path(files_dir, "causalCCC_layout.json"))
+list.files(files_dir)
+```
+
+## 4. MIIC
+
+MIIC runs with the settings of the CausalCCC web server (`scripts/run_miic.R`, seed 2026) on 8 threads. With the
+installed miic, several threads crash ("C stack" errors), so the run uses the patched "deterministic" miic variant
+(`docs/INSTALL.md`, section 4), which on case study 2 gave the one-thread links, orientations and genuine causations
+about 3 times faster. The C stack limit is also lifted for the MIIC process only (`ulimit -s unlimited`), as in thymus
+case 1.
+
+```{r}
+#| label: miic
+
+miic_dir    <- file.path(results_dir, "miic_input")
+result_file <- file.path(miic_dir, "miic_result.rds")
+dir.create(miic_dir, showWarnings = FALSE)
+if (!file.exists(result_file)) {
+  files <- file.path(miic_dir, c("input.tsv", "state_order.tsv", "interact_edges.tsv"))
+  write_tsv(mosaic, files[1], na = "NA")
+  write_tsv(state_order, files[2], na = "NA")
+  write_tsv(edges_out, files[3], col_names = FALSE)
+  command <- paste("ulimit -s unlimited &&", 'R_LIBS="$HOME/R/miic_variants/deterministic"',
+                   "Rscript", shQuote(file.path(root, "scripts", "run_miic.R")),
+                   paste(shQuote(files), collapse = " "), shQuote(miic_dir), n_threads)
+  if (system2("bash", c("-c", shQuote(command))) != 0) stop("MIIC failed, see the messages above.")
+}
+miic_result <- readRDS(result_file)
+attr(miic_result, "run_time")
+```
+
+```{r}
+#| label: summary
+
+# MIIC lists each imposed L-R link twice (once per direction, info_shifted = 0): keep one row per pair of variables
+edges <- miic_result$all.edges.summary |>
+  filter(type == "P") |>
+  distinct(pair_a = pmin(x, y), pair_b = pmax(x, y), .keep_all = TRUE) |>
+  select(-pair_a, -pair_b)
+lr_keys <- c(paste(edges_out$ligands, edges_out$receptors), paste(edges_out$receptors, edges_out$ligands))
+is_lr <- paste(edges$x, edges$y) %in% lr_keys
+tibble(retained_links   = nrow(edges),
+       lr_links         = sum(is_lr),
+       learned_links    = sum(!is_lr),
+       oriented_links   = sum(abs(edges$infOrt) == 2),
+       variables_linked = n_distinct(c(edges$x, edges$y)),
+       variables_total  = ncol(mosaic))
+```
+
+### Links around the claim
+
+Retained links that touch XCL1, XCL2, XCR1, CCR7, LAMP3 or a `population` variable, strongest first. `infOrt`:
+1 = not oriented, 2 = x → y, −2 = y → x. The imposed L–R links have `info_shifted` = 0.
+
+```{r}
+#| label: claim-links
+
+key <- "^(XCL1|XCL2|XCR1|CCR7|LAMP3|population)(_senders|_receivers)?$"
+edges |>
+  filter(str_detect(x, key) | str_detect(y, key)) |>
+  select(x, y, info_shifted, infOrt, is_causal) |>
+  mutate(info_shifted = round(info_shifted, 1)) |>
+  arrange(desc(info_shifted)) |>
+  as.data.frame()
+```
+
+```{r}
+#| label: metadata-links
+
+# Links of the technical and design variables
+meta_key <- "^(stage|donor|method)_(senders|receivers)$"
+edges |>
+  filter(str_detect(x, meta_key) | str_detect(y, meta_key)) |>
+  select(x, y, info_shifted, infOrt) |>
+  mutate(info_shifted = round(info_shifted, 1)) |>
+  arrange(desc(info_shifted)) |>
+  as.data.frame()
+```
+
+## 5. First reading
+
+The L–R links are imposed by CausalCCC (they connect variables that are never observed in the same cell); what MIIC
+learns is the network around them, within each group.
+
+- **Senders.** XCL1 has only two learned neighbours: XCL2 (strong) and `population_senders` (the NK / CD8αα(I)
+  label). It has no direct link to stage, donor or chemistry, so its variation in this group is explained by which
+  population a cell belongs to, and XCL2 carries the NK cytotoxic program (its neighbours are NKG7 and CRTAM). The
+  `population_senders` hub links NK markers (NKG7, TYROBP, KLRD1, KLRC1, GNLY, GZMB) and CD8αα(I) / T-cell markers
+  (LEF1, TCF7, CAMK4, CD28). The orientation XCL1 → population ← CD28 is a v-structure between two population-specific
+  genes; it is not a causal statement about a cell label.
+- **Receivers.** XCR1 links to FGL2 and `population_receivers`; CCR7 links to `population_receivers` and to activation
+  genes (CD83, BIRC3, SAMSN1); LAMP3 is a hub of the activation program (CD40, CD80, IL12B, EBI3, FSCN1). XCR1 and
+  CCR7 are **not directly linked**: they are connected only through the DC1 / aDC1 label. This matches the claim as a
+  change of state (XCR1⁺ resting DC1 → CCR7⁺ activated DC1), but the network cannot say that XCL1 signalling causes
+  this activation: the activation genes do not depend on XCR1 within the receivers.
+- **Design variables.** Stage links only to donor (each donor has a single age, so stage is fully determined by donor).
+  Donor and chemistry link to a few housekeeping, translation and HLA genes and to one ligand subunit (ITGA4, of the
+  VLA-4 complex), but not to the genes of the claim.
+
+The full interpretation – including the remaining L–R links (MIF/APP → CD74, CD40LG → CD40, CD28 → CD80/CD86) – is
+left to the next notebook.
