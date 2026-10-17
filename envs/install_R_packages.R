@@ -4,6 +4,7 @@
 
 pak::pak(c("Seurat", "tidyverse", "rjson"))   # rjson + tidyverse: needed by miic's causalccc branch but not declared
 pak::pak("visNetwork")                         # interactive network plots (notebook 06)
+pak::pak("bioc::AUCell")                       # gene-set activity scores per cell (thymus early niche, notebook 10)
 pak::pak("miicTeam/CausalCCC@0aa8586e961153f244dcc1001aba9cb1442102c8")
 pak::pak("saezlab/liana@6cab46c54234f861ea176c3de77c4b8aa45ecb3d")  # LIANA: L-R inference used by causalCCC.links()
 pak::pak("miicTeam/miic_R_package@5ca0b222cc36bee902aa87e5ecfc480428d98927")  # last, so this exact commit is kept
