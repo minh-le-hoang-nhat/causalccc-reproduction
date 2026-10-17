@@ -1,0 +1,156 @@
+gene,sign,curation_effort,kept
+ABCC1,activated,2,kept
+ADAM19,activated,2,kept
+AHSP,activated,2,kept
+AKT1,activated,1,kept
+ATM,activated,2,kept
+BCL2,activated,4,kept
+BIRC5,activated,2,kept
+BMP10,activated,2,kept
+BNIP3,activated,2,kept
+CASP3,activated,2,kept
+CCND3,activated,1,kept
+CDH2,activated,5,kept
+CDK6,activated,1,kept
+CDKN1A,activated,13,kept
+CRTC1,activated,1,kept
+CYP26A1,activated,2,kept
+DTX1,activated,8,kept
+DUSP1,activated,2,kept
+EFNA2,activated,2,kept
+ELAC2,activated,1,kept
+ERBB2,activated,3,kept
+ESR1,activated,2,kept
+FABP7,activated,2,kept
+FCER1G,activated,1,kept
+FCRL5,activated,2,kept
+FGF6,activated,2,kept
+FHL1,activated,3,kept
+FJX1,activated,3,kept
+FOXP3,activated,4,kept
+GAMT,activated,2,kept
+GATA2,activated,6,kept
+GATA3,activated,6,kept
+HBB,activated,4,kept
+HES1,activated,56,kept
+HES3,activated,1,kept
+HES5,activated,11,kept
+HES7,activated,5,kept
+HEY1,activated,20,kept
+HEY2,activated,19,kept
+HNF1B,activated,3,kept
+HOXD1,activated,2,kept
+IL17A,activated,2,kept
+IL9,activated,2,kept
+LFNG,activated,4,kept
+MAL,activated,1,kept
+MARK3,activated,2,kept
+MDFIC,activated,2,kept
+MMP9,activated,4,kept
+MSX2,activated,4,kept
+MT1A,activated,2,kept
+MT2A,activated,2,kept
+NEUROG1,activated,4,kept
+NFKB1,activated,7,kept
+NFKB2,activated,4,kept
+NRARP,activated,4,kept
+NUP155,activated,2,kept
+PDLIM7,activated,3,kept
+PDX1,activated,3,kept
+PLAU,activated,2,kept
+PSG6,activated,2,kept
+PTCRA,activated,2,kept
+PTF1A,activated,1,kept
+PTGS2,activated,5,kept
+RAB18,activated,1,kept
+RAB27A,activated,1,kept
+RBM15,activated,1,kept
+RBPJL,activated,3,kept
+RCVRN,activated,2,kept
+REL,activated,2,kept
+RELA,activated,2,kept
+RELB,activated,2,kept
+REN,activated,2,kept
+RLF,activated,2,kept
+S100A10,activated,2,kept
+SKP2,activated,4,kept
+SMN2,activated,2,kept
+SOX10,activated,2,kept
+SOX2,activated,4,kept
+SPI1,activated,5,kept
+SRC,activated,2,kept
+TBX21,activated,2,kept
+TBX6,activated,2,kept
+TCF7,activated,3,kept
+TERT,activated,1,kept
+TNP1,activated,4,kept
+TRAF2,activated,1,kept
+U2AF1,activated,1,kept
+UCMA,activated,2,kept
+WNT10B,activated,2,kept
+ACTA2,repressed,7,repressed target
+ASCL1,repressed,10,repressed target
+ATP5PD,repressed,2,repressed target
+BMP2,activated,1,ligand or receptor (table S5)
+CD40,activated,3,ligand or receptor (table S5)
+CD8A,repressed,2,repressed target
+CDH5,repressed,2,repressed target
+CDKN1B,both,5,both target
+CEBPA,repressed,2,repressed target
+CEBPZ,repressed,2,repressed target
+CHST12,repressed,2,repressed target
+CLCN1,repressed,2,repressed target
+CR2,activated,9,ligand or receptor (table S5)
+CSF1,repressed,2,repressed target
+DDX6,repressed,2,repressed target
+DIO2,repressed,2,repressed target
+DLK1,repressed,4,repressed target
+DLL4,activated,9,ligand or receptor (table S5)
+DLX4,repressed,2,repressed target
+EFNB2,activated,2,ligand or receptor (table S5)
+EFNB3,activated,2,ligand or receptor (table S5)
+EPHA3,repressed,2,repressed target
+EPHB4,repressed,2,repressed target
+FCER2,activated,9,ligand or receptor (table S5)
+FES,repressed,2,repressed target
+FLT4,activated,2,ligand or receptor (table S5)
+GLUL,repressed,2,repressed target
+HMX2,repressed,2,repressed target
+HNF1A,repressed,2,repressed target
+HNF4A,repressed,2,repressed target
+IGHM,repressed,2,repressed target
+IL10,both,3,both target
+IL6,both,24,both target
+LHX3,repressed,2,repressed target
+LMAN2L,repressed,2,repressed target
+MCM2,repressed,3,repressed target
+MCM6,repressed,3,repressed target
+MET,activated,1,ligand or receptor (table S5)
+MYC,both,13,both target
+MYH11,both,5,both target
+MYOD1,repressed,6,repressed target
+NCOR2,repressed,3,repressed target
+NES,repressed,4,repressed target
+NEUROG3,repressed,3,repressed target
+NFATC1,both,3,both target
+NFKBIA,both,4,both target
+NOTCH1,activated,11,ligand or receptor (table S5)
+NOTCH2,activated,2,ligand or receptor (table S5)
+NOTCH3,activated,2,ligand or receptor (table S5)
+NR1H2,repressed,2,repressed target
+NRG1,activated,3,ligand or receptor (table S5)
+PDCD1,activated,1,ligand or receptor (table S5)
+PSEN1,repressed,3,repressed target
+PTEN,repressed,10,repressed target
+PTMA,repressed,2,repressed target
+SEMA5B,repressed,2,repressed target
+SMARCA1,repressed,2,repressed target
+SMTN,repressed,4,repressed target
+SOX9,repressed,6,repressed target
+SPP1,both,3,both target
+TAGLN,repressed,3,repressed target
+TLX1,repressed,2,repressed target
+TNC,activated,2,ligand or receptor (table S5)
+TNFRSF11B,activated,2,ligand or receptor (table S5)
+TNFSF11,both,3,both target
+TP53,repressed,4,repressed target

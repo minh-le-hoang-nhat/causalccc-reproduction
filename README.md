@@ -24,8 +24,10 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
         pairs of the authors (data: Park *et al.*, *Science* 2020, [doi:10.1126/science.aay3224](https://doi.org/10.1126/science.aay3224)).
         `notebooks/thymus_early/`: 01 (data inventory), 02 (cell populations), 03 (candidate ligand–receptor pairs),
         04–06 (run A, stroma → lymphoid: input, CausalCCC, interpretation of the Notch claim), 07–09 (run B,
-        lymphoid → stroma: links, CausalCCC, interpretation of the LTB, RANKL and CD40LG claims, comparison of both runs).
-        Notebooks 01–04 and 07 are Python (`.ipynb`), 05, 06, 08 and 09 R (Quarto `.qmd`).
+        lymphoid → stroma: links, CausalCCC, interpretation of the LTB, RANKL and CD40LG claims, comparison of both runs),
+        10 (a Notch activity score per cell from the CollecTRI RBPJ regulon with AUCell: it fails its positive control,
+        ETP and DN(early) scoring lowest of the lymphoid populations, so it is not used in a network).
+        Notebooks 01–04 and 07 are Python (`.ipynb`), 05, 06, 08, 09 and 10 R (Quarto `.qmd`).
   - [ ] CellPhoneDB re-run on the thymus atlas, overall and by stage (`scripts/thymus/01_*.py` to `05_*.py`,
         `results/thymus/`).
   - [ ] Medullary niche of the same atlas (Fig. 4 of Park *et al.*).
@@ -48,7 +50,7 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 │   ├── case1/           # case study 1: 01_* to 04_*
 │   ├── case2/           # case study 2: 03_* to 07_*, and preprocessing/ (raw reads -> matrix, Python)
 │   ├── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
-│   └── thymus_early/    # early thymic niche: 01_* to 09_* (Python .ipynb and R Quarto .qmd)
+│   └── thymus_early/    # early thymic niche: 01_* to 10_* (Python .ipynb and R Quarto .qmd)
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── case1/           # download_case1.sh, case1_helpers.R (functions of notebooks 03 and 04)

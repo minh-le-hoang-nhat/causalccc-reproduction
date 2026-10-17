@@ -1,0 +1,337 @@
+---
+title: "10 – A Notch activity score per cell"
+subtitle: "AUCell on the CollecTRI RBPJ regulon, before using it in run C"
+author: "Minh Le, Jeanne Leclerc"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Question
+
+In run A (notebooks 04–06), NOTCH1 on the lymphoid side was not linked to the four Notch targets we chose (HES1,
+DTX1, NRARP, PTCRA), and the targets followed the lymphoid population instead. Single target genes are sparse in
+single-cell data, and the four were picked by hand. Here we replace them with **one score per cell** computed from a
+published gene set, and ask whether this score behaves like a measure of Notch activity before it is used in run C
+(stroma → ETP + DN(early)):
+
+1. Which genes does a database give as Notch targets, and how many are detected in our cells?
+2. Is the score higher in the early T-lineage populations (Notch-dependent) than in NK cells and ILC3?
+3. Does the score follow sequencing depth within each population, more than a random gene set of the same kind?
+4. Within ETP and DN(early) (the receivers of run C), how does the score vary with population and donor?
+
+**Choices and their sources.**
+
+- *Gene set.* Notch receptors act through the DNA-binding factor RBPJ (CSL): the cleaved Notch intracellular domain
+  binds RBPJ and turns its targets on (Kopan & Ilagan, *Cell* 2009,
+  [doi:10.1016/j.cell.2009.03.045](https://doi.org/10.1016/j.cell.2009.03.045)). The Notch target set is the RBPJ
+  regulon of **CollecTRI** (Müller-Dott *et al.*, *Nucleic Acids Res* 2023,
+  [doi:10.1093/nar/gkad841](https://doi.org/10.1093/nar/gkad841)), a curated collection of signed transcription
+  factor → target interactions with literature references (file: `data/README.md`). PROGENy (Schubert *et al.*,
+  *Nat Commun* 2018) has no Notch pathway, so it cannot be used here.
+- *Score.* **AUCell** (Aibar *et al.*, *Nat Methods* 2017, [doi:10.1038/nmeth.4463](https://doi.org/10.1038/nmeth.4463))
+  ranks the genes within each cell and measures how many genes of the set are near the top. It uses only ranks within
+  a cell, so it is less tied to the total counts than a sum of counts – our main confounder in runs A and B.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(Matrix)
+library(AUCell)
+
+find_repo_root <- function(dir = getwd()) {
+  while (!(file.exists(file.path(dir, "README.md")) && dir.exists(file.path(dir, "notebooks")))) {
+    parent <- dirname(dir)
+    if (parent == dir) stop("Repository root not found. Open the repository folder in Positron.")
+    dir <- parent
+  }
+  dir
+}
+root <- find_repo_root()
+
+data_dir <- file.path(root, "data", "thymus")
+res_dir  <- file.path(root, "results", "thymus_early")
+out_dir  <- file.path(res_dir, "10_activity_scores")
+fig_dir  <- file.path(root, "results", "figures", "thymus_early")
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+
+populations <- c("ETP", "DN(early)", "DN(P)", "DN(Q)", "γδT", "NK", "ILC3",   # early lymphoid
+                 "cTEC", "mTEC(II)", "Fb_1", "Endo")                       # stroma
+```
+
+The cells are those exported for run A (notebook 04): all 11 populations of 7–11 PCW, at most 500 cells per
+population (seed 0), raw counts. ETP (127 cells) and DN(early) (201) are complete, so run C can use the same cells.
+
+```{r}
+#| label: cells
+
+input_dir <- file.path(res_dir, "04_runA_input")
+counts <- readMM(file.path(input_dir, "counts.mtx.gz"))               # genes x cells
+genes  <- read_csv(file.path(input_dir, "genes.csv"), show_col_types = FALSE)$gene
+cells  <- read_csv(file.path(input_dir, "cells.csv"), show_col_types = FALSE) |>
+  mutate(population = factor(population, levels = populations))
+dimnames(counts) <- list(genes, cells$cell)
+counts <- as(counts, "CsparseMatrix")
+cells$n_detected <- colSums(counts > 0)
+
+count(cells, group, population)
+```
+
+## 1. The gene set
+
+CollecTRI gives each RBPJ → target interaction a sign. AUCell ignores signs, so only targets that RBPJ **activates**
+are kept (`is_stimulation` true and `is_inhibition` false); repressed and ambiguous targets would lower the score of
+cells where Notch is active.
+
+```{r}
+#| label: regulon
+
+collectri <- read_tsv(file.path(data_dir, "collectri", "collectri_human.tsv"), show_col_types = FALSE)
+
+rbpj <- collectri |>
+  filter(source_genesymbol == "RBPJ") |>
+  summarise(stimulation = any(is_stimulation), inhibition = any(is_inhibition),
+            curation_effort = max(curation_effort), .by = target_genesymbol) |>
+  rename(gene = target_genesymbol) |>
+  mutate(sign = case_when(stimulation & !inhibition ~ "activated",
+                          inhibition & !stimulation ~ "repressed",
+                          .default = "both"))
+count(rbpj, sign)
+```
+
+Two more filters:
+
+- **No ligand or receptor gene.** In run C, ligands and receptors are network variables and the L–R links are imposed.
+  A score that contains NOTCH1 or DLL4 would be partly the same measurement as the receptor. Every gene of every partner
+  of table S5 (complexes split into their subunits with the CellPhoneDB v2 files, as in notebook 04) is removed.
+- **Present in the count matrix** (gene symbols of the atlas).
+
+```{r}
+#| label: lr-genes
+
+db <- file.path(data_dir, "cellphonedb_v2_db", "db_2019-09")
+gene_db <- read_csv(file.path(db, "gene_input.csv"), show_col_types = FALSE) |>
+  distinct(uniprot, .keep_all = TRUE) |>
+  mutate(gene_name = recode(gene_name, NECTIN1 = "PVRL1", NECTIN2 = "PVRL2", NECTIN3 = "PVRL3"))
+complexes <- read_csv(file.path(db, "complex_input.csv"), show_col_types = FALSE) |>
+  pivot_longer(uniprot_1:uniprot_4, values_to = "uniprot", values_drop_na = TRUE) |>
+  left_join(gene_db, by = "uniprot") |>
+  select(complex_name, gene_name)
+
+s5 <- read_csv(file.path(res_dir, "03_ligand_receptor_candidates", "s5_oriented.csv"), show_col_types = FALSE)
+partners <- unique(c(s5$ligand, s5$receptor))
+lr_genes <- unique(c(setdiff(partners, complexes$complex_name),
+                     complexes$gene_name[complexes$complex_name %in% partners]))
+stopifnot(!anyNA(lr_genes))
+length(lr_genes)
+```
+
+```{r}
+#| label: gene-set
+
+rbpj <- rbpj |>
+  mutate(kept = case_when(sign != "activated" ~ paste(sign, "target"),
+                          gene %in% lr_genes ~ "ligand or receptor (table S5)",
+                          !gene %in% genes ~ "not in the count matrix",
+                          .default = "kept"))
+count(rbpj, kept)
+filter(rbpj, kept == "ligand or receptor (table S5)")$gene
+notch_set <- sort(filter(rbpj, kept == "kept")$gene)
+```
+
+How often each kept gene is detected, in the run C receivers (ETP + DN(early)) and in the other groups:
+
+```{r}
+#| label: detection
+
+cell_group <- case_when(cells$population %in% c("ETP", "DN(early)") ~ "ETP + DN(early)",
+                        cells$population %in% c("DN(P)", "DN(Q)") ~ "DN(P) + DN(Q)",
+                        cells$population %in% c("NK", "ILC3") ~ "NK + ILC3",
+                        cells$population == "γδT" ~ "γδT",
+                        .default = "stroma")
+detected <- map(split(seq_len(ncol(counts)), cell_group),
+                \(j) rowMeans(counts[notch_set, j, drop = FALSE] > 0)) |>
+  as_tibble() |>
+  mutate(gene = notch_set, .before = 1) |>
+  select(gene, `ETP + DN(early)`, `DN(P) + DN(Q)`, `γδT`, `NK + ILC3`, stroma) |>
+  arrange(desc(`ETP + DN(early)`))
+
+c(genes_in_set = length(notch_set),
+  detected_in_5pct_of_ETP_DNearly = sum(detected$`ETP + DN(early)` >= 0.05),
+  never_detected_in_these_cells = sum(rowSums(counts[notch_set, ] > 0) == 0))
+detected |> head(25) |> mutate(across(where(is.numeric), \(x) round(x, 2)))
+```
+
+## 2. Scoring
+
+AUCell ranks the genes of each cell; genes with the same value (most of them at 0) are put in random order, hence the
+seed. The score looks only at the top `aucMaxRank` genes of each ranking. The AUCell vignette asks that most cells
+detect at least that many genes; otherwise the end of the window falls among random zeros. The default (5% of 33,694
+genes = 1,685) is above the number of genes detected by `r round(100 * mean(cells$n_detected < 1685))`% of the cells,
+so the window is set to the **10th percentile of detected genes**: 90% of the cells have at least that many.
+
+```{r}
+#| label: auc
+
+quantile(cells$n_detected, c(0.05, 0.1, 0.25, 0.5))
+max_rank <- floor(quantile(cells$n_detected, 0.1))
+max_rank
+
+set.seed(0)
+rankings <- AUCell_buildRankings(counts, plotStats = FALSE, splitByBlocks = TRUE, verbose = FALSE)
+notch_auc <- getAUC(AUCell_calcAUC(list(notch = notch_set), rankings, aucMaxRank = max_rank, verbose = FALSE))
+cells$notch_auc <- notch_auc["notch", cells$cell]
+```
+
+**Control gene sets.** A score can differ between populations simply because some populations detect more genes
+(median `r min(tapply(cells$n_detected, cells$population, median))` to
+`r max(tapply(cells$n_detected, cells$population, median))` here). To see what is specific to the Notch set, the same
+score is computed for 100 random gene sets of the same size, in which each Notch gene is replaced by a random gene
+detected in a similar fraction of cells (same twentieth of the detection distribution). The **adjusted score** is the
+Notch score minus the mean score of the random sets in the same cell.
+
+```{r}
+#| label: control-sets
+
+detection <- rowMeans(counts > 0)
+pool <- names(detection)[detection > 0 & !names(detection) %in% c(notch_set, lr_genes)]
+bins <- cut(detection, breaks = unique(quantile(detection[pool], seq(0, 1, 0.05))), include.lowest = TRUE)
+names(bins) <- names(detection)
+
+set.seed(1)
+control_sets <- map(1:100, \(i) map_chr(notch_set, \(g) {
+  same_bin <- pool[bins[pool] == bins[g]]
+  if (length(same_bin) == 0 || is.na(bins[g])) same_bin <- pool    # genes never detected: any gene
+  sample(same_bin, 1)
+}))
+names(control_sets) <- paste0("control_", 1:100)
+control_matrix <- getAUC(AUCell_calcAUC(control_sets, rankings, aucMaxRank = max_rank, verbose = FALSE))
+
+cells$control_auc <- colMeans(control_matrix[, cells$cell])
+cells$notch_adjusted <- cells$notch_auc - cells$control_auc
+```
+
+## 3. Is the score higher where Notch is expected to be active?
+
+Notch signalling specifies the T lineage in thymic progenitors and is needed up to β-selection; in human thymus it is
+active in CD34⁺ progenitors and developing thymocytes (García-León *et al.*, *Development* 2018,
+[doi:10.1242/dev.165597](https://doi.org/10.1242/dev.165597)), and strong Notch signals also favour γδ T cells
+(Van de Walle *et al.*, *J Exp Med* 2013, [doi:10.1084/jem.20121798](https://doi.org/10.1084/jem.20121798)).
+Expected: ETP, DN(early), DN(P), DN(Q) and γδT above NK and ILC3. The stroma is not a negative control: endothelial
+cells use Notch signalling themselves.
+
+```{r}
+#| label: by-population
+
+by_population <- cells |>
+  summarise(cells = n(), notch_auc = median(notch_auc), control_auc = median(control_auc),
+            notch_adjusted = median(notch_adjusted), .by = population) |>
+  arrange(population)
+by_population |> mutate(across(c(notch_auc, control_auc, notch_adjusted), \(x) signif(x, 2)))
+```
+
+```{r}
+#| label: fig-score
+#| fig-width: 10
+#| fig-height: 4.5
+
+plot_data <- cells |>
+  select(population, group, `Notch set` = notch_auc, `random sets (mean)` = control_auc,
+         `adjusted (Notch − random)` = notch_adjusted) |>
+  pivot_longer(-c(population, group), names_to = "score") |>
+  mutate(score = fct_inorder(score))
+p <- ggplot(plot_data, aes(population, value, fill = group)) +
+  geom_boxplot(outlier.size = 0.3) +
+  facet_wrap(~score, scales = "free_y") +
+  scale_fill_manual(values = c(stroma = "#b5d99c", early_lymphoid = "#f2c57c"),
+                    labels = c(stroma = "stroma", early_lymphoid = "early lymphoid")) +
+  labs(x = NULL, y = "AUCell score", fill = NULL,
+       title = "Notch (RBPJ regulon, CollecTRI) activity score by population, 7–11 PCW") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom")
+p
+ggsave(file.path(fig_dir, "10_notch_score_by_population.png"), p, width = 10, height = 4.5, dpi = 150)
+```
+
+## 4. Does the score follow sequencing depth?
+
+Within each population, Spearman correlation of each score with the total counts of the cell (`n_counts`). For the
+random sets, the median correlation over the 100 sets.
+
+```{r}
+#| label: depth
+
+depth <- cells |>
+  summarise(cells = n(),
+            notch = cor(notch_auc, n_counts, method = "spearman"),
+            random_sets_median = median(apply(control_matrix[, cell, drop = FALSE], 1,
+                                              \(a) cor(a, n_counts, method = "spearman"))),
+            adjusted = cor(notch_adjusted, n_counts, method = "spearman"),
+            .by = population) |>
+  arrange(population)
+depth |> mutate(across(where(is.double), \(x) round(x, 2)))
+```
+
+## 5. Within the run C receivers
+
+```{r}
+#| label: run-c-receivers
+
+receivers <- filter(cells, population %in% c("ETP", "DN(early)")) |> droplevels()
+receivers |>
+  summarise(cells = n(), notch_auc = median(notch_auc), notch_adjusted = median(notch_adjusted),
+            .by = c(population, donor)) |>
+  arrange(population, desc(cells)) |>
+  mutate(across(c(notch_auc, notch_adjusted), \(x) signif(x, 2)))
+
+wilcox.test(notch_adjusted ~ population, data = receivers)$p.value
+kruskal.test(notch_adjusted ~ donor, data = filter(receivers, population == "DN(early)"))$p.value
+```
+
+## 6. Export
+
+```{r}
+#| label: export
+
+rbpj |>
+  select(gene, sign, curation_effort, kept) |>
+  arrange(kept != "kept", gene) |>
+  write_csv(file.path(out_dir, "notch_gene_set.csv"))
+cells |>
+  select(cell, population, donor, n_counts, n_detected, notch_auc, control_auc, notch_adjusted) |>
+  write_csv(file.path(out_dir, "notch_scores.csv"))
+writeLines(c(paste("aucMaxRank:", max_rank), paste("genes in the Notch set:", length(notch_set))),
+           file.path(out_dir, "settings.txt"))
+list.files(out_dir)
+```
+
+## Summary
+
+| Question | Result |
+| -------- | ------ |
+| 1. Gene set | CollecTRI gives 155 RBPJ targets; 105 are activated, 89 remain after removing 16 ligand/receptor genes (NOTCH1–3, DLL4, CD40, …). 50 of the 89 are detected in ≥ 5% of ETP + DN(early) cells. |
+| 2. Positive control | **Fails.** ETP and DN(early) have the lowest scores of the lymphoid populations (median adjusted score 0.009 and 0.012), below NK (0.013) and ILC3 (0.021); DN(P) and DN(Q) are the highest (0.025, 0.029). |
+| 3. Sequencing depth | Within populations, the raw score correlates with `n_counts` from −0.13 to 0.29; random sets of matched detection from −0.29 to −0.16. Subtracting them makes the dependence on depth stronger (0.05 to 0.40), not weaker. |
+| 4. Run C receivers | The score differs between ETP and DN(early) (Wilcoxon p = 0.02) and strongly between donors within DN(early) (Kruskal–Wallis p = 1.5 × 10⁻⁸). |
+
+**Why the score fails.** The CollecTRI regulon collects RBPJ targets reported in any tissue. The 89 genes include
+pancreatic (PDX1, PTF1A), neural (SOX2, NEUROG1), erythroid (HBB, AHSP) and T-helper (IL17A, FOXP3, TBX21) genes, and
+broadly expressed genes (DUSP1, MT2A, CDK6, REL, NFKB1, NFKB2). The genes most often detected in our cells are of the
+last kind. The known T-lineage Notch targets are only 6 of the 89 (HES1, DTX1, NRARP, PTCRA, GATA3, TCF7). Taken one
+at a time, they do follow the expected pattern (for example DTX1 is detected in 34% of ETP + DN(early) cells and 3% of
+NK + ILC3), but the rest of the set hides them.
+
+**Consequence.** This score is not used in run C. A Notch score for thymocytes would need a gene set measured in
+human T-lineage cells (for example genes that respond to Notch ligands in human CD34⁺ progenitors), which no database
+used here provides.
