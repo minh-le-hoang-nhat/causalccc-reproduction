@@ -12,10 +12,10 @@ execute:
   warning: true
 ---
 
-## Goal
+## Question
 
-Notebook 04 learned two networks with MIIC, one per age class, with the same 25 L–R pairs (27 gene–gene links) and the
-same settings:
+Notebook 04 built two CausalCCC networks with MIIC, one per age class, with the same 25 L–R pairs (27 gene–gene links)
+and the same settings:
 
 | | Fetal (7–17 PCW) | Postnatal (3 months – 35 years) |
 |---|---|---|
@@ -30,7 +30,7 @@ Here the claim of Park *et al.* is read with **CD8αα(I) cells only** as sender
 > "GNG4⁺CD8αα⁺ T(I) cells expressed XCL1, which may be involved in the recruitment of XCR1-expressing DC1 cells. […]
 > XCL1 is expressed most highly by CD8αα⁺ T(I) cells […] where these cells are activated and up-regulate CCR7."
 
-Questions:
+Here we ask:
 
 1. Within CD8αα(I) cells, what does XCL1 depend on, and is it the same before and after birth (section 2)?
 2. On the receiver side, is the XCR1 / CCR7 picture of case 2 found in both age classes (section 3)?
@@ -561,32 +561,28 @@ networks add, and what remains untested.
   postnatal network has only 35 aDC1. As noted in section 4, CD40, CD80 and CD274 are themselves activation markers of
   DCs, so these links may reflect co-expression in aDC1 rather than signalling.
 
-## Conclusions
+## Summary
 
-1. **XCL1 in CD8αα(I) cells drops at birth.**
-   - 29% of fetal against 12% of postnatal cells express it (notebook 01).
-   - The drop is much larger than the difference in sequencing depth.
-   - Before and after birth, XCL1 belongs to an activation program of these cells: it is linked to TNFRSF9 (4-1BB) in
-     both runs, with BIRC3 and DUSP4 (fetal) or BHLHE40 and RGS16 (postnatal) nearby, and goes with XCL2 and CRTAM.
-   - So the XCL1 source in CD8αα(I) cells is their activated (4-1BB⁺) fraction, which is larger before birth. This
-     refines the claim: CD8αα(I) cells are an XCL1 source mainly in the fetal thymus, and it is the cells carrying a
-     TCR-activation signature that produce it.
-   - GNG4 is not in the networks, so its role cannot be read from them.
-   - This association is new but fits the literature on agonist-selected CD8αα cells (section 8).
-2. **The receiver side is the same at both ages, and as in case 2.**
-   - XCR1 marks resting DC1, and CCR7 / LAMP3 mark activated DC1; the two are almost never co-expressed.
-   - The activation program does not depend on XCR1.
-   - The claim's "activated […] up-regulate CCR7" is a change of state that the networks describe but cannot attribute
-     to XCL1 signalling.
-3. **Costimulation is a fetal feature in these networks.** CD28 → CD80, CD40LG → CD40 and PDCD1 → CD274 connect
-   CD8αα(I) cells to the aDC1 activation module in fetal cells; postnatally only PD-L1 stays tied to aDC1, with 35 aDC1
-   cells only. The thymocyte–DC costimulation crosstalk is known; its restriction to fetal life is not (section 8).
-4. **CRTAM → CADM1 links the XCL1⁺ CD8αα(I) cells to DC1 in fetal cells.** It is a known adhesion pair between
-   activated cytotoxic cells and DC1, here found in the human thymus (section 8).
+| Question | Fetal (7–17 PCW) | Postnatal (3 months – 35 years) |
+|---|---|---|
+| XCL1 in CD8αα(I), sender side | 29% of cells; linked to TNFRSF9 (4-1BB, strongest neighbour), XCL2, CRTAM, near BIRC3 and DUSP4 | 12% of cells, not a depth artefact; linked to TNFRSF9 (second neighbour), near BHLHE40 and RGS16 |
+| XCR1 → DC1 activation, receiver side | XCR1 (resting DC1) and CCR7 / LAMP3 (aDC1) almost mutually exclusive; activation genes do not depend on XCR1 | same, with 35 aDC1 only |
+| Other L–R links | CD28 → CD80, CD40LG → CD40, PDCD1 → CD274 reach the LAMP3 module; CRTAM → CADM1 connects XCL1⁺ cells to CLEC9A⁺ DC1 | only CD274 (PD-L1) stays tied to aDC1; CRTAM joins the TCR-activation genes, CADM1 moves to HLA-DPA1 |
+| Network similarity, design variables | Jaccard 0.31 (senders) and 0.22 (receivers) between runs; depth first hub of every group; donor, chemistry and depth not linked to the claim's genes | chemistry and donor confounded among the senders |
+
+**What this means for the claim.**
+
+1. **CD8αα(I) cells are an XCL1 source mainly before birth, and it is their activated fraction that produces it.**
+   XCL1 drops at birth (29% → 12% of cells, much more than depth). At both ages it belongs to an activation program
+   (TNFRSF9 / 4-1BB and TCR-induced genes). This refines the claim; it is new but fits the literature on
+   agonist-selected CD8αα cells (section 8). GNG4 is not in the networks, so the "GNG4⁺" part rests on co-expression only.
+2. **The relay part reads as in case 2 at both ages:** the networks describe the change of state from XCR1⁺ DC1 to
+   CCR7⁺ aDC1, but do not attribute it to XCL1 signalling.
+3. **Costimulation and CRTAM → CADM1 connect CD8αα(I) cells to DC1 in fetal cells.** These are known thymocyte–DC
+   signals; their restriction to fetal life is not described (section 8).
 
 **Limits.**
-- The two networks rest on different gene selections and share few links (Jaccard 0.22–0.31), so they are compared
-  gene by gene.
+- The two networks rest on different gene selections and share few links, so they are compared gene by gene.
 - Postnatal aDC1 has only 35 cells.
 - Postnatally, chemistry and donor are confounded.
 - As in cases 1 and 2, the L–R links are given, not inferred, and the orientations involving the claim's genes are

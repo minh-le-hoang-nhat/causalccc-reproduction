@@ -12,22 +12,26 @@ execute:
   warning: true
 ---
 
-## Goal
+## Question
 
-Notebook 04 learned one network with MIIC: 1,000 sender cells (CD8αα(I) and NK, 500 each), 635 receiver cells (DC1
-500, aDC1 135), 25 L–R pairs from Table S5 (28 gene–gene links) and five metadata variables per group (population,
-donor, chemistry, stage and sequencing depth `n_counts`). A first run without sequencing depth is kept for comparison
-(section 5). This notebook reads that network against the claim of Park *et al.* 2020 (Fig. 4D, fig. S26):
+Park *et al.* 2020 (Fig. 4D, fig. S26) write:
 
 > "GNG4⁺CD8αα⁺ T(I) cells expressed XCL1, which may be involved in the recruitment of XCR1-expressing DC1 cells. […]
 > XCL1 is expressed most highly by CD8αα⁺ T(I) cells and at a lower level by NK cells […] a potential relay of signals
 > from CD8αα⁺ T(I) cells to recruit XCR1⁺ DC1 cells into the medulla, where these cells are activated and up-regulate
 > CCR7."
 
-The claim has three parts, examined in turn: **(1) who produces XCL1** (sections 2), **(2) XCR1 on DC1 and the
-activation that follows** (section 3), and **(3) the other signals between the same cells** (section 4). Section 5
-checks the design variables and what adding sequencing depth changed; section 6 the orientations; section 7 draws the
-network.
+Notebook 04 built a CausalCCC network with MIIC: 1,000 sender cells (CD8αα(I) and NK, 500 each), 635 receiver cells
+(DC1 500, aDC1 135), 25 L–R pairs from Table S5 (28 gene–gene links) and five metadata variables per group (population,
+donor, chemistry, stage and sequencing depth `n_counts`). A first run without sequencing depth is kept for comparison.
+Here we ask:
+
+1. Sender side: what is the expression of XCL1 associated with – NK or CD8αα(I) population, other genes (section 2)?
+2. Receiver side: is XCR1 on DC1 connected to the activation program (CCR7, LAMP3) of aDC1 (section 3)?
+3. Which other L–R links connect the same cells to the DC1 program (section 4)?
+4. Do the design variables touch the claim's genes, and what did adding sequencing depth change (section 5)?
+
+Section 6 reads the orientations, section 7 draws the network.
 
 **How to read a CausalCCC network.** Within each group (senders, receivers), a link means that two variables remain
 dependent whatever other variable of the group is conditioned on; its strength is `info_shifted` (the mutual
@@ -570,41 +574,30 @@ lr_table |> select(-ligands, -receptors) |> write_csv(file.path(out_dir, "lr_lin
 list.files(out_dir)
 ```
 
-## Conclusions
+## Summary
 
-The claim has three parts; the network supports them unevenly.
+| Question | Answer from the network |
+|---|---|
+| XCL1, sender side | Linked only to XCL2 and to the population label; NK cells are the main source (61–79% of cells against 10–36% of CD8αα(I)); in CD8αα(I), a small XCL1⁺XCL2⁺ subset, 29% of fetal against 12% of postnatal cells (case 3, notebook 01) |
+| XCR1 → DC1 activation, receiver side | XCR1 (resting DC1) and CCR7 / LAMP3 (aDC1) are almost mutually exclusive and connected only through the DC1 / aDC1 label; the activation program does not depend on XCR1 |
+| Other L–R links | Costimulation from CD8αα(I) (CD40LG → CD40, CD28 → CD80 / CD86, PDCD1 → CD274) reaches the aDC1 program more directly than XCL1 → XCR1; CRTAM → CADM1 links the XCL2⁺ cytotoxic program to CLEC9A⁺ DC1; MIF / APP → CD74 are not specific |
+| Design variables, depth | Donor and chemistry do not touch the claim's genes; stage is redundant with donor; depth absorbs part of the sender housekeeping module (46% → 36% of gene–gene links) without changing the results on the claim |
 
-1. **"GNG4⁺ CD8αα⁺ T(I) cells express XCL1, most highly […], and NK cells at a lower level": partly supported.**
-   XCL1 depends only on XCL2 and on the population label. In this run, NK cells are the main source (61–79% of cells
-   against 10–36%). In CD8αα(I) cells, XCL1 is carried by a small XCL1⁺XCL2⁺ subset whose share drops at birth (29% of
-   all fetal CD8αα(I) cells against 12% postnatally; thymus case 3, notebook 01). "Most highly" holds only for the
-   level within expressing cells (notebook 01).
-2. **"Recruitment of XCR1⁺ DC1, which are then activated and up-regulate CCR7": consistent as a change of state, not
-   shown as a consequence.** XCR1 marks resting DC1 and CCR7 / LAMP3 mark activated DC1; the two states are almost
-   mutually exclusive and are connected only through the DC1 / aDC1 label. Nothing in the receivers' network makes the
-   activation program depend on XCR1, and recruitment into the medulla cannot be tested on dissociated cells.
-3. **Other signals between the same cells.**
-   - The costimulation pairs from CD8αα(I) cells (CD40LG → CD40, CD28 → CD80 / CD86, PDCD1 → CD274) reach the
-     activation program of aDC1 more directly than XCL1 → XCR1. Thymocytes are known to drive the maturation of
-     thymic DCs through CD40 (Oh *et al.*, *J Immunol* 2018,
-     [doi:10.4049/jimmunol.1700768](https://doi.org/10.4049/jimmunol.1700768); Srinivasan *et al.*, *Nat Immunol*
-     2026, [doi:10.1038/s41590-025-02371-9](https://doi.org/10.1038/s41590-025-02371-9)).
-   - CRTAM → CADM1 links the XCL2⁺ cytotoxic program to CLEC9A⁺ DC1, in parallel with the XCL axis. CRTAM binding to
-     CADM1 makes the cells adhere, and CADM1 marks the DC1 lineage (Arase *et al.*, *Int Immunol* 2005,
-     [doi:10.1093/intimm/dxh299](https://doi.org/10.1093/intimm/dxh299); Galibert *et al.*, *J Biol Chem* 2005,
-     [doi:10.1074/jbc.M502095200](https://doi.org/10.1074/jbc.M502095200)).
-   - Thymus case 3 (notebook 05, section 8) discusses these pairs, and the XCL1–TNFRSF9 association, against the
-     literature.
-   - The top-ranked S5 pairs (MIF / APP → CD74) are not specific to these cells.
+**What this means for the claim.** The network reproduces the *expression* part of the claim only in part: XCL1 is
+specific to the senders, but NK cells, not CD8αα(I) cells, are its main source in this object ("most highly" holds
+only for the level within expressing cells, notebook 01). The *relay* part (XCR1⁺ DC1 recruited, then activated) is
+consistent as a change of state, but not shown as a consequence of XCL1 signalling; recruitment into the medulla cannot
+be tested on dissociated cells. The costimulation and CRTAM → CADM1 pairs are known thymocyte–DC signals (Oh *et al.*,
+*J Immunol* 2018, [doi:10.4049/jimmunol.1700768](https://doi.org/10.4049/jimmunol.1700768); Srinivasan *et al.*,
+*Nat Immunol* 2026, [doi:10.1038/s41590-025-02371-9](https://doi.org/10.1038/s41590-025-02371-9); Arase *et al.*,
+*Int Immunol* 2005, [doi:10.1093/intimm/dxh299](https://doi.org/10.1093/intimm/dxh299); Galibert *et al.*,
+*J Biol Chem* 2005, [doi:10.1074/jbc.M502095200](https://doi.org/10.1074/jbc.M502095200)); thymus case 3 (notebook 05,
+section 8) discusses them, and the XCL1–TNFRSF9 association, against the literature.
 
-**Technical checks.**
-- **Sequencing depth** is now a network variable. Among the senders, it absorbs part of the housekeeping module (links
-  between depth-following genes: 46% → 36%) and four genuine causations of the first run. The results on the claim are
-  unchanged.
-- Donor and chemistry do not touch the claim's genes directly.
-- Stage is redundant with donor.
-- Pooling NK and CD8αα(I) cells hides the age decline of XCL1 in CD8αα(I), because NK cells go the opposite way. Thymus
-  case 3 (`notebooks/thymus_case3_xcl1_age/`) runs CD8αα(I) senders only, fetal and postnatal separately.
+**Limits.** The L–R links are given, not inferred. Pooling NK and CD8αα(I) cells hides the drop of XCL1 at birth in
+CD8αα(I), because NK cells go the opposite way: thymus case 3 (`notebooks/thymus_case3_xcl1_age/`) runs CD8αα(I) senders
+only, fetal and postnatal separately. Sequencing depth also removed four genuine causations of the first run among the
+senders.
 
 **Possible next steps.**
 - A check of GNG4 in the XCL1⁺ CD8αα(I) subset.
