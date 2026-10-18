@@ -73,7 +73,7 @@ network reconstruction method MIIC (Dupuis *et al.*, *Nucleic Acids Research* 20
 
 ## Team
 
-Minh Le and Jeanne Leclerc (ENS-PSL).
+Minh Le and Jeanne Leclerc (ENS-PSL). Who did what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 
 ## Acknowledgements
 
