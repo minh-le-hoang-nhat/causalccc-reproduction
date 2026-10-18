@@ -37,9 +37,7 @@ from the rendered site, <https://minh-le-hoang-nhat.github.io/causalccc-reproduc
       results: patched `miic`, `envs/patches/miic/`, benchmarks in `scripts/benchmarks/` and `results/benchmarks/`).
 - [x] **Tutorial** – `notebooks/tutorial/causalccc_tutorial.qmd`: CausalCCC step by step on case study 2, from raw counts to the
       network, with the pitfalls of each step and the measured effect of the settings of each function and of MIIC.
-- [ ] Assess the preprocessing of the input data used in the case studies (case study 2: `notebooks/case2/preprocessing/`,
-      from the raw reads; notebook 08, section 11).
-- [ ] Extensions of the published analyses, on the human thymus atlas of Park *et al.*, *Science* 2020
+- [x] Extensions of the published analyses, on the human thymus atlas of Park *et al.*, *Science* 2020
       ([doi:10.1126/science.aay3224](https://doi.org/10.1126/science.aay3224)), with the CellPhoneDB ligand–receptor
       pairs of the authors.
   - [x] **CellPhoneDB re-run** on the atlas, overall and by stage, and reproduction of fig. S11
@@ -53,15 +51,18 @@ from the rendered site, <https://minh-le-hoang-nhat.github.io/causalccc-reproduc
         10 (a Notch activity score per cell from the CollecTRI RBPJ regulon with AUCell: it fails its positive control,
         ETP and DN(early) scoring lowest of the lymphoid populations, so it is not used in a network).
         Notebooks 01–04 and 07 are Python (`.ipynb`), 05, 06, 08, 09 and 10 R (Quarto `.qmd`).
-  - [ ] CellPhoneDB re-run on the thymus atlas, overall and by stage (`scripts/thymus/01_*.py` to `05_*.py`,
-        `results/thymus/`).
-  - [ ] Medullary niche of the same atlas (Fig. 4 of Park *et al.*).
+  - [x] **XCL1 relay** – CD8αα(I) and NK cells (senders, XCL1) → DC1 and aDC1 (receivers, XCR1) of the same atlas.
+        `notebooks/thymus_case2_xcl1/`: 01 (cell populations), 02 (candidate ligand–receptor pairs), 03 (run input),
+        04 (CausalCCC, with and without sequencing depth as a variable) and 05 (interpretation).
+  - [x] **XCL1 relay by age** – CD8αα(I) → DC1/aDC1, one network for fetal and one for postnatal thymus.
+        `notebooks/thymus_case3_xcl1_age/`: 01 (cell populations), 02 (candidate ligand–receptor pairs), 03 (inputs of
+        the two runs), 04 (CausalCCC, fetal and postnatal) and 05 (comparison of the two networks).
+        Notebooks 01–03 are Python (`.ipynb`), 04 and 05 R (Quarto `.qmd`), in both folders.
 
   **Limits of the thymus analysis.** Sender and receiver cells are unpaired: the ligand → receptor links come from
   CellPhoneDB and are imposed in the network, and the causal inference is within each group of cells. In the stroma,
   cell population and donor are confounded (cTEC and mTEC(II) come almost only from two donors), and sequencing depth
   still structures part of the networks (thymus_early notebooks 06 and 09).
-- [ ] Analysis of a dataset shared with the BoNesis team, and comparison of the two approaches.
 
 ## Repository structure
 
@@ -75,7 +76,9 @@ from the rendered site, <https://minh-le-hoang-nhat.github.io/causalccc-reproduc
 │   ├── case1/           # case study 1: 01_* to 05_*
 │   ├── case2/           # case study 2: 03_* to 10_*, and preprocessing/ (raw reads -> matrix, Python)
 │   ├── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
-│   └── thymus_early/    # early thymic niche: 01_* to 10_* (Python .ipynb and R Quarto .qmd)
+│   ├── thymus_early/    # early thymic niche: 01_* to 10_* (Python .ipynb and R Quarto .qmd)
+│   ├── thymus_case2_xcl1/      # XCL1 relay CD8αα(I)/NK → DC1/aDC1: 01_* to 05_*
+│   └── thymus_case3_xcl1_age/  # same relay, fetal versus postnatal: 01_* to 05_*
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── case1/           # download_case1.sh, case1_helpers.R (functions of notebooks 03 and 04)

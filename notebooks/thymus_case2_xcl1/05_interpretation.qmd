@@ -384,11 +384,9 @@ map(c("XCL1", "XCL2", "XCR1", "CCR7"), \(g) {
 
 ### What did adding sequencing depth change?
 
-Same measure as Minh's run A (`notebooks/thymus_early/06_runA_interpretation.qmd`, section 2): for every gene of the
-network, the Spearman correlation between its counts and the total counts of the cell, computed within each population
-(NK, CD8αα(I), DC1, aDC1), median over the two populations of its group. Genes above 0.5 "follow depth". We then
-compare the two runs: how often a gene–gene link joins two such genes, and what the hubs and the genes of the claim are
-linked to.
+A first run without `n_counts` is kept for comparison (same cells, genes and settings). Genes that "follow depth" are
+measured as in Minh's run A (`notebooks/thymus_early/06_runA_interpretation.qmd`, section 2): median over the
+populations of the Spearman correlation between the gene's counts and the total counts of the cell, above 0.5.
 
 ```{r}
 #| label: depth-correlation
@@ -427,48 +425,28 @@ bind_rows(`without depth` = depth_module(intracellular_without), `with depth` = 
 ```
 
 ```{r}
-#| label: depth-hubs
+#| label: depth-stability
 
-# The 10 hubs of each group in the run without depth: their degree in both runs and their depth correlation
-degree_in <- function(intra, v) map_int(v, \(g) sum(intra$x == g | intra$y == g))
-tibble(variable = unique(c(intracellular_without$x, intracellular_without$y))) |>
-  mutate(group = type_of[variable], degree_without = degree_in(intracellular_without, variable)) |>
-  group_by(group) |> slice_max(degree_without, n = 10, with_ties = FALSE) |> ungroup() |>
-  mutate(degree_with = degree_in(intracellular, variable), depth_rho = round(depth_rho[variable], 2),
-         variable = var_label(variable))
-```
-
-```{r}
-#| label: depth-claim-genes
-
-# Neighbours of the genes of the claim in both runs
-neighbours_in <- function(intra, v) {
-  nb <- intra |> filter(x == v | y == v) |> mutate(other = if_else(x == v, y, x)) |> arrange(desc(info_shifted))
-  if (nrow(nb) == 0) "–" else paste(var_label(nb$other), collapse = ", ")
-}
-tibble(variable = c("XCL1", "XCL2", "XCR1", "CCR7", "LAMP3"),
-       without_depth = map_chr(variable, \(v) neighbours_in(intracellular_without, v)),
-       with_depth = map_chr(variable, \(v) neighbours_in(intracellular, v)),
-       depth_rho = round(depth_rho[variable], 2))
+# Links found in both runs, and whether the genes of the claim keep the same neighbours
+pairs_of <- function(intra) link_name(intra$x, intra$y)
+neighbours_in <- function(intra, v) sort(with(filter(intra, x == v | y == v), if_else(x == v, y, x)))
+list(links_in_both = length(intersect(pairs_of(intracellular), pairs_of(intracellular_without))),
+     only_without_depth = length(setdiff(pairs_of(intracellular_without), pairs_of(intracellular))),
+     only_with_depth = length(setdiff(pairs_of(intracellular), pairs_of(intracellular_without))))
+tibble(gene = c("XCL1", "XCL2", "XCR1", "CCR7", "LAMP3"),
+       same_neighbours = map_lgl(gene, \(v) identical(neighbours_in(intracellular, v), neighbours_in(intracellular_without, v))),
+       depth_rho = round(depth_rho[gene], 2))
 ```
 
 **Reading.**
-- **Which genes follow depth:** 54 of the 141 sender genes (38%) and 97 of the 136 receiver genes (71%). The DCs are
-  deeper cells, and most of their selected genes rise with the total count.
-- **Senders: depth absorbs part of the module.** The share of gene–gene links joining two depth-following genes falls
-  from 46% to 36% (15% expected by chance). This is the same effect as in Minh's run A (34% → 24%, 14% by chance), and
-  it is also partial.
-- **Most housekeeping hubs of the first run lose their links:** SERF2 (13 → 5), PPIA (12 → 3), TPT1 (11 → 6), EEF1A1
-  (11 → 7), PTMA (10 → 7). GAPDH (16 → 19) and ACTB (13 → 14) keep theirs: GAPDH is the hub of a glycolysis
-  module (ALDOA, PKM, ENO1, TPI1, PGAM1, PGK1, LDHA, and MIF), ACTB of a cytoskeleton module (ACTG1, PFN1, RHOA).
-  Depth does not explain these modules: they vary between cells of the same depth, probably with metabolic activity.
-- **Receivers: little change** (73% → 71%, 51% by chance). Since most receiver genes follow depth, this measure
-  separates little there, and the receiver hubs keep their degree.
-- **The network as a whole is stable:** 514 links are found in both runs; 99 are only in the run without depth, and 82
-  only in the run with depth.
-- **The genes of the claim are unchanged.** XCL1, XCR1, CCR7 and LAMP3 keep exactly the same neighbours; XCL2 loses
-  only HINT1, which follows depth. Their own correlations with depth are low (0.15–0.41), so the conclusions on the
-  claim do not depend on depth.
+- **Depth removes part of the depth module, not all of it.** Among the senders, the share of gene–gene links joining
+  two depth-following genes falls from 46% to 36% (15% by chance), the same partial effect as in Minh's run A
+  (34% → 24%). Housekeeping hubs such as SERF2, PPIA and TPT1 lose most of their links; the glycolysis (GAPDH) and
+  cytoskeleton (ACTB) modules stay, so they are not depth effects.
+- **Among the receivers the measure separates little** (73% → 71%, 51% by chance): 71% of the DC genes follow depth.
+- **The network is stable** (486 learned links in both runs, 99 and 82 in one only), and **the genes of the claim keep their
+  neighbours** (XCL2 loses only HINT1, a depth-following gene): the results on the claim do not depend on depth.
+- So `n_counts` is worth including in every run, but a link between two depth-following genes stays weak evidence.
 
 ## 6. Orientations and genuine causations
 
