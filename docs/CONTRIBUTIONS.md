@@ -12,12 +12,11 @@ with a summary).
 | Running MIIC on several threads                  |    ○    |       ●        | Minh: stack size limit, used in the thymus runs; Jeanne: `miic` patches, benchmarks          |
 | CausalCCC tutorial                               |    ○    |       ●        | One pipeline combining the workflows of both case studies                                    |
 | Thymus – early niche                             |    ●    |                |                                                                                              |
-| Thymus – other niches, CellPhoneDB re-run        |    ○    |       ●        | XCL1 niche built from the early-niche notebooks                                              |
+| Thymus – XCL1 niche, CellPhoneDB re-run          |    ○    |       ●        | XCL1 niche (all ages, then fetal vs postnatal) built from the early-niche notebooks          |
 
 ● led · ○ contributed or built on
 
-*Status (2026-10-18): Minh Le's part is complete. Jeanne Leclerc's part is in progress; her section below is a draft
-to be completed by her.*
+*Status (2026-10-18): both parts are complete.*
 
 ## Minh Le
 
@@ -67,16 +66,58 @@ paper's ligand–receptor claims in both directions.
 
 ## Jeanne Leclerc
 
-*Draft from the repository history, to be completed and corrected by Jeanne.*
+### Case study 2 – fibroblasts, dendritic cells and T cells, atopic dermatitis (`notebooks/case2/03`–`10`)
 
-- **Case study 2** – fibroblasts, dendritic cells and T cells in atopic dermatitis: `notebooks/case2/03`–`10`,
-  preprocessing from raw reads (`notebooks/case2/preprocessing/`, `scripts/case2/`), network plotting functions
-  (`scripts/helpers.R`).
-- **Case study 1** – `notebooks/case1/05` (performance compared with the web server).
-- **Faster `miic`** – patches that make multithreaded runs crash-free and deterministic (`envs/patches/miic/`),
-  benchmarks (`scripts/benchmarks/`, `results/benchmarks/`), `docs/INSTALL.md` section 4; shared script
-  `scripts/run_miic.R`.
-- **Tutorial** – `notebooks/tutorial/causalccc_tutorial.qmd`: CausalCCC step by step on case study 2.
-- **Thymus** – CellPhoneDB re-run on the atlas, overall and by stage (`scripts/thymus/01`–`05`, `results/thymus/`);
-  XCL1 niche (`notebooks/thymus_case2_xcl1/`).
-- *To add: …*
+- **03** – The files the authors uploaded to the CausalCCC server, and the paper's statements about Figure 3C (all
+  supported within the neighbourhood the figure draws). 14 genes appear twice, as identical columns under two names.
+- **04** – MIIC rerun on the authors' input with the server's settings: the network is reproduced. As in case study 1,
+  the MIIC step is reproducible from the authors' files.
+- **05** – Input rebuilt from CellChat's `data_humanSkin`: cells and counts reproduced exactly (normalisation undone).
+  `causalCCC.wrapper()` does not run as published (Seurat 5, data frame input, one sender and one receiver only).
+- **06** – MIIC on the rebuilt input: the skeleton of the network (Jaccard 0.85–0.92 per cell type) and the Figure 3C
+  neighbourhoods are reproduced; orientations mostly (96 % of the shared links without a duplicated gene), genuine
+  causations less so (8 in common out of 14 and 12).
+- **07** – The causes of the differences. The authors' gene selection is reproduced exactly with undocumented settings
+  (25 genes per run, no cap of 8 ligands or receptors, both metadata). Removing the duplicated columns changes no link,
+  but the 111 links of the duplicated genes have contradictory orientations in the published network.
+- **08** – The 12 places where the pipeline is not reproducible as published (summary table).
+- **09** – Adding the 14 duplicated columns to the rebuilt input gives the authors' network exactly (same links,
+  orientations and genuine causations). The duplicates also set the strength of all 43 L–R links (11,579 instead of
+  3,050).
+- **10** – Making CausalCCC faster without changing its results (see below).
+- Preprocessing from raw reads (`notebooks/case2/preprocessing/`, `scripts/case2/`): kallisto|bustools, QC and
+  clustering in scanpy, comparison with CellChat's cells. Agreement is only partial, because the preprocessing of the
+  CellChat dataset is not described.
+- Network plotting functions (`scripts/helpers.R`), used by the later notebooks.
+
+### Faster MIIC (`notebooks/case2/10`, `notebooks/case1/05`)
+
+- Patches to `miic` (`envs/patches/miic/`): no console output from worker threads (stock `miic` crashed with several
+  threads), early decision of the confidence cut, exact ties broken by position (results independent of thread timing).
+- On 8 threads, the network reconstruction is 3 times faster with the same links, orientations and genuine causations:
+  22 instead of 70 minutes on the rebuilt case 2 input, 30 instead of 91 on the authors' input. Only the `confidence`
+  values move slightly (up to 0.02).
+- `compute_mi_table()` for the gene selection: identical MI values, 21 % faster, a third of the memory.
+- Case study 1: every local run gives the server's network; 288 s on 8 threads against 935 s on the server. The patches
+  are not faster at equal threads; the gain comes only from using 8 threads.
+- Benchmark scripts and results (`scripts/benchmarks/`, `results/benchmarks/`), `docs/INSTALL.md` section 4, shared
+  script `scripts/run_miic.R`.
+
+### CausalCCC tutorial (`notebooks/tutorial/causalccc_tutorial.qmd`)
+
+CausalCCC step by step on case study 2, from a raw count matrix to the network. It combines what both case studies
+taught: preprocessing, pitfalls of each function, how to choose the settings, how to compare a web server job with a
+local run, and a checklist of 22 points.
+
+### Extension – thymus, XCL1 relay to DC1 (`scripts/thymus/`, `notebooks/thymus_case2_xcl1/`, `notebooks/thymus_case3_xcl1_age/`)
+
+- **CellPhoneDB re-run** on the atlas, overall and by developmental stage, following the paper's protocol, and
+  reproduction of fig. S11 (`scripts/thymus/01`–`05`, `results/thymus/first_results.html`).
+- **XCL1 niche, all ages** (`thymus_case2_xcl1/01`–`05`) – claim: CD8αα(I) and NK cells express XCL1 and recruit XCR1⁺
+  DC1, which become activated and up-regulate CCR7. Built on the early-niche pipeline, with sequencing depth as a
+  variable (runs with and without depth compared). The claim is partly supported: NK cells are the main XCL1 source;
+  XCR1 (resting DC1) and CCR7 (activated DC1) are linked only through the population label; costimulation pairs reach
+  the activation program of DC1 more directly than XCL1 → XCR1.
+- **XCL1 niche, fetal vs postnatal** (`thymus_case3_xcl1_age/01`–`05`) – CD8αα(I) senders only, one run per age. XCL1
+  in CD8αα(I) cells drops at birth (29 % → 12 % of cells) and goes with an activation program (TNFRSF9 / 4-1BB) at both
+  ages; the receiver side is the same at both ages; costimulation links to activated DC1 are a fetal feature.
