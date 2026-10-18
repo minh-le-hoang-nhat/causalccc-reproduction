@@ -3,10 +3,12 @@ population_senders	0		0	metadata	FFE397
 donor_senders	0		0	metadata	FFE397
 method_senders	0		0	metadata	FFE397
 stage_senders	0		0	metadata	FFE397
+n_counts_senders	1		0	metadata	FFE397
 population_receivers	0		0	metadata	FFD050
 donor_receivers	0		0	metadata	FFD050
 method_receivers	0		0	metadata	FFD050
 stage_receivers	0		0	metadata	FFD050
+n_counts_receivers	1		0	metadata	FFD050
 XCL1	1		0	ligands	73C1B9
 XCL2	1		0	ligands	73C1B9
 MIF	1		0	ligands	73C1B9

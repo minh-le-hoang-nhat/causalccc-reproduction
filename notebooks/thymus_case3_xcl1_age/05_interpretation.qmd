@@ -1,0 +1,549 @@
+---
+title: "05 – XCL1 relay, CD8αα(I) → DC1/aDC1: fetal versus postnatal networks"
+subtitle: "What the two CausalCCC runs say about the claim, and how they differ with age, with the drawings of the networks"
+author: "Jeanne Leclerc, Minh Le"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+execute:
+  warning: true
+---
+
+## Goal
+
+Notebook 04 learned two networks with MIIC, one per age class, with the same 25 L–R pairs (27 gene–gene links) and the
+same settings:
+
+| | Fetal (7–17 PCW) | Postnatal (3 months – 35 years) |
+|---|---|---|
+| Senders | CD8αα(I) 1,000 cells, 14 donors | CD8αα(I) 1,000 cells, 8 donors |
+| Receivers | DC1 300 + aDC1 100 | DC1 300 + aDC1 35 |
+| Metadata | senders: donor, chemistry, depth · receivers: population, donor, chemistry, depth | same |
+
+Thymus case 2 pooled NK and CD8αα(I) senders and all ages. There, XCL1 depended only on XCL2 and on the NK / CD8αα(I)
+label, and the drop of XCL1 at birth in CD8αα(I) cells (29% → 12% of cells, notebook 01) did not show in the network.
+Here the claim of Park *et al.* is read with **CD8αα(I) cells only** as senders, the cell type it names:
+
+> "GNG4⁺CD8αα⁺ T(I) cells expressed XCL1, which may be involved in the recruitment of XCR1-expressing DC1 cells. […]
+> XCL1 is expressed most highly by CD8αα⁺ T(I) cells […] where these cells are activated and up-regulate CCR7."
+
+Questions:
+
+1. Within CD8αα(I) cells, what does XCL1 depend on, and is it the same before and after birth (section 2)?
+2. On the receiver side, is the XCR1 / CCR7 picture of case 2 found in both age classes (section 3)?
+3. Which other L–R links have a learned context, and does it change with age (section 4)?
+4. How similar are the two networks, and what do depth and donor do in each (sections 1, 5 and 6)?
+
+The networks are read as in case 2 (notebook 05): within each group a link means that two variables stay dependent
+whatever other variable of the group is conditioned on; the L–R links between the groups are given, not learned.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+
+root <- getwd()
+while (!file.exists(file.path(root, "scripts", "helpers.R"))) {
+  if (dirname(root) == root) stop("Repository root not found.")
+  root <- dirname(root)
+}
+# link_name(), neighbors_of(), graph_distance(), column_cell_type(), network_data(), plot_network_*()
+source(file.path(root, "scripts", "helpers.R"))
+
+res_dir <- file.path(root, "results", "thymus_case3_xcl1_age")
+out_dir <- file.path(res_dir, "05_interpretation")
+fig_dir <- file.path(root, "results", "figures", "thymus_case3_xcl1_age")
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+
+RUNS <- c("fetal", "postnatal")
+SEND <- "CD8αα(I)"
+RECV <- "DC1/aDC1"
+META <- c("population", "donor", "method", "n_counts")
+
+read_run <- function(run) {
+  dir    <- file.path(res_dir, "04_causalccc", run)
+  result <- readRDS(file.path(dir, "miic_input", "miic_result.rds"))
+  mosaic <- read_csv(file.path(dir, "causalccc_files", "causalCCC_df.csv"), show_col_types = FALSE, guess_max = Inf)
+  lr     <- read_tsv(file.path(dir, "causalccc_files", "causalCCC_interactEdges.tsv"), show_col_types = FALSE)
+  # Cell type of each variable: the group whose rows hold its values
+  row_type <- if_else(!is.na(mosaic$donor_senders), SEND, RECV)
+  type_of  <- column_cell_type(mosaic, row_type)
+  lr_links <- link_name(lr$ligands, lr$receptors)
+  # One row per pair of variables (MIIC lists each given L-R link twice, once per direction)
+  edges <- result$all.edges.summary |>
+    filter(type == "P") |>
+    distinct(pair_a = pmin(x, y), pair_b = pmax(x, y), .keep_all = TRUE) |>
+    select(-pair_a, -pair_b) |>
+    mutate(is_lr = link_name(x, y) %in% lr_links,
+           where = case_when(is_lr ~ "L–R (given)", type_of[x] == SEND ~ "within senders", .default = "within receivers"))
+  list(run = run, result = result, mosaic = mosaic, lr = lr, lr_links = lr_links, row_type = row_type,
+       type_of = type_of, edges = edges, intra = filter(edges, !is_lr))
+}
+nets <- set_names(map(RUNS, read_run), RUNS)
+
+# Labels for the tables and drawings: no group suffix, metadata in brackets
+var_label <- function(v) {
+  label <- str_remove(v, "_(senders|receivers)$")
+  if_else(label %in% META, paste0("[", label, "]"), label)
+}
+degree_of <- function(net, v) map_int(v, \(g) sum(net$intra$x == g | net$intra$y == g))
+neighbour_string <- function(net, v, n = Inf) {
+  nb <- net$intra |> filter(x == v | y == v) |>
+    transmute(other = if_else(x == v, y, x), info_shifted) |> arrange(desc(info_shifted)) |> head(n)
+  if (nrow(nb) == 0) return("–")
+  paste0(var_label(nb$other), " (", round(nb$info_shifted), ")", collapse = ", ")
+}
+map_chr(nets, \(n) format(attr(n$result, "run_time")))
+```
+
+## 1. Overview of the two networks
+
+```{r}
+#| label: overview
+
+map(nets, \(n) {
+  vars <- tibble(variable = names(n$mosaic), group = n$type_of[names(n$mosaic)],
+                 kind = if_else(str_remove(names(n$mosaic), "_(senders|receivers)$") %in% META, "metadata", "gene"))
+  linked <- unique(c(n$edges$x, n$edges$y))
+  vars |> group_by(where = if_else(group == SEND, "within senders", "within receivers")) |>
+    summarise(genes = sum(kind == "gene"), metadata = sum(kind == "metadata"),
+              variables_linked = sum(variable %in% linked)) |>
+    left_join(n$edges |> group_by(where) |>
+                summarise(links = n(), oriented = sum(abs(infOrt) == 2), genuine_causations = sum(is_causal == "Y")),
+              by = "where")
+}) |> list_rbind(names_to = "run") |> arrange(desc(where), run)
+```
+
+**Hubs**: the variables with the most learned links in each group and run.
+
+```{r}
+#| label: hubs
+
+map(nets, \(n) {
+  tibble(variable = unique(c(n$intra$x, n$intra$y))) |>
+    mutate(group = n$type_of[variable], degree = degree_of(n, variable)) |>
+    group_by(group) |> slice_max(degree, n = 10, with_ties = FALSE) |>
+    mutate(rank = row_number(), label = paste0(var_label(variable), " (", degree, ")")) |>
+    ungroup() |> select(group, rank, label)
+}) |> list_rbind(names_to = "run") |>
+  pivot_wider(names_from = c(group, run), values_from = label, names_sep = " · ")
+```
+
+**How similar are the two networks?** The gene selection was made separately in each run, so the networks share only
+part of their variables. Among the links whose two variables are in both networks, how many are found in both?
+
+```{r}
+#| label: similarity
+
+map(c("within senders", "within receivers"), \(w) {
+  a <- nets$fetal$intra |> filter(where == w)
+  b <- nets$postnatal$intra |> filter(where == w)
+  shared_vars <- intersect(names(nets$fetal$mosaic)[nets$fetal$type_of == if_else(w == "within senders", SEND, RECV)],
+                           names(nets$postnatal$mosaic)[nets$postnatal$type_of == if_else(w == "within senders", SEND, RECV)])
+  la <- link_name(a$x, a$y)[a$x %in% shared_vars & a$y %in% shared_vars]
+  lb <- link_name(b$x, b$y)[b$x %in% shared_vars & b$y %in% shared_vars]
+  tibble(where = w, shared_variables = length(shared_vars), links_fetal = length(la), links_postnatal = length(lb),
+         in_both = length(intersect(la, lb)), jaccard = round(length(intersect(la, lb)) / length(union(la, lb)), 2))
+}) |> list_rbind()
+```
+
+**Reading.**
+- **Run times:** the postnatal MIIC run took 19.5 minutes. The 1.4 days of the fetal run include a suspension of the
+  computer (sleep) during the run; its computing time was of the same order.
+- **Sizes:** both networks have about 140 genes per group.
+  - Fetal: 307 links among the senders and 251 among the receivers, with 10 genuine causations.
+  - Postnatal: 284 and 340 links, with 2 genuine causations.
+- **Hubs:**
+  - Sequencing depth `[n_counts]` is the first hub of every group (fetal 78 and 34 links; postnatal 58 and 42).
+  - Among the senders it is followed by housekeeping and metabolic genes (EEF1A1, PPIA, GAPDH, PARK7, MIF).
+  - In the postnatal senders, `[method]` (19 links) and **XCL1 (9 links)** are also hubs.
+- **The two networks differ a lot:**
+  - The gene selection was made separately in each run, so only 61 sender variables and 84 receiver variables are
+    common to both.
+  - Among the links between these common variables, few are found in both runs (Jaccard index 0.31 among the senders,
+    0.22 among the receivers).
+  - Comparisons between the runs are therefore made gene by gene, on the genes of the claim.
+
+## 2. Senders: what XCL1 depends on, before and after birth
+
+```{r}
+#| label: xcl-neighbours
+
+expand_grid(run = RUNS, variable = c("XCL1", "XCL2")) |>
+  mutate(degree = map2_int(run, variable, \(r, v) degree_of(nets[[r]], v)),
+         neighbours = map2_chr(run, variable, \(r, v) neighbour_string(nets[[r]], v))) |>
+  arrange(variable, run)
+```
+
+```{r}
+#| label: xcl-by-donor
+
+# XCL1 and XCL2 in the sender cells of each run, per donor (raw counts of the mosaic table)
+map(nets, \(n) {
+  n$mosaic |> filter(n$row_type == SEND) |>
+    group_by(donor = donor_senders) |>
+    summarise(cells = n(), XCL1_detected = mean(XCL1 > 0), XCL1_mean = mean(XCL1), XCL2_detected = mean(XCL2 > 0),
+              median_depth = median(n_counts_senders), .groups = "drop")
+}) |> list_rbind(names_to = "run") |>
+  filter(cells >= 20) |>
+  mutate(across(where(is.double), \(v) round(v, 2)))
+```
+
+```{r}
+#| label: xcl-coexpression
+
+# XCL1 among XCL2+ and XCL2- cells, and distance from XCL1 to the design variables
+map(nets, \(n) {
+  s <- n$mosaic |> filter(n$row_type == SEND)
+  d <- graph_distance(n$intra |> filter(where == "within senders"), "XCL1")
+  tibble(cells = nrow(s), XCL1_detected = mean(s$XCL1 > 0),
+         `XCL1+ among XCL2+` = mean(s$XCL1[s$XCL2 > 0] > 0), `XCL1+ among XCL2-` = mean(s$XCL1[s$XCL2 == 0] > 0),
+         links_to_donor = d["donor_senders"], links_to_chemistry = d["method_senders"], links_to_depth = d["n_counts_senders"])
+}) |> list_rbind(names_to = "run") |>
+  mutate(across(where(is.double), \(v) round(v, 2)))
+```
+
+**Reading.**
+- **XCL1 is linked to TNFRSF9 (4-1BB / CD137) in both age classes:** it is the strongest XCL1 neighbour in fetal cells
+  (252, before XCL2, 221) and the second in postnatal cells (109).
+  - TNFRSF9 is induced in T cells by TCR signalling.
+  - Its other neighbours point to the same activation program: BIRC3, DUSP4 and MEF2C in fetal cells, BHLHE40 and RGS16
+    (two genes induced by TCR signalling) in postnatal cells.
+  - CRTAM, the other XCL-associated ligand, is linked to XCL1 in fetal cells and to BHLHE40 and RGS16 in postnatal cells.
+  - **Within CD8αα(I) cells, XCL1 is therefore part of an activation program.** This was hidden in case 2, where NK
+    cells dominated the XCL1 signal.
+- **XCL2 goes with XCL1 at both ages:** 96% (fetal) and 92% (postnatal) of XCL2⁺ cells express XCL1, against 16% and
+  8% of XCL2⁻ cells.
+- **The design variables are not direct neighbours of XCL1** in either run (donor, chemistry, depth). Postnatally,
+  XCL1 also links to PARK7, MAOB and MEST, metabolic genes whose meaning here is unclear.
+- **The drop at birth is not a depth artefact:**
+  - Postnatal cells are shallower (median 2,500–3,100 counts per donor, against 4,000–7,700 in fetal donors).
+  - But XCL1 falls much more than depth: from 9–28 mean counts per fetal donor to 0.6–4.4 per postnatal donor.
+  - On the normalised scale, the drop is about threefold (notebook 01).
+- **GNG4 was not selected** in either network, so the "GNG4⁺" part of the claim rests on co-expression only
+  (notebook 01: 59% of fetal GNG4⁺ CD8αα(I) cells express XCL1).
+
+## 3. Receivers: XCR1, CCR7 and the activation of DC1
+
+```{r}
+#| label: receiver-neighbours
+
+expand_grid(variable = c("XCR1", "CCR7", "LAMP3", "CD40", "CD80", "population"), run = RUNS) |>
+  mutate(degree = map2_int(run, variable, \(r, v) degree_of(nets[[r]], v)),
+         neighbours = map2_chr(run, variable, \(r, v) neighbour_string(nets[[r]], v)))
+```
+
+```{r}
+#| label: receiver-distances
+
+map(nets, \(n) {
+  d <- graph_distance(n$intra |> filter(where == "within receivers"), "XCR1")
+  tibble(to = c("population", "CCR7", "LAMP3", "CD40", "CD80", "IL12B"), links_from_XCR1 = unname(d[to]))
+}) |> list_rbind(names_to = "run") |>
+  pivot_wider(names_from = run, values_from = links_from_XCR1)
+```
+
+```{r}
+#| label: xcr1-ccr7
+
+map(nets, \(n) {
+  n$mosaic |> filter(n$row_type == RECV) |>
+    mutate(XCR1 = if_else(XCR1 > 0, "XCR1+", "XCR1-"), CCR7 = if_else(CCR7 > 0, "CCR7+", "CCR7-")) |>
+    count(population, XCR1, CCR7) |>
+    pivot_wider(names_from = c(XCR1, CCR7), values_from = n, values_fill = 0)
+}) |> list_rbind(names_to = "run")
+```
+
+**Reading.**
+- **XCR1 has only DC1 neighbours:** FGL2 in both runs, and HLA-DQA1 postnatally. Unlike case 2, it is not directly
+  linked to `[population]`: that link was weak in case 2 (16) and is lost with 300 DC1 instead of 500.
+- **CCR7 and LAMP3 stay tied to the DC1 / aDC1 label at both ages:** 155 and 142 in fetal cells, 60 and 63 in
+  postnatal cells. The links are weaker postnatally because there are only 35 aDC1.
+- **The activation program around LAMP3 differs with age.** In fetal cells, LAMP3 is linked to CD40 and CD80 (as in
+  case 2); in postnatal cells it is not. There, CD40 is linked to BCL2A1 and MARCKSL1 instead.
+- **XCR1 and CCR7 remain almost mutually exclusive:**
+  - fetal: 172 of 300 DC1 express XCR1 and 11 express CCR7; 90 of 100 aDC1 express CCR7 and 2 express XCR1;
+  - postnatal: 146 of 300 DC1 express XCR1 and 18 express CCR7; 31 of 35 aDC1 express CCR7 and 1 expresses XCR1.
+- **Conclusion for the receivers:** the picture of case 2 holds at both ages. XCR1 marks resting DC1, CCR7 and LAMP3
+  mark activated DC1, and the activation genes do not depend on XCR1.
+
+## 4. The L–R links, fetal and postnatal
+
+For every given link, the learned context of the ligand (in CD8αα(I) cells) and of the receptor (in DC1 / aDC1 cells)
+in each run. On the receiver side, a receptor linked to `[population]` is specific to DC1 or to aDC1. On the sender
+side there is no population variable (one population): a ligand linked only to `[donor]`, `[method]` or `[n_counts]`
+varies for technical or donor reasons; a ligand with gene neighbours belongs to a program of the cell.
+
+```{r}
+#| label: lr-table
+
+lr_context <- map(nets, \(n) {
+  n$lr |>
+    mutate(ligand = var_label(ligands), receptor = var_label(receptors),
+           ligand_degree = degree_of(n, ligands), receptor_degree = degree_of(n, receptors),
+           receptor_to_population = map_lgl(receptors, \(g) "population" %in% neighbors_of(g, n$intra)$neighbor),
+           ligand_neighbours = map_chr(ligands, \(g) neighbour_string(n, g, n = 3)),
+           receptor_neighbours = map_chr(receptors, \(g) neighbour_string(n, g, n = 3)))
+}) |> list_rbind(names_to = "run")
+
+lr_context |>
+  select(run, ligand, receptor, ligand_degree, ligand_neighbours) |>
+  pivot_wider(names_from = run, values_from = c(ligand_degree, ligand_neighbours)) |>
+  as.data.frame()
+```
+
+```{r}
+#| label: lr-receptors
+
+lr_context |>
+  distinct(run, receptor, receptor_degree, receptor_to_population, receptor_neighbours) |>
+  pivot_wider(names_from = run, values_from = c(receptor_degree, receptor_to_population, receptor_neighbours)) |>
+  as.data.frame()
+```
+
+```{r}
+#| label: lr-ligand-classes
+
+# Context of each ligand gene: isolated, design variables only, or with genes
+lr_context |>
+  distinct(run, ligands, ligand) |>
+  mutate(context = map2_chr(run, ligands, \(r, g) {
+    nb <- neighbors_of(g, nets[[r]]$intra)$neighbor
+    case_when(length(nb) == 0 ~ "isolated",
+              all(str_remove(nb, "_(senders|receivers)$") %in% META) ~ "design variables only",
+              .default = "with genes")
+  })) |>
+  count(run, context) |>
+  pivot_wider(names_from = run, values_from = n, values_fill = 0)
+```
+
+**Reading.**
+- **Almost every ligand has gene neighbours** (fetal 22 of 22, postnatal 20 of 22). The two postnatal exceptions,
+  CD28 and ICAM3, are linked only to `[n_counts]`.
+- **T-cell costimulation is a fetal feature here:**
+  - In fetal cells, CD28 is linked to PDCD1, and its receptors CD80 and CD40 (ligand CD40LG) are next to LAMP3 on the
+    aDC1 side, as in case 2.
+  - In postnatal cells, CD28 depends only on depth, and CD40 / CD80 have left the LAMP3 module.
+  - CD274 (PD-L1) is tied to the aDC1 label at both ages; PDCD1LG2 (PD-L2) only in fetal cells.
+- **Other changes with age:**
+  - CRTAM joins the TCR-activation genes postnatally (BHLHE40, RGS16).
+  - CADM1 is linked to CLEC9A (DC1 identity) in fetal cells, to HLA-DPA1 in postnatal cells.
+  - CD6 moves from XCL1 / ARHGDIB (fetal) to the T-cell identity genes CD5 and LEF1 (postnatal).
+  - ITGA4 is tied to `[donor]` postnatally (112).
+- **Ubiquitous pairs:** MIF → CD74 stays in the housekeeping (PPIA, GAPDH, NME2) and MHC class II modules at both
+  ages, as in cases 1 and 2.
+
+## 5. Design variables and sequencing depth
+
+```{r}
+#| label: meta-neighbours
+
+expand_grid(run = RUNS, variable = c("donor_senders", "method_senders", "n_counts_senders",
+                                     "population", "donor_receivers", "method_receivers", "n_counts_receivers")) |>
+  mutate(degree = map2_int(run, variable, \(r, v) degree_of(nets[[r]], v)),
+         neighbours = map2_chr(run, variable, \(r, v) neighbour_string(nets[[r]], v, n = 8)))
+```
+
+Genes that follow depth, measured as in case 2 (Spearman correlation with the total counts of the cell within each
+population, median over the populations of the group, threshold 0.5), and the share of gene–gene links joining two of
+them.
+
+```{r}
+#| label: depth-module
+
+map(nets, \(n) {
+  gene_vars <- names(n$mosaic)[!str_remove(names(n$mosaic), "_(senders|receivers)$") %in% META]
+  pop <- if_else(n$row_type == SEND, "CD8αα(I)", n$mosaic$population)
+  depth <- coalesce(n$mosaic$n_counts_senders, n$mosaic$n_counts_receivers)
+  rho <- map_dbl(gene_vars, \(v) {
+    rows <- n$row_type == n$type_of[[v]]
+    x <- n$mosaic[[v]][rows]
+    r <- tapply(seq_along(x), pop[rows], \(i) if (sd(x[i]) == 0) NA_real_ else cor(x[i], depth[rows][i], method = "spearman"))
+    median(unlist(r), na.rm = TRUE)
+  }) |> set_names(gene_vars)
+  follows <- gene_vars[!is.na(rho) & rho > 0.5]
+  n$intra |> filter(x %in% gene_vars, y %in% gene_vars) |>
+    group_by(where) |>
+    summarise(gene_gene_links = n(), both_follow_depth = sum(x %in% follows & y %in% follows)) |>
+    mutate(share = both_follow_depth / gene_gene_links,
+           expected_by_chance = map_dbl(where, \(w) {
+             g <- gene_vars[n$type_of[gene_vars] == if_else(w == "within senders", SEND, RECV)]
+             mean(g %in% follows)^2
+           }))
+}) |> list_rbind(names_to = "run") |>
+  mutate(across(c(share, expected_by_chance), \(v) round(v, 3)))
+```
+
+**Reading.**
+- **Depth structures both networks.**
+  - In fetal sender cells, most selected genes follow depth: 59% of gene–gene links join two depth-following genes,
+    against 43% by chance.
+  - In postnatal sender cells, the share is 17% against 4%.
+  - Among the receivers, it is 71% and 73% (51% and 56% by chance), as in case 2.
+- **Postnatally, chemistry and donor are confounded among the senders.** `[method]`–`[donor]` is the strongest link
+  (562), and `[method]` has 19 links. The postnatal donors were sequenced either 3′ (P1–P3) or 5′ (T03, T06, T07,
+  A43), with A16 in both, so a chemistry effect cannot be told apart from a donor effect.
+- **Fetal donor** links only to a handful of genes (HLA-DRB5 and housekeeping genes), as in case 2.
+- **None of the claim's genes is directly linked to donor, chemistry or depth** in either run.
+
+## 6. Orientations and genuine causations
+
+```{r}
+#| label: orientations
+
+oriented <- map(nets, \(n) {
+  n$edges |>
+    filter(abs(infOrt) == 2) |>
+    transmute(from = if_else(infOrt == 2, x, y), to = if_else(infOrt == 2, y, x), where,
+              strength = round(info_shifted), genuine = is_causal,
+              involves_metadata = str_detect(paste(from, to), "(population|donor|method|n_counts)"))
+}) |> list_rbind(names_to = "run")
+oriented |> count(run, where, involves_metadata, genuine)
+```
+
+```{r}
+#| label: genuine
+
+oriented |>
+  filter(genuine == "Y" | str_detect(paste(from, to), "XCL|XCR1|CCR7|LAMP3")) |>
+  mutate(from = var_label(from), to = var_label(to)) |>
+  arrange(run, desc(genuine), desc(strength)) |>
+  as.data.frame()
+```
+
+**Reading.**
+- **Fetal: 50 links are oriented, and 10 are genuine causations.**
+  - 7 go from `[n_counts]` to housekeeping genes (UBA52, SUMO2, TMSB10, SLC25A5, EIF3K, GNG5, PHB2): depth as a cause
+    of counts, the expected technical direction.
+  - The other 3 are ATP5E → FAU, CPVL → LYZ and CPVL → CORO1A.
+- **Postnatal: 33 links are oriented, and 2 are genuine causations,** `[method]` → PCBP2 and `[n_counts]` → RAN, both
+  technical.
+- **No orientation involves XCL1, XCL2, XCR1 or CCR7** in either run.
+
+## 7. The networks, drawn
+
+Same conventions as case 2: colours are the two groups; diamonds are the centres (XCL1, XCL2, XCR1); dashed lines are
+the given L–R links (drawn thin); an arrowhead is an orientation found by MIIC, and a green link a genuine causation;
+thicker links are stronger. Metadata variables are in brackets.
+
+```{r}
+#| label: drawing-setup
+
+# Colours of the two groups for the drawing functions of scripts/helpers.R (which read these two global vectors)
+cell_type_colours <- set_names(c("#f2c57c", "#9cc3e6"), c(SEND, RECV))
+cell_type_borders <- set_names(c("#a8742a", "#2f6491"), c(SEND, RECV))
+centres <- c("XCL1", "XCL2", "XCR1")
+claim_nets <- map(nets, \(n) network_data(n$edges, n$lr_links, n$type_of, var_label, centres = centres, max_distance = 2))
+map(claim_nets, \(cn) c(variables = nrow(cn$nodes), links = nrow(cn$links))) |> bind_rows(.id = "run")
+```
+
+### The neighbourhood of the claim, fetal
+
+```{r}
+#| label: fig-claim-fetal
+#| fig-width: 11
+#| fig-height: 9
+
+p_fetal <- plot_network_static(claim_nets$fetal, title = "Fetal: XCL1 / XCL2 → XCR1, second-degree neighbourhood",
+                               label_size = 2.8)
+ggsave(file.path(fig_dir, "05_claim_neighbourhood_fetal.png"), p_fetal, width = 11, height = 9, dpi = 200)
+p_fetal
+```
+
+```{r}
+#| label: fig-claim-fetal-interactive
+
+plot_network_interactive(claim_nets$fetal, title = "Fetal: second-degree neighbourhood (interactive)", height = "700px")
+```
+
+### The neighbourhood of the claim, postnatal
+
+```{r}
+#| label: fig-claim-postnatal
+#| fig-width: 11
+#| fig-height: 9
+
+p_postnatal <- plot_network_static(claim_nets$postnatal,
+                                   title = "Postnatal: XCL1 / XCL2 → XCR1, second-degree neighbourhood", label_size = 2.8)
+ggsave(file.path(fig_dir, "05_claim_neighbourhood_postnatal.png"), p_postnatal, width = 11, height = 9, dpi = 200)
+p_postnatal
+```
+
+```{r}
+#| label: fig-claim-postnatal-interactive
+
+plot_network_interactive(claim_nets$postnatal, title = "Postnatal: second-degree neighbourhood (interactive)",
+                         height = "700px")
+```
+
+### The whole networks
+
+```{r}
+#| label: fig-full-fetal
+
+network_data(nets$fetal$edges, nets$fetal$lr_links, nets$fetal$type_of, var_label) |>
+  plot_network_interactive(title = "Fetal: all links", height = "800px")
+```
+
+```{r}
+#| label: fig-full-postnatal
+
+network_data(nets$postnatal$edges, nets$postnatal$lr_links, nets$postnatal$type_of, var_label) |>
+  plot_network_interactive(title = "Postnatal: all links", height = "800px")
+```
+
+```{r}
+#| label: export
+
+map(nets, \(n) n$edges |>
+      transmute(x, y, x_label = var_label(x), y_label = var_label(y), where, is_lr, info_shifted, infOrt, is_causal)) |>
+  list_rbind(names_to = "run") |>
+  write_csv(file.path(out_dir, "retained_links.csv"))
+lr_context |> select(-ligands, -receptors) |> write_csv(file.path(out_dir, "lr_links_context.csv"))
+list.files(out_dir)
+```
+
+## Conclusions
+
+1. **XCL1 in CD8αα(I) cells drops at birth.**
+   - 29% of fetal against 12% of postnatal cells express it (notebook 01).
+   - The drop is much larger than the difference in sequencing depth.
+   - Before and after birth, XCL1 belongs to an activation program of these cells: it is linked to TNFRSF9 (4-1BB) in
+     both runs, with BIRC3 and DUSP4 (fetal) or BHLHE40 and RGS16 (postnatal) nearby, and goes with XCL2 and CRTAM.
+   - So the XCL1 source in CD8αα(I) cells is their activated (4-1BB⁺) fraction, which is larger before birth. This
+     refines the claim: CD8αα(I) cells are an XCL1 source mainly in the fetal thymus, and it is the cells carrying a
+     TCR-activation signature that produce it.
+   - GNG4 is not in the networks, so its role cannot be read from them.
+2. **The receiver side is the same at both ages, and as in case 2.**
+   - XCR1 marks resting DC1, and CCR7 / LAMP3 mark activated DC1; the two are almost never co-expressed.
+   - The activation program does not depend on XCR1.
+   - The claim's "activated […] up-regulate CCR7" is a change of state that the networks describe but cannot attribute
+     to XCL1 signalling.
+3. **Costimulation is a fetal feature in these networks.** CD28 → CD80, CD40LG → CD40 and PDCD1 → CD274 connect
+   CD8αα(I) cells to the aDC1 activation module in fetal cells; postnatally only PD-L1 stays tied to aDC1, with 35 aDC1
+   cells only.
+
+**Limits.**
+- The two networks rest on different gene selections and share few links (Jaccard 0.22–0.31), so they are compared
+  gene by gene.
+- Postnatal aDC1 has only 35 cells.
+- Postnatally, chemistry and donor are confounded.
+- As in cases 1 and 2, the L–R links are given, not inferred, and the orientations involving the claim's genes are
+  not causal.
+
+**Possible next steps.**
+- Split CD8αα(I) cells into TNFRSF9⁺ and TNFRSF9⁻ and compare their XCL1, XCL2 and GNG4 expression.
+- Check whether the TNFRSF9⁺ XCL1⁺ CD8αα(I) cells match the authors' "T(agonist)" population.
+
+**Outputs:**
+- `results/thymus_case3_xcl1_age/05_interpretation/retained_links.csv`: every link of both runs;
+- `results/thymus_case3_xcl1_age/05_interpretation/lr_links_context.csv`: the context of each L–R link per run;
+- `results/figures/thymus_case3_xcl1_age/05_claim_neighbourhood_fetal.png` and `..._postnatal.png`: the static figures.

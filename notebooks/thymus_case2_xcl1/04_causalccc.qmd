@@ -22,7 +22,7 @@ those of thymus case 1 (notebook 05):
 2. select, in each group, the genes sharing the most mutual information (MI) with the genes of interest: the ligands
    (senders), the receptors and three DC activation / migration genes (receivers) – `causalCCC.MIselection()`;
 3. build the mosaic table and the state order (`causalCCC.mosaic()`, `causalCCC.state_order()`), with population,
-   donor, chemistry and stage as metadata variables;
+   donor, chemistry, stage and sequencing depth (`n_counts`) as metadata variables;
 4. run MIIC with the settings of the CausalCCC web server (`scripts/run_miic.R`), on 8 threads.
 
 **What the claim predicts in this network.** XCL1 (and XCL2) in the senders, linked to XCR1 in the receivers; in the
@@ -37,6 +37,7 @@ takes (`causalccc_files/`), and the MIIC result (`miic_input/miic_result.rds`).
 ## Running time
 Gene selection: about 10 to 20 minutes per group. MIIC: several minutes to half an hour on 8 threads. Both are saved the
 first time and reloaded afterwards; delete `selected_genes.rds` or `miic_input/miic_result.rds` to recompute them.
+Adding sequencing depth did not change the gene selection (depth is not a pivot), so only MIIC is recomputed.
 :::
 
 ## Setup
@@ -72,7 +73,7 @@ dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 
 senders   <- "cd8aa_nk"
 receivers <- "dc1"
-metadata  <- c("population", "donor", "method", "stage")
+metadata  <- c("population", "donor", "method", "stage", "n_counts")   # n_counts: total counts per cell (depth)
 # DC1 activation / migration genes (aDC1 markers, notebook 01), added as genes of interest on the receiver side
 activation_genes <- c("CCR7", "LAMP3", "CD40", "CD80", "CD86", "IL12B")
 n_threads <- 8
@@ -170,7 +171,15 @@ list(senders   = setdiff(genes_senders, goi$senders),
 
 One row per cell: sender genes are filled in the CD8αα(I)/NK cells and empty (NA) in the DC cells, and the other way
 round. Genes selected in both groups (at least ITGAL and ITGB2, notebook 03) and the metadata, which are on both sides,
-get a `_senders` / `_receivers` suffix. The metadata are unordered categories, so no level order is given.
+get a `_senders` / `_receivers` suffix. Population, donor, chemistry and stage are unordered categories, so no level
+order is given.
+
+**Sequencing depth (`n_counts`).** The first run, without it, had housekeeping genes as hubs of the sender network
+(GAPDH, ACTB, SERF2, PPIA, EEF1A1, TPT1, PTMA). With raw counts, depth is a common cause of all genes; as a variable,
+MIIC can explain those links by depth instead of linking the genes to each other (as in Minh's runs A and B,
+`notebooks/thymus_early/`, notebooks 05 and 08). It is not a pivot, so the gene selection is unchanged and reloaded.
+`causalCCC.state_order()` declares every metadata variable as discrete (`var_type = 0`); `n_counts` is a count, so it
+is set to continuous (`var_type = 1`) afterwards.
 
 ```{r}
 #| label: mosaic
@@ -186,6 +195,9 @@ state_order <- causalCCC.state_order(mosaic_data_table = mosaic,
                                      metadata_senders = no_order, metadata_receivers = no_order,
                                      genes_senders = genes_senders, genes_receivers = genes_receivers,
                                      ligands = ligands, receptors = receptors)
+state_order$var_type[str_starts(state_order$var_names, "n_counts")] <- 1
+stopifnot(sum(str_starts(state_order$var_names, "n_counts")) == 2)
+filter(state_order, group == "metadata") |> select(var_names, var_type)
 
 # L-R links with the same (suffixed) names as the mosaic table
 edges_out <- interact_edges |>
@@ -218,6 +230,9 @@ installed miic, several threads crash ("C stack" errors), so the run uses the pa
 (`docs/INSTALL.md`, section 4), which on case study 2 gave the one-thread links, orientations and genuine causations
 about 3 times faster. The C stack limit is also lifted for the MIIC process only (`ulimit -s unlimited`), as in thymus
 case 1.
+
+The first run, without sequencing depth (same cells, genes and settings; 29.5 minutes), is kept in
+`miic_input_without_depth/` for comparison (notebook 05).
 
 ```{r}
 #| label: miic
@@ -278,7 +293,7 @@ edges |>
 #| label: metadata-links
 
 # Links of the technical and design variables
-meta_key <- "^(stage|donor|method)_(senders|receivers)$"
+meta_key <- "^(stage|donor|method|n_counts)_(senders|receivers)$"
 edges |>
   filter(str_detect(x, meta_key) | str_detect(y, meta_key)) |>
   select(x, y, info_shifted, infOrt) |>
@@ -287,25 +302,6 @@ edges |>
   as.data.frame()
 ```
 
-## 5. First reading
-
 The L–R links are imposed by CausalCCC (they connect variables that are never observed in the same cell); what MIIC
-learns is the network around them, within each group.
-
-- **Senders.** XCL1 has only two learned neighbours: XCL2 (strong) and `population_senders` (the NK / CD8αα(I)
-  label). It has no direct link to stage, donor or chemistry, so its variation in this group is explained by which
-  population a cell belongs to, and XCL2 carries the NK cytotoxic program (its neighbours are NKG7 and CRTAM). The
-  `population_senders` hub links NK markers (NKG7, TYROBP, KLRD1, KLRC1, GNLY, GZMB) and CD8αα(I) / T-cell markers
-  (LEF1, TCF7, CAMK4, CD28). The orientation XCL1 → population ← CD28 is a v-structure between two population-specific
-  genes; it is not a causal statement about a cell label.
-- **Receivers.** XCR1 links to FGL2 and `population_receivers`; CCR7 links to `population_receivers` and to activation
-  genes (CD83, BIRC3, SAMSN1); LAMP3 is a hub of the activation program (CD40, CD80, IL12B, EBI3, FSCN1). XCR1 and
-  CCR7 are **not directly linked**: they are connected only through the DC1 / aDC1 label. This matches the claim as a
-  change of state (XCR1⁺ resting DC1 → CCR7⁺ activated DC1), but the network cannot say that XCL1 signalling causes
-  this activation: the activation genes do not depend on XCR1 within the receivers.
-- **Design variables.** Stage links only to donor (each donor has a single age, so stage is fully determined by donor).
-  Donor and chemistry link to a few housekeeping, translation and HLA genes and to one ligand subunit (ITGA4, of the
-  VLA-4 complex), but not to the genes of the claim.
-
-The full interpretation – including the remaining L–R links (MIF/APP → CD74, CD40LG → CD40, CD28 → CD80/CD86) – is
-left to the next notebook.
+learns is the network around them, within each group. The interpretation, and the comparison with the first run
+without sequencing depth (`miic_input_without_depth/`), is in notebook 05.

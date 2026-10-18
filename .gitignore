@@ -32,3 +32,6 @@ omnipathr-log/
 *.bus
 kb_out/
 sandbox/
+
+# Quarto intermediate files
+*.rmarkdown

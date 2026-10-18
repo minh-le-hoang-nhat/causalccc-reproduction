@@ -15,8 +15,9 @@ execute:
 ## Goal
 
 Notebook 04 learned one network with MIIC: 1,000 sender cells (CD8αα(I) and NK, 500 each), 635 receiver cells (DC1
-500, aDC1 135), 25 L–R pairs from Table S5 (28 gene–gene links) and four metadata variables per group (population,
-donor, chemistry, stage). This notebook reads that network against the claim of Park *et al.* 2020 (Fig. 4D, fig. S26):
+500, aDC1 135), 25 L–R pairs from Table S5 (28 gene–gene links) and five metadata variables per group (population,
+donor, chemistry, stage and sequencing depth `n_counts`). A first run without sequencing depth is kept for comparison
+(section 5). This notebook reads that network against the claim of Park *et al.* 2020 (Fig. 4D, fig. S26):
 
 > "GNG4⁺CD8αα⁺ T(I) cells expressed XCL1, which may be involved in the recruitment of XCR1-expressing DC1 cells. […]
 > XCL1 is expressed most highly by CD8αα⁺ T(I) cells and at a lower level by NK cells […] a potential relay of signals
@@ -24,8 +25,9 @@ donor, chemistry, stage). This notebook reads that network against the claim of 
 > CCR7."
 
 The claim has three parts, examined in turn: **(1) who produces XCL1** (sections 2), **(2) XCR1 on DC1 and the
-activation that follows** (section 3), and **(3) the other signals between the same cells** (section 4). Sections 5
-and 6 check the design variables and the orientations; section 7 draws the network.
+activation that follows** (section 3), and **(3) the other signals between the same cells** (section 4). Section 5
+checks the design variables and what adding sequencing depth changed; section 6 the orientations; section 7 draws the
+network.
 
 **How to read a CausalCCC network.** Within each group (senders, receivers), a link means that two variables remain
 dependent whatever other variable of the group is conditioned on; its strength is `info_shifted` (the mutual
@@ -57,13 +59,15 @@ fig_dir   <- file.path(root, "results", "figures", "thymus_case2_xcl1")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-miic_result <- readRDS(file.path(res_dir, "04_causalccc", "miic_input", "miic_result.rds"))
+miic_result  <- readRDS(file.path(res_dir, "04_causalccc", "miic_input", "miic_result.rds"))
+# First run, without sequencing depth (same cells, genes and settings; notebook 04)
+miic_without <- readRDS(file.path(res_dir, "04_causalccc", "miic_input_without_depth", "miic_result.rds"))
 mosaic      <- read_csv(file.path(files_dir, "causalCCC_df.csv"), show_col_types = FALSE, guess_max = Inf)
 lr          <- read_tsv(file.path(files_dir, "causalCCC_interactEdges.tsv"), show_col_types = FALSE)
 
 SEND <- "CD8αα(I)/NK"
 RECV <- "DC1/aDC1"
-META <- c("population", "donor", "method", "stage")
+META <- c("population", "donor", "method", "stage", "n_counts")
 
 # Cell type of each variable: the group whose rows hold its values
 row_type <- if_else(!is.na(mosaic$population_senders), SEND, RECV)
@@ -71,13 +75,18 @@ type_of  <- column_cell_type(mosaic, row_type)
 
 # One row per pair of variables (MIIC lists each given L-R link twice, once per direction; notebook 04)
 lr_links <- link_name(lr$ligands, lr$receptors)
-edges <- miic_result$all.edges.summary |>
-  filter(type == "P") |>
-  distinct(pair_a = pmin(x, y), pair_b = pmax(x, y), .keep_all = TRUE) |>
-  select(-pair_a, -pair_b) |>
-  mutate(is_lr = link_name(x, y) %in% lr_links,
-         where = case_when(is_lr ~ "L–R (given)", type_of[x] == SEND ~ "within senders", .default = "within receivers"))
+retained <- function(result) {
+  result$all.edges.summary |>
+    filter(type == "P") |>
+    distinct(pair_a = pmin(x, y), pair_b = pmax(x, y), .keep_all = TRUE) |>
+    select(-pair_a, -pair_b) |>
+    mutate(is_lr = link_name(x, y) %in% lr_links,
+           where = case_when(is_lr ~ "L–R (given)", type_of[x] == SEND ~ "within senders", .default = "within receivers"))
+}
+edges <- retained(miic_result)
 intracellular <- edges |> filter(!is_lr)
+edges_without <- retained(miic_without)
+intracellular_without <- edges_without |> filter(!is_lr)
 
 # Labels for the tables and drawings: no group suffix, metadata in brackets
 var_label <- function(v) {
@@ -142,17 +151,18 @@ intracellular |>
 ```
 
 **Reading.**
-- Each group holds about 140 genes plus its 4 metadata variables, all of them linked. MIIC kept 293 links among the
-  senders and 292 among the receivers, of which about one in ten is oriented and 9 are genuine causations in total.
-- **Senders:** the two hubs are NKG7 and `[population]` (25 links each): the network is organised around the NK versus
-  CD8αα(I) identity. The other hubs are housekeeping and glycolysis genes (GAPDH, ACTB, SERF2, PPIA, EEF1A1, TPT1,
-  PTMA). Ribosomal genes were excluded from the gene selection (notebook 04), but these other highly expressed genes
-  still share a lot of information with many pivots.
+- Each group holds about 140 genes plus its 5 metadata variables, all of them linked. MIIC kept 272 links among the
+  senders and 296 among the receivers; 53 are oriented and 9 are genuine causations in total.
+- **Sequencing depth is the first hub of both groups:** `[n_counts]` has 32 links among the senders and 21 among the
+  receivers, with ribosome-associated, translation, cytoskeleton and ATP synthase genes (section 5).
+- **Senders:** next come NKG7 and `[population]` (25 links each), so the network is organised around depth and around
+  the NK versus CD8αα(I) identity. GAPDH and ACTB remain hubs; the other housekeeping hubs of the first run lost most of
+  their links once depth was a variable (section 5).
 - **Receivers:** the hubs are CD74 and the MHC class II genes (antigen presentation), CPVL and LYZ (DC1 identity), and
   LAMP3 and `[population]` (activation, section 3).
 - **Strongest links:** in both groups, the strongest link is `[donor]`–`[stage]`. Stage is fully determined by donor
-  (section 5), so this link carries no biology. Next come NK identity (NKG7–`[population]`, TYROBP, FCER1G) among the
-  senders, and the HLA class I and class II modules among the receivers.
+  (section 5), so this link carries no biology. Next come NK identity (NKG7–`[population]`, TYROBP, FCER1G) and depth
+  (GNB2L1–`[n_counts]`) among the senders, and the HLA modules and depth (FAU, CFL1) among the receivers.
 
 ## 2. Senders: what XCL1 depends on
 
@@ -164,8 +174,7 @@ tibble(variable = c("XCL1", "XCL2", "population_senders"),
        neighbours = map_chr(variable, neighbour_string))
 ```
 
-The network says that, once the NK / CD8αα(I) label is known, XCL1 no longer depends on stage, donor or chemistry.
-This can be checked directly in the mosaic table (raw counts of the 1,000 sender cells):
+XCL1 by population and stage in the mosaic table (raw counts of the 1,000 sender cells):
 
 ```{r}
 #| label: xcl-by-population-stage
@@ -196,18 +205,19 @@ mosaic |>
 
 **Reading.**
 - **XCL1 has only two learned neighbours:** XCL2 (146) and `[population]` (49). So in these cells, XCL1 depends on
-  which population the cell belongs to and on XCL2, and on nothing else among the ~140 sender variables. XCL2 is
-  attached to the NK program (NKG7, 215) and to CRTAM.
+  which population the cell belongs to and on XCL2, and on nothing else among the ~140 sender variables, depth
+  included. XCL2 is attached to the NK program (NKG7, 215) and to CRTAM.
 - **NK cells are the main XCL1 source in this run:** 61–79% of NK cells express it, against 10–36% of CD8αα(I) cells.
   This agrees with notebook 01: CD8αα(I) leads only on the level within expressing cells.
 - **In CD8αα(I), XCL1 is carried by a small XCL2⁺ subset:** 96% of XCL2⁺ CD8αα(I) cells express XCL1, against 9% of
   the others. Since only 3% of CD8αα(I) cells express NKG7, this subset is not contaminating NK cells. Whether it is
   the GNG4⁺ subset named in the paper is not tested here.
-- **XCL1 in CD8αα(I) falls with age**, from 36% of cells (mean 19 counts) at 7–11 PCW to 10% (mean 1.8) postnatally
-  from 15 months. In NK cells it goes the other way (61% → 79% → 73%). Yet the network shows **no XCL1–stage (or
-  donor) link**. MIIC tests each dependence on the whole sender group, where these opposite trends probably blur
-  each other. This is a limit of pooling the two populations, not evidence that XCL1 is stable with age: in CD8αα(I)
-  cells, the claimed XCL1 source is mainly a fetal feature.
+- **XCL1 in CD8αα(I) falls with age.** In the run's cells it goes from 36% (early) to 23% (middle) to 10% (late), but
+  the early value rests on 45 cells. On all CD8αα(I) cells (thymus case 3, notebook 01), it is a drop at birth: 29% of
+  fetal cells against 12% of postnatal cells, with no further decline after birth. In NK cells it goes the other way
+  (61% → 79% → 73%). Yet the network shows **no XCL1–stage (or donor) link**. MIIC tests each dependence on the whole
+  sender group, where these opposite trends probably blur each other. This is a limit of pooling the two populations,
+  which thymus case 3 addresses with CD8αα(I) senders only, fetal and postnatal separately.
 
 ## 3. Receivers: XCR1, CCR7 and the activation of DC1
 
@@ -310,6 +320,8 @@ lr_table |>
   points to the same cells as XCL1 → XCR1.
 - **NK-specific ligands:** IFNG, KLRF1, TIGIT and TNFSF14 are tied to the population label (NK cells). Their receptors
   are not specific to DC1 or aDC1.
+- **Depth-driven ligands:** ICAM3 and CD47 are now linked only to `[n_counts]`: their variation among sender cells is
+  explained by sequencing depth.
 - **Ubiquitous pairs:** MIF and APP → CD74 again rank first in S5 (as in thymus case 1), but the network places MIF in
   a housekeeping and glycolysis module (GAPDH, GPI, PSMA6) and CD74 in the MHC class II module (HLA-DPA1, HLA-DRB5).
   Nothing in the network is specific to these pairs.
@@ -317,7 +329,7 @@ lr_table |>
   mostly among cytoskeletal and housekeeping genes. On the receiver side, ICAM1 is linked to NF-κB target genes (SRGN,
   NFKBIA, BCL2A1).
 
-## 5. Design variables: donor, stage, chemistry
+## 5. Design variables and sequencing depth
 
 ```{r}
 #| label: stage-donor
@@ -333,8 +345,8 @@ mosaic |>
 ```{r}
 #| label: meta-neighbours
 
-tibble(variable = c("donor_senders", "stage_senders", "method_senders",
-                    "donor_receivers", "stage_receivers", "method_receivers"),
+tibble(variable = c("donor_senders", "stage_senders", "method_senders", "n_counts_senders",
+                    "donor_receivers", "stage_receivers", "method_receivers", "n_counts_receivers"),
        degree = degree_of(variable), neighbours = map_chr(variable, neighbour_string))
 ```
 
@@ -346,7 +358,7 @@ map(c("XCL1", "XCL2", "XCR1", "CCR7"), \(g) {
   d <- graph_distance(intracellular, g)
   side <- if_else(type_of[g] == SEND, "senders", "receivers")
   tibble(gene = g, donor = d[paste0("donor_", side)], stage = d[paste0("stage_", side)],
-         chemistry = d[paste0("method_", side)])
+         chemistry = d[paste0("method_", side)], depth = d[paste0("n_counts_", side)])
 }) |> list_rbind()
 ```
 
@@ -359,8 +371,100 @@ map(c("XCL1", "XCL2", "XCR1", "CCR7"), \(g) {
     haplotypes, DR15/DR16), and MIIC orients donor → HLA-DRB5 as a genuine causation, a sensible result.
 - **Chemistry (3′ / 5′)** links to a handful of genes (PTPRCAP, GABARAP, YWHAZ, NME2, ATP6V0C, TMSB4X), a technical
   effect.
-- **The claim's genes are 2 to 5 links away from donor, stage and chemistry.** So the XCL1, XCL2, XCR1 and CCR7
-  results above are not direct effects of donor or technology.
+- **Sequencing depth** links to 32 sender genes and 21 receiver genes:
+  - mostly ribosome-associated and translation genes (GNB2L1, FAU, UBA52, EEF1A1, BTF3), cytoskeleton (PFN1, ACTG1,
+    CFL1, TMSB10) and ATP synthase subunits;
+  - and two ligands, ICAM3 and CD47 (section 4).
+- **The claim's genes are 2 to 5 links away from donor, stage, chemistry and depth.** So the XCL1, XCL2, XCR1 and CCR7
+  results above are not direct effects of donor, technology or depth.
+
+### What did adding sequencing depth change?
+
+Same measure as Minh's run A (`notebooks/thymus_early/06_runA_interpretation.qmd`, section 2): for every gene of the
+network, the Spearman correlation between its counts and the total counts of the cell, computed within each population
+(NK, CD8αα(I), DC1, aDC1), median over the two populations of its group. Genes above 0.5 "follow depth". We then
+compare the two runs: how often a gene–gene link joins two such genes, and what the hubs and the genes of the claim are
+linked to.
+
+```{r}
+#| label: depth-correlation
+
+pop_col   <- c(setNames("population_senders", SEND), setNames("population_receivers", RECV))
+depth_col <- c(setNames("n_counts_senders", SEND), setNames("n_counts_receivers", RECV))
+gene_vars <- variables |> filter(kind == "gene") |> pull(variable)
+depth_rho <- map_dbl(gene_vars, \(v) {
+  t <- type_of[[v]]
+  rows <- mosaic[row_type == t, c(v, pop_col[[t]], depth_col[[t]])] |> set_names(c("x", "population", "depth"))
+  rhos <- rows |> group_by(population) |>
+    summarise(rho = if (sd(x) == 0) NA_real_ else cor(x, depth, method = "spearman")) |> pull(rho)
+  median(rhos, na.rm = TRUE)
+}) |> setNames(gene_vars)
+follows_depth <- names(depth_rho)[!is.na(depth_rho) & depth_rho > 0.5]
+tibble(group = type_of[gene_vars], follows = gene_vars %in% follows_depth) |>
+  count(group, follows) |> pivot_wider(names_from = follows, values_from = n, names_prefix = "follows_depth_")
+```
+
+```{r}
+#| label: depth-comparison
+
+depth_module <- function(intra) {
+  gene_gene <- intra |> filter(x %in% gene_vars, y %in% gene_vars)
+  gene_gene |> group_by(where) |>
+    summarise(gene_gene_links = n(),
+              both_follow_depth = sum(x %in% follows_depth & y %in% follows_depth)) |>
+    mutate(share = both_follow_depth / gene_gene_links,
+           expected_by_chance = map_dbl(where, \(w) {
+             g <- gene_vars[type_of[gene_vars] == if_else(w == "within senders", SEND, RECV)]
+             mean(g %in% follows_depth)^2
+           }))
+}
+bind_rows(`without depth` = depth_module(intracellular_without), `with depth` = depth_module(intracellular), .id = "run") |>
+  mutate(across(c(share, expected_by_chance), \(v) round(v, 3)))
+```
+
+```{r}
+#| label: depth-hubs
+
+# The 10 hubs of each group in the run without depth: their degree in both runs and their depth correlation
+degree_in <- function(intra, v) map_int(v, \(g) sum(intra$x == g | intra$y == g))
+tibble(variable = unique(c(intracellular_without$x, intracellular_without$y))) |>
+  mutate(group = type_of[variable], degree_without = degree_in(intracellular_without, variable)) |>
+  group_by(group) |> slice_max(degree_without, n = 10, with_ties = FALSE) |> ungroup() |>
+  mutate(degree_with = degree_in(intracellular, variable), depth_rho = round(depth_rho[variable], 2),
+         variable = var_label(variable))
+```
+
+```{r}
+#| label: depth-claim-genes
+
+# Neighbours of the genes of the claim in both runs
+neighbours_in <- function(intra, v) {
+  nb <- intra |> filter(x == v | y == v) |> mutate(other = if_else(x == v, y, x)) |> arrange(desc(info_shifted))
+  if (nrow(nb) == 0) "–" else paste(var_label(nb$other), collapse = ", ")
+}
+tibble(variable = c("XCL1", "XCL2", "XCR1", "CCR7", "LAMP3"),
+       without_depth = map_chr(variable, \(v) neighbours_in(intracellular_without, v)),
+       with_depth = map_chr(variable, \(v) neighbours_in(intracellular, v)),
+       depth_rho = round(depth_rho[variable], 2))
+```
+
+**Reading.**
+- **Which genes follow depth:** 54 of the 141 sender genes (38%) and 97 of the 136 receiver genes (71%). The DCs are
+  deeper cells, and most of their selected genes rise with the total count.
+- **Senders: depth absorbs part of the module.** The share of gene–gene links joining two depth-following genes falls
+  from 46% to 36% (15% expected by chance). This is the same effect as in Minh's run A (34% → 24%, 14% by chance), and
+  it is also partial.
+- **Most housekeeping hubs of the first run lose their links:** SERF2 (13 → 5), PPIA (12 → 3), TPT1 (11 → 6), EEF1A1
+  (11 → 7), PTMA (10 → 7). GAPDH (16 → 19) and ACTB (13 → 14) keep theirs: GAPDH is the hub of a glycolysis
+  module (ALDOA, PKM, ENO1, TPI1, PGAM1, PGK1, LDHA, and MIF), ACTB of a cytoskeleton module (ACTG1, PFN1, RHOA).
+  Depth does not explain these modules: they vary between cells of the same depth, probably with metabolic activity.
+- **Receivers: little change** (73% → 71%, 51% by chance). Since most receiver genes follow depth, this measure
+  separates little there, and the receiver hubs keep their degree.
+- **The network as a whole is stable:** 514 links are found in both runs; 99 are only in the run without depth, and 82
+  only in the run with depth.
+- **The genes of the claim are unchanged.** XCL1, XCR1, CCR7 and LAMP3 keep exactly the same neighbours; XCL2 loses
+  only HINT1, which follows depth. Their own correlations with depth are low (0.15–0.41), so the conclusions on the
+  claim do not depend on depth.
 
 ## 6. Orientations and genuine causations
 
@@ -376,7 +480,7 @@ oriented <- edges |>
   filter(abs(infOrt) == 2) |>
   transmute(from = if_else(infOrt == 2, x, y), to = if_else(infOrt == 2, y, x), where,
             strength = round(info_shifted), genuine = is_causal,
-            involves_metadata = str_detect(paste(from, to), "(population|donor|method|stage)_"))
+            involves_metadata = str_detect(paste(from, to), "(population|donor|method|stage|n_counts)_"))
 oriented |> count(where, involves_metadata, genuine)
 ```
 
@@ -391,11 +495,15 @@ oriented |>
 ```
 
 **Reading.**
-- 65 links are oriented: 35 among the senders and 30 among the receivers.
+- 53 links are oriented: 17 among the senders and 36 among the receivers (65 in the run without depth).
 - **Genuine causations:** there are 9.
-  - 7 are between genes: UBA52 → TMSB4X, NKG7 → IL2RB, GAPDH → TPI1, SERF2 → FAU, GAPDH → COX6C, LYZ → ITGB2 and
-    NKG7 → ARPC5L. These are housekeeping, glycolysis or cell-identity genes, with no clear signalling meaning.
-  - 2 involve metadata: `[population]` → NUCB2 and `[donor]` → HLA-DRB5 (section 5).
+  - 3 go from `[n_counts]` to a gene (GNB2L1, PSME1, NPC2): depth as a cause of counts, the expected technical
+    direction.
+  - 2 are the same metadata effects as before: `[population]` → NUCB2 and `[donor]` → HLA-DRB5.
+  - 4 are between genes: NKG7 → IL2RB and NKG7 → ARPC5L (NK identity), LYZ → ITGB2 and PFN1 → ACTG1. None has a clear
+    signalling meaning.
+  - Four gene–gene genuine causations of the first run (UBA52 → TMSB4X, GAPDH → TPI1, SERF2 → FAU, GAPDH → COX6C) are
+    gone once depth is a variable: they were depth effects.
 - **None involves XCL1, XCL2, XCR1 or CCR7.**
 - **The arrow XCL1 → `[population]` is not causal:** it is a v-structure. XCL1, CD28 and other population-specific
   genes are independent of each other but each depends on the label, so MIIC points them into it.
@@ -442,7 +550,7 @@ p
 
 ### The whole network
 
-All 613 links. With about 285 variables the drawing is dense: zoom in, or click a gene to highlight its neighbours.
+All retained links. With about 287 variables the drawing is dense: zoom in, or click a gene to highlight its neighbours.
 
 ```{r}
 #| label: fig-full
@@ -468,8 +576,9 @@ The claim has three parts; the network supports them unevenly.
 
 1. **"GNG4⁺ CD8αα⁺ T(I) cells express XCL1, most highly […], and NK cells at a lower level": partly supported.**
    XCL1 depends only on XCL2 and on the population label. In this run, NK cells are the main source (61–79% of cells
-   against 10–36%). In CD8αα(I) cells, XCL1 is carried by a small XCL1⁺XCL2⁺ subset whose share falls from fetal (36%)
-   to postnatal (10%) thymus. "Most highly" holds only for the level within expressing cells (notebook 01).
+   against 10–36%). In CD8αα(I) cells, XCL1 is carried by a small XCL1⁺XCL2⁺ subset whose share drops at birth (29% of
+   all fetal CD8αα(I) cells against 12% postnatally; thymus case 3, notebook 01). "Most highly" holds only for the
+   level within expressing cells (notebook 01).
 2. **"Recruitment of XCR1⁺ DC1, which are then activated and up-regulate CCR7": consistent as a change of state, not
    shown as a consequence.** XCR1 marks resting DC1 and CCR7 / LAMP3 mark activated DC1; the two states are almost
    mutually exclusive and are connected only through the DC1 / aDC1 label. Nothing in the receivers' network makes the
@@ -481,12 +590,15 @@ The claim has three parts; the network supports them unevenly.
    - The top-ranked S5 pairs (MIF / APP → CD74) are not specific to these cells.
 
 **Technical checks.**
+- **Sequencing depth** is now a network variable. Among the senders, it absorbs part of the housekeeping module (links
+  between depth-following genes: 46% → 36%) and four genuine causations of the first run. The results on the claim are
+  unchanged.
 - Donor and chemistry do not touch the claim's genes directly.
 - Stage is redundant with donor.
-- Pooling NK and CD8αα(I) cells hides the age decline of XCL1 in CD8αα(I), because NK cells go the opposite way.
+- Pooling NK and CD8αα(I) cells hides the age decline of XCL1 in CD8αα(I), because NK cells go the opposite way. Thymus
+  case 3 (`notebooks/thymus_case3_xcl1_age/`) runs CD8αα(I) senders only, fetal and postnatal separately.
 
 **Possible next steps.**
-- A run with CD8αα(I) senders only, fetal versus postnatal, to test the age dependence of XCL1 directly.
 - A check of GNG4 in the XCL1⁺ CD8αα(I) subset.
 - The same analysis on the authors' T-cell object (finer annotation), which fig. S26 was drawn from.
 

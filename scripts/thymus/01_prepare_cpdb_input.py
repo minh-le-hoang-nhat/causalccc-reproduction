@@ -1,8 +1,9 @@
 """Subsample 1000 cells per cell type (as in Park et al. 2020) and write CellPhoneDB inputs.
-Run in WSL: python 01_prepare_cpdb_input.py"""
+Run from the root of the repository: python scripts/thymus/01_prepare_cpdb_input.py"""
+from pathlib import Path
 import os
 import anndata as ad, numpy as np, pandas as pd
-ROOT = '/mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction'
+ROOT = Path(__file__).resolve().parents[2]   # root of the repository
 LEVEL = 'Anno_level_fig1'
 a = ad.read_h5ad(f'{ROOT}/data/thymus/HTA08_v01_A05_Science_human_fig1.h5ad', backed='r')
 print('var_names head:', list(a.var_names[:8]), '| duplicated:', a.var_names.duplicated().sum())

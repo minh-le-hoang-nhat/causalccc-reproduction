@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jeanne Leclerc, Minh Le">
-<meta name="dcterms.date" content="2026-10-15">
+<meta name="dcterms.date" content="2026-10-16">
 
 <title>04 – CausalCCC run: XCL1 relay, CD8αα(I)/NK → DC1/aDC1</title>
 <style>
@@ -2215,7 +2215,6 @@ vertical-align: -.125em;
   <li><a href="#gene-selection" id="toc-gene-selection" class="nav-link" data-scroll-target="#gene-selection">2. Gene selection</a></li>
   <li><a href="#mosaic-table-and-state-order" id="toc-mosaic-table-and-state-order" class="nav-link" data-scroll-target="#mosaic-table-and-state-order">3. Mosaic table and state order</a></li>
   <li><a href="#miic" id="toc-miic" class="nav-link" data-scroll-target="#miic">4. MIIC</a></li>
-  <li><a href="#first-reading" id="toc-first-reading" class="nav-link" data-scroll-target="#first-reading">5. First reading</a></li>
   </ul>
 </nav>
 </div>
@@ -2241,7 +2240,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 15, 2026</p>
+      <p class="date">October 16, 2026</p>
     </div>
   </div>
   
@@ -2259,7 +2258,7 @@ vertical-align: -.125em;
 <ol type="1">
 <li>build a Seurat object from the exported counts;</li>
 <li>select, in each group, the genes sharing the most mutual information (MI) with the genes of interest: the ligands (senders), the receptors and three DC activation / migration genes (receivers) – <code>causalCCC.MIselection()</code>;</li>
-<li>build the mosaic table and the state order (<code>causalCCC.mosaic()</code>, <code>causalCCC.state_order()</code>), with population, donor, chemistry and stage as metadata variables;</li>
+<li>build the mosaic table and the state order (<code>causalCCC.mosaic()</code>, <code>causalCCC.state_order()</code>), with population, donor, chemistry, stage and sequencing depth (<code>n_counts</code>) as metadata variables;</li>
 <li>run MIIC with the settings of the CausalCCC web server (<code>scripts/run_miic.R</code>), on 8 threads.</li>
 </ol>
 <p><strong>What the claim predicts in this network.</strong> XCL1 (and XCL2) in the senders, linked to XCR1 in the receivers; in the receiver network, XCR1 (resting DC1) and CCR7 / LAMP3 (activated DC1) connected through the DC1 / aDC1 <code>population</code> variable, since activation is a change of state between the two populations (notebook 01).</p>
@@ -2274,7 +2273,7 @@ vertical-align: -.125em;
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Gene selection: about 10 to 20 minutes per group. MIIC: several minutes to half an hour on 8 threads. Both are saved the first time and reloaded afterwards; delete <code>selected_genes.rds</code> or <code>miic_input/miic_result.rds</code> to recompute them.</p>
+<p>Gene selection: about 10 to 20 minutes per group. MIIC: several minutes to half an hour on 8 threads. Both are saved the first time and reloaded afterwards; delete <code>selected_genes.rds</code> or <code>miic_input/miic_result.rds</code> to recompute them. Adding sequencing depth did not change the gene selection (depth is not a pivot), so only MIIC is recomputed.</p>
 </div>
 </div>
 </section>
@@ -2307,7 +2306,7 @@ vertical-align: -.125em;
 <span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>senders   <span class="ot">&lt;-</span> <span class="st">&quot;cd8aa_nk&quot;</span></span>
 <span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>receivers <span class="ot">&lt;-</span> <span class="st">&quot;dc1&quot;</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>metadata  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;population&quot;</span>, <span class="st">&quot;donor&quot;</span>, <span class="st">&quot;method&quot;</span>, <span class="st">&quot;stage&quot;</span>)</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>metadata  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;population&quot;</span>, <span class="st">&quot;donor&quot;</span>, <span class="st">&quot;method&quot;</span>, <span class="st">&quot;stage&quot;</span>, <span class="st">&quot;n_counts&quot;</span>)   <span class="co"># n_counts: total counts per cell (depth)</span></span>
 <span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="co"># DC1 activation / migration genes (aDC1 markers, notebook 01), added as genes of interest on the receiver side</span></span>
 <span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>activation_genes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;CCR7&quot;</span>, <span class="st">&quot;LAMP3&quot;</span>, <span class="st">&quot;CD40&quot;</span>, <span class="st">&quot;CD80&quot;</span>, <span class="st">&quot;CD86&quot;</span>, <span class="st">&quot;IL12B&quot;</span>)</span>
 <span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>n_threads <span class="ot">&lt;-</span> <span class="dv">8</span></span>
@@ -2477,7 +2476,8 @@ $receivers
 </section>
 <section id="mosaic-table-and-state-order" class="level2">
 <h2 class="anchored" data-anchor-id="mosaic-table-and-state-order">3. Mosaic table and state order</h2>
-<p>One row per cell: sender genes are filled in the CD8αα(I)/NK cells and empty (NA) in the DC cells, and the other way round. Genes selected in both groups (at least ITGAL and ITGB2, notebook 03) and the metadata, which are on both sides, get a <code>_senders</code> / <code>_receivers</code> suffix. The metadata are unordered categories, so no level order is given.</p>
+<p>One row per cell: sender genes are filled in the CD8αα(I)/NK cells and empty (NA) in the DC cells, and the other way round. Genes selected in both groups (at least ITGAL and ITGB2, notebook 03) and the metadata, which are on both sides, get a <code>_senders</code> / <code>_receivers</code> suffix. Population, donor, chemistry and stage are unordered categories, so no level order is given.</p>
+<p><strong>Sequencing depth (<code>n_counts</code>).</strong> The first run, without it, had housekeeping genes as hubs of the sender network (GAPDH, ACTB, SERF2, PPIA, EEF1A1, TPT1, PTMA). With raw counts, depth is a common cause of all genes; as a variable, MIIC can explain those links by depth instead of linking the genes to each other (as in Minh’s runs A and B, <code>notebooks/thymus_early/</code>, notebooks 05 and 08). It is not a pivot, so the gene selection is unchanged and reloaded. <code>causalCCC.state_order()</code> declares every metadata variable as discrete (<code>var_type = 0</code>); <code>n_counts</code> is a count, so it is set to continuous (<code>var_type = 1</code>) afterwards.</p>
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>mosaic <span class="ot">&lt;-</span> <span class="fu">causalCCC.mosaic</span>(<span class="at">data_input =</span> thymus, <span class="at">assay_name =</span> <span class="st">&quot;RNA&quot;</span>, <span class="at">interact_ident =</span> <span class="st">&quot;group&quot;</span>,</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>                           <span class="at">senders_name =</span> senders, <span class="at">receivers_name =</span> receivers,</span>
@@ -2493,38 +2493,54 @@ $receivers
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>                                     <span class="at">metadata_senders =</span> no_order, <span class="at">metadata_receivers =</span> no_order,</span>
 <span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>                                     <span class="at">genes_senders =</span> genes_senders, <span class="at">genes_receivers =</span> genes_receivers,</span>
 <span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>                                     <span class="at">ligands =</span> ligands, <span class="at">receptors =</span> receptors)</span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="co"># L-R links with the same (suffixed) names as the mosaic table</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>edges_out <span class="ot">&lt;-</span> interact_edges <span class="sc">|&gt;</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ligands   =</span> <span class="fu">if_else</span>(ligands <span class="sc">%in%</span> genes_receivers, <span class="fu">paste0</span>(ligands, <span class="st">&quot;_senders&quot;</span>), ligands),</span>
-<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">receptors =</span> <span class="fu">if_else</span>(receptors <span class="sc">%in%</span> genes_senders, <span class="fu">paste0</span>(receptors, <span class="st">&quot;_receivers&quot;</span>), receptors))</span>
-<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">c</span>(edges_out<span class="sc">$</span>ligands, edges_out<span class="sc">$</span>receptors) <span class="sc">%in%</span> <span class="fu">names</span>(mosaic)))</span>
-<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(mosaic)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>state_order<span class="sc">$</span>var_type[<span class="fu">str_starts</span>(state_order<span class="sc">$</span>var_names, <span class="st">&quot;n_counts&quot;</span>)] <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">sum</span>(<span class="fu">str_starts</span>(state_order<span class="sc">$</span>var_names, <span class="st">&quot;n_counts&quot;</span>)) <span class="sc">==</span> <span class="dv">2</span>)</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(state_order, group <span class="sc">==</span> <span class="st">&quot;metadata&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">select</span>(var_names, var_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[1] 1635  285</code></pre>
+<pre><code>              var_names var_type
+1    population_senders        0
+2         donor_senders        0
+3        method_senders        0
+4         stage_senders        0
+5      n_counts_senders        1
+6  population_receivers        0
+7       donor_receivers        0
+8      method_receivers        0
+9       stage_receivers        0
+10   n_counts_receivers        1</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(state_order, group, var_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># L-R links with the same (suffixed) names as the mosaic table</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>edges_out <span class="ot">&lt;-</span> interact_edges <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">ligands   =</span> <span class="fu">if_else</span>(ligands <span class="sc">%in%</span> genes_receivers, <span class="fu">paste0</span>(ligands, <span class="st">&quot;_senders&quot;</span>), ligands),</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">receptors =</span> <span class="fu">if_else</span>(receptors <span class="sc">%in%</span> genes_senders, <span class="fu">paste0</span>(receptors, <span class="st">&quot;_receivers&quot;</span>), receptors))</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">all</span>(<span class="fu">c</span>(edges_out<span class="sc">$</span>ligands, edges_out<span class="sc">$</span>receptors) <span class="sc">%in%</span> <span class="fu">names</span>(mosaic)))</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="fu">dim</span>(mosaic)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1635  287</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">count</span>(state_order, group, var_type)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>            group var_type   n
 1         ligands        0   1
 2         ligands        1  23
 3        metadata        0   8
-4 receivers genes        1 114
-5       receptors        0   1
-6       receptors        1  21
-7   senders genes        1 117</code></pre>
+4        metadata        1   2
+5 receivers genes        1 114
+6       receptors        0   1
+7       receptors        1  21
+8   senders genes        1 117</code></pre>
 </div>
 </div>
 <p>The four files taken by the CausalCCC web server are saved as well, so the same run can be repeated there.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>files_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(results_dir, <span class="st">&quot;causalccc_files&quot;</span>)</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(files_dir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(mosaic, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_df.csv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;,&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(state_order, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_st.tsv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;</span><span class="sc">\t</span><span class="st">&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(edges_out, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_interactEdges.tsv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;</span><span class="sc">\t</span><span class="st">&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="fu">writeLines</span>(<span class="fu">causalCCC.layout</span>(state_order, <span class="at">network_height =</span> <span class="dv">8</span>), <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_layout.json&quot;</span>))</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(files_dir)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>files_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(results_dir, <span class="st">&quot;causalccc_files&quot;</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(files_dir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(mosaic, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_df.csv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;,&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(state_order, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_st.tsv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;</span><span class="sc">\t</span><span class="st">&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="fu">write.table</span>(edges_out, <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_interactEdges.tsv&quot;</span>), <span class="at">quote =</span> <span class="cn">FALSE</span>, <span class="at">sep =</span> <span class="st">&quot;</span><span class="sc">\t</span><span class="st">&quot;</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="fu">writeLines</span>(<span class="fu">causalCCC.layout</span>(state_order, <span class="at">network_height =</span> <span class="dv">8</span>), <span class="fu">file.path</span>(files_dir, <span class="st">&quot;causalCCC_layout.json&quot;</span>))</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(files_dir)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] &quot;causalCCC_df.csv&quot;            &quot;causalCCC_interactEdges.tsv&quot;
 [3] &quot;causalCCC_layout.json&quot;       &quot;causalCCC_st.tsv&quot;           </code></pre>
@@ -2534,45 +2550,46 @@ $receivers
 <section id="miic" class="level2">
 <h2 class="anchored" data-anchor-id="miic">4. MIIC</h2>
 <p>MIIC runs with the settings of the CausalCCC web server (<code>scripts/run_miic.R</code>, seed 2026) on 8 threads. With the installed miic, several threads crash (“C stack” errors), so the run uses the patched “deterministic” miic variant (<code>docs/INSTALL.md</code>, section 4), which on case study 2 gave the one-thread links, orientations and genuine causations about 3 times faster. The C stack limit is also lifted for the MIIC process only (<code>ulimit -s unlimited</code>), as in thymus case 1.</p>
+<p>The first run, without sequencing depth (same cells, genes and settings; 29.5 minutes), is kept in <code>miic_input_without_depth/</code> for comparison (notebook 05).</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>miic_dir    <span class="ot">&lt;-</span> <span class="fu">file.path</span>(results_dir, <span class="st">&quot;miic_input&quot;</span>)</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>result_file <span class="ot">&lt;-</span> <span class="fu">file.path</span>(miic_dir, <span class="st">&quot;miic_result.rds&quot;</span>)</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(miic_dir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(result_file)) {</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>  files <span class="ot">&lt;-</span> <span class="fu">file.path</span>(miic_dir, <span class="fu">c</span>(<span class="st">&quot;input.tsv&quot;</span>, <span class="st">&quot;state_order.tsv&quot;</span>, <span class="st">&quot;interact_edges.tsv&quot;</span>))</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(mosaic, files[<span class="dv">1</span>], <span class="at">na =</span> <span class="st">&quot;NA&quot;</span>)</span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(state_order, files[<span class="dv">2</span>], <span class="at">na =</span> <span class="st">&quot;NA&quot;</span>)</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(edges_out, files[<span class="dv">3</span>], <span class="at">col_names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>  command <span class="ot">&lt;-</span> <span class="fu">paste</span>(<span class="st">&quot;ulimit -s unlimited &amp;&amp;&quot;</span>, <span class="st">&#39;R_LIBS=&quot;$HOME/R/miic_variants/deterministic&quot;&#39;</span>,</span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>                   <span class="st">&quot;Rscript&quot;</span>, <span class="fu">shQuote</span>(<span class="fu">file.path</span>(root, <span class="st">&quot;scripts&quot;</span>, <span class="st">&quot;run_miic.R&quot;</span>)),</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>                   <span class="fu">paste</span>(<span class="fu">shQuote</span>(files), <span class="at">collapse =</span> <span class="st">&quot; &quot;</span>), <span class="fu">shQuote</span>(miic_dir), n_threads)</span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">system2</span>(<span class="st">&quot;bash&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;-c&quot;</span>, <span class="fu">shQuote</span>(command))) <span class="sc">!=</span> <span class="dv">0</span>) <span class="fu">stop</span>(<span class="st">&quot;MIIC failed, see the messages above.&quot;</span>)</span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>miic_result <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(result_file)</span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a><span class="fu">attr</span>(miic_result, <span class="st">&quot;run_time&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>miic_dir    <span class="ot">&lt;-</span> <span class="fu">file.path</span>(results_dir, <span class="st">&quot;miic_input&quot;</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>result_file <span class="ot">&lt;-</span> <span class="fu">file.path</span>(miic_dir, <span class="st">&quot;miic_result.rds&quot;</span>)</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(miic_dir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(result_file)) {</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  files <span class="ot">&lt;-</span> <span class="fu">file.path</span>(miic_dir, <span class="fu">c</span>(<span class="st">&quot;input.tsv&quot;</span>, <span class="st">&quot;state_order.tsv&quot;</span>, <span class="st">&quot;interact_edges.tsv&quot;</span>))</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(mosaic, files[<span class="dv">1</span>], <span class="at">na =</span> <span class="st">&quot;NA&quot;</span>)</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(state_order, files[<span class="dv">2</span>], <span class="at">na =</span> <span class="st">&quot;NA&quot;</span>)</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_tsv</span>(edges_out, files[<span class="dv">3</span>], <span class="at">col_names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>  command <span class="ot">&lt;-</span> <span class="fu">paste</span>(<span class="st">&quot;ulimit -s unlimited &amp;&amp;&quot;</span>, <span class="st">&#39;R_LIBS=&quot;$HOME/R/miic_variants/deterministic&quot;&#39;</span>,</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>                   <span class="st">&quot;Rscript&quot;</span>, <span class="fu">shQuote</span>(<span class="fu">file.path</span>(root, <span class="st">&quot;scripts&quot;</span>, <span class="st">&quot;run_miic.R&quot;</span>)),</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>                   <span class="fu">paste</span>(<span class="fu">shQuote</span>(files), <span class="at">collapse =</span> <span class="st">&quot; &quot;</span>), <span class="fu">shQuote</span>(miic_dir), n_threads)</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">system2</span>(<span class="st">&quot;bash&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;-c&quot;</span>, <span class="fu">shQuote</span>(command))) <span class="sc">!=</span> <span class="dv">0</span>) <span class="fu">stop</span>(<span class="st">&quot;MIIC failed, see the messages above.&quot;</span>)</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>miic_result <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(result_file)</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a><span class="fu">attr</span>(miic_result, <span class="st">&quot;run_time&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Time difference of 29.45048 mins</code></pre>
+<pre><code>Time difference of 36.07049 mins</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># MIIC lists each imposed L-R link twice (once per direction, info_shifted = 0): keep one row per pair of variables</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> miic_result<span class="sc">$</span>all.edges.summary <span class="sc">|&gt;</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(type <span class="sc">==</span> <span class="st">&quot;P&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(<span class="at">pair_a =</span> <span class="fu">pmin</span>(x, y), <span class="at">pair_b =</span> <span class="fu">pmax</span>(x, y), <span class="at">.keep_all =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>pair_a, <span class="sc">-</span>pair_b)</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>lr_keys <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">paste</span>(edges_out<span class="sc">$</span>ligands, edges_out<span class="sc">$</span>receptors), <span class="fu">paste</span>(edges_out<span class="sc">$</span>receptors, edges_out<span class="sc">$</span>ligands))</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>is_lr <span class="ot">&lt;-</span> <span class="fu">paste</span>(edges<span class="sc">$</span>x, edges<span class="sc">$</span>y) <span class="sc">%in%</span> lr_keys</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">retained_links   =</span> <span class="fu">nrow</span>(edges),</span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">lr_links         =</span> <span class="fu">sum</span>(is_lr),</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">learned_links    =</span> <span class="fu">sum</span>(<span class="sc">!</span>is_lr),</span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">oriented_links   =</span> <span class="fu">sum</span>(<span class="fu">abs</span>(edges<span class="sc">$</span>infOrt) <span class="sc">==</span> <span class="dv">2</span>),</span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">variables_linked =</span> <span class="fu">n_distinct</span>(<span class="fu">c</span>(edges<span class="sc">$</span>x, edges<span class="sc">$</span>y)),</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">variables_total  =</span> <span class="fu">ncol</span>(mosaic))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># MIIC lists each imposed L-R link twice (once per direction, info_shifted = 0): keep one row per pair of variables</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>edges <span class="ot">&lt;-</span> miic_result<span class="sc">$</span>all.edges.summary <span class="sc">|&gt;</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(type <span class="sc">==</span> <span class="st">&quot;P&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(<span class="at">pair_a =</span> <span class="fu">pmin</span>(x, y), <span class="at">pair_b =</span> <span class="fu">pmax</span>(x, y), <span class="at">.keep_all =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>pair_a, <span class="sc">-</span>pair_b)</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>lr_keys <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">paste</span>(edges_out<span class="sc">$</span>ligands, edges_out<span class="sc">$</span>receptors), <span class="fu">paste</span>(edges_out<span class="sc">$</span>receptors, edges_out<span class="sc">$</span>ligands))</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>is_lr <span class="ot">&lt;-</span> <span class="fu">paste</span>(edges<span class="sc">$</span>x, edges<span class="sc">$</span>y) <span class="sc">%in%</span> lr_keys</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">retained_links   =</span> <span class="fu">nrow</span>(edges),</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>       <span class="at">lr_links         =</span> <span class="fu">sum</span>(is_lr),</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">learned_links    =</span> <span class="fu">sum</span>(<span class="sc">!</span>is_lr),</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>       <span class="at">oriented_links   =</span> <span class="fu">sum</span>(<span class="fu">abs</span>(edges<span class="sc">$</span>infOrt) <span class="sc">==</span> <span class="dv">2</span>),</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>       <span class="at">variables_linked =</span> <span class="fu">n_distinct</span>(<span class="fu">c</span>(edges<span class="sc">$</span>x, edges<span class="sc">$</span>y)),</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>       <span class="at">variables_total  =</span> <span class="fu">ncol</span>(mosaic))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code># A tibble: 1 × 6
   retained_links lr_links learned_links oriented_links variables_linked
            &lt;int&gt;    &lt;int&gt;         &lt;int&gt;          &lt;int&gt;            &lt;int&gt;
-1            613       28           585             65              285
+1            596       28           568             53              287
 # ℹ 1 more variable: variables_total &lt;int&gt;</code></pre>
 </div>
 </div>
@@ -2580,13 +2597,13 @@ $receivers
 <h3 class="anchored" data-anchor-id="links-around-the-claim">Links around the claim</h3>
 <p>Retained links that touch XCL1, XCL2, XCR1, CCR7, LAMP3 or a <code>population</code> variable, strongest first. <code>infOrt</code>: 1 = not oriented, 2 = x → y, −2 = y → x. The imposed L–R links have <code>info_shifted</code> = 0.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>key <span class="ot">&lt;-</span> <span class="st">&quot;^(XCL1|XCL2|XCR1|CCR7|LAMP3|population)(_senders|_receivers)?$&quot;</span></span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>edges <span class="sc">|&gt;</span></span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">str_detect</span>(x, key) <span class="sc">|</span> <span class="fu">str_detect</span>(y, key)) <span class="sc">|&gt;</span></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(x, y, info_shifted, infOrt, is_causal) <span class="sc">|&gt;</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">info_shifted =</span> <span class="fu">round</span>(info_shifted, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(info_shifted)) <span class="sc">|&gt;</span></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>key <span class="ot">&lt;-</span> <span class="st">&quot;^(XCL1|XCL2|XCR1|CCR7|LAMP3|population)(_senders|_receivers)?$&quot;</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>edges <span class="sc">|&gt;</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">str_detect</span>(x, key) <span class="sc">|</span> <span class="fu">str_detect</span>(y, key)) <span class="sc">|&gt;</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(x, y, info_shifted, infOrt, is_causal) <span class="sc">|&gt;</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">info_shifted =</span> <span class="fu">round</span>(info_shifted, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(info_shifted)) <span class="sc">|&gt;</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>                      x                    y info_shifted infOrt is_causal
 1                  NKG7   population_senders        610.0      1         N
@@ -2629,74 +2646,117 @@ $receivers
 38                 FGL2                 XCR1         76.0      1         N
 39                CRTAM                 XCL2         51.9      1         N
 40   population_senders                 XCL1         48.8     -2         N
-41                HINT1                 XCL2         29.0      1         N
-42             C1orf162 population_receivers         29.0      1         N
-43                ITM2A   population_senders         28.8      1         N
-44                 LAD1 population_receivers         24.9      1         N
-45                LAMP3                TRAF1         24.3      1         N
-46                 FGL2 population_receivers         21.8      1         N
-47        HLA-B_senders   population_senders         21.4      1         N
-48                 CCR7               SAMHD1         21.0      1         N
-49                 EBI3 population_receivers         20.9      1         N
-50 population_receivers                 XCR1         16.5      1         N
-51   population_senders                TIGIT         15.7      1         N
-52                 OAS1   population_senders         13.5      1         N
-53                IL4I1                LAMP3         11.2      1         N
-54                KLRB1   population_senders          7.0      1         N
-55      ITGAL_receivers population_receivers          5.2      1         N
-56                 XCL1                 XCR1          0.0      1         N
-57                 XCL2                 XCR1          0.0      1         N</code></pre>
+41             C1orf162 population_receivers         29.0      1         N
+42                ITM2A   population_senders         28.8      1         N
+43                 LAD1 population_receivers         24.9      1         N
+44                LAMP3                TRAF1         24.3      1         N
+45                 FGL2 population_receivers         21.8      1         N
+46        HLA-B_senders   population_senders         21.4      1         N
+47                 CCR7               SAMHD1         21.0      1         N
+48                 EBI3 population_receivers         20.9      1         N
+49 population_receivers                 XCR1         16.5      1         N
+50   population_senders                TIGIT         15.7      1         N
+51                 OAS1   population_senders         13.5      1         N
+52                IL4I1                LAMP3         11.2      1         N
+53                KLRB1   population_senders          7.0      1         N
+54      ITGAL_receivers population_receivers          5.2      1         N
+55                 XCL1                 XCR1          0.0      1         N
+56                 XCL2                 XCR1          0.0      1         N</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Links of the technical and design variables</span></span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>meta_key <span class="ot">&lt;-</span> <span class="st">&quot;^(stage|donor|method)_(senders|receivers)$&quot;</span></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>edges <span class="sc">|&gt;</span></span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">str_detect</span>(x, meta_key) <span class="sc">|</span> <span class="fu">str_detect</span>(y, meta_key)) <span class="sc">|&gt;</span></span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(x, y, info_shifted, infOrt) <span class="sc">|&gt;</span></span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">info_shifted =</span> <span class="fu">round</span>(info_shifted, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(info_shifted)) <span class="sc">|&gt;</span></span>
-<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Links of the technical and design variables</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>meta_key <span class="ot">&lt;-</span> <span class="st">&quot;^(stage|donor|method|n_counts)_(senders|receivers)$&quot;</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>edges <span class="sc">|&gt;</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">str_detect</span>(x, meta_key) <span class="sc">|</span> <span class="fu">str_detect</span>(y, meta_key)) <span class="sc">|&gt;</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(x, y, info_shifted, infOrt) <span class="sc">|&gt;</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">info_shifted =</span> <span class="fu">round</span>(info_shifted, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(info_shifted)) <span class="sc">|&gt;</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>                  x                y info_shifted infOrt
-1     donor_senders    stage_senders       1023.0      1
-2   donor_receivers  stage_receivers        513.7      1
-3     donor_senders   method_senders        507.8      1
-4     donor_senders             NKG7        315.9      1
-5    method_senders          PTPRCAP        311.2      1
-6        AC090498.1    donor_senders        303.8      2
-7   donor_receivers         HLA-DRB5        250.5      2
-8   donor_receivers method_receivers        240.4     -2
-9     donor_senders             TPT1        236.9     -2
-10  GABARAP_senders   method_senders        222.6      1
-11    donor_senders            HSPE1        200.8      1
-12            COTL1    donor_senders        200.5      1
-13 method_receivers   NME2_receivers        197.2      1
-14    donor_senders           IFITM1        146.2      1
-15    donor_senders            PCBP1        115.1      1
-16  donor_receivers         HLA-DQA2         95.5      1
-17             CD99    donor_senders         93.2      1
-18    donor_senders             LDHA         68.1      1
-19           CLEC2B  donor_receivers         52.4      1
-20          ATP6V0C method_receivers         31.5      1
-21    donor_senders            ITGA4         24.5      1
-22    donor_senders            EEF1G         22.5     -2
-23   method_senders            YWHAZ         19.9      1
-24  donor_receivers  HLA-C_receivers         19.7     -2
-25 method_receivers           TMSB4X         16.5      2</code></pre>
+<pre><code>                    x                  y info_shifted infOrt
+1       donor_senders      stage_senders       1023.0      1
+2     donor_receivers    stage_receivers        513.7      1
+3       donor_senders     method_senders        507.8      1
+4      GNB2L1_senders   n_counts_senders        465.5      1
+5         FAU_senders   n_counts_senders        457.1      1
+6      EEF1A1_senders   n_counts_senders        456.1      1
+7       FAU_receivers n_counts_receivers        449.5      1
+8    n_counts_senders      UBA52_senders        418.6      1
+9        BTF3_senders   n_counts_senders        406.9      1
+10               CFL1 n_counts_receivers        406.6      1
+11             COX4I1 n_counts_receivers        405.9      1
+12   n_counts_senders       PPIA_senders        395.0      1
+13    GAPDH_receivers n_counts_receivers        393.9      1
+14     BTF3_receivers n_counts_receivers        380.1      1
+15   GNB2L1_receivers n_counts_receivers        379.6     -2
+16              ATP5E   n_counts_senders        369.2      1
+17    ACTG1_receivers n_counts_receivers        364.4      1
+18   n_counts_senders              SERF2        357.7      1
+19 n_counts_receivers     PPIA_receivers        352.8      1
+20 n_counts_receivers     PFN1_receivers        345.8      1
+21   n_counts_senders               TPT1        344.9     -2
+22            HNRNPA1   n_counts_senders        339.3      1
+23   n_counts_senders               NPM1        337.6      1
+24              ATP5L   n_counts_senders        337.2      1
+25               EIF1 n_counts_receivers        329.4      1
+26              EEF1D n_counts_receivers        328.8      1
+27              HINT1   n_counts_senders        327.9      1
+28      donor_senders               NKG7        315.9      1
+29   n_counts_senders                RAN        315.7      1
+30   n_counts_senders     TMSB10_senders        311.3      1
+31     method_senders            PTPRCAP        311.2      1
+32   n_counts_senders               PTMA        305.8      6
+33         AC090498.1      donor_senders        303.8      2
+34     ATP5G2_senders   n_counts_senders        303.3      1
+35   n_counts_senders              SUMO2        297.7      1
+36   n_counts_senders       PFN1_senders        297.6      1
+37           HLA-DPA1 n_counts_receivers        288.7      1
+38 n_counts_receivers              PSME1        285.7      2
+39      ACTG1_senders   n_counts_senders        268.3      1
+40   n_counts_senders               YBX1        253.1      1
+41    donor_receivers           HLA-DRB5        250.5      2
+42    donor_receivers   method_receivers        240.4     -2
+43      donor_senders               TPT1        236.9     -2
+44      CLIC1_senders   n_counts_senders        236.3      1
+45               CNBP n_counts_receivers        234.8      1
+46   n_counts_senders            SLC25A5        234.0      1
+47   n_counts_senders             SNRPD2        230.1      1
+48    GABARAP_senders     method_senders        222.6      1
+49              COX5A   n_counts_senders        215.5      1
+50             COX6A1   n_counts_senders        212.7      1
+51            ATP6V0B n_counts_receivers        212.4      1
+52      donor_senders              HSPE1        200.8      1
+53              COTL1      donor_senders        200.5      1
+54   method_receivers     NME2_receivers        197.2      1
+55           HSP90AB1   n_counts_senders        193.3      1
+56 n_counts_receivers               NPC2        186.7      2
+57               ATG3 n_counts_receivers        184.6      1
+58      donor_senders             IFITM1        146.2      1
+59           C11orf31   n_counts_senders        121.6      1
+60      donor_senders              PCBP1        115.1      1
+61               GMFG   n_counts_senders        113.8      1
+62    donor_receivers           HLA-DQA2         95.5      1
+63               CD99      donor_senders         93.2      1
+64   n_counts_senders             UBE2L6         86.5      1
+65              ICAM3   n_counts_senders         68.9      1
+66               CD47   n_counts_senders         55.6      1
+67             CLEC2B    donor_receivers         52.4      1
+68      donor_senders               LDHA         34.2      1
+69            ATP6V0C   method_receivers         31.5      1
+70 n_counts_receivers   TMSB10_receivers         27.4      1
+71      donor_senders              ITGA4         24.5      1
+72      donor_senders              EEF1G         22.5     -2
+73     method_senders              YWHAZ         19.9      1
+74    donor_receivers    HLA-C_receivers         19.7     -2
+75 n_counts_receivers               TPM3         19.7     -2
+76              H2AFY n_counts_receivers         19.5      2
+77 n_counts_receivers    UBA52_receivers         19.1      1
+78   method_receivers             TMSB4X         16.5      2</code></pre>
 </div>
 </div>
+<p>The L–R links are imposed by CausalCCC (they connect variables that are never observed in the same cell); what MIIC learns is the network around them, within each group. The interpretation, and the comparison with the first run without sequencing depth (<code>miic_input_without_depth/</code>), is in notebook 05.</p>
 </section>
-</section>
-<section id="first-reading" class="level2">
-<h2 class="anchored" data-anchor-id="first-reading">5. First reading</h2>
-<p>The L–R links are imposed by CausalCCC (they connect variables that are never observed in the same cell); what MIIC learns is the network around them, within each group.</p>
-<ul>
-<li><strong>Senders.</strong> XCL1 has only two learned neighbours: XCL2 (strong) and <code>population_senders</code> (the NK / CD8αα(I) label). It has no direct link to stage, donor or chemistry, so its variation in this group is explained by which population a cell belongs to, and XCL2 carries the NK cytotoxic program (its neighbours are NKG7 and CRTAM). The <code>population_senders</code> hub links NK markers (NKG7, TYROBP, KLRD1, KLRC1, GNLY, GZMB) and CD8αα(I) / T-cell markers (LEF1, TCF7, CAMK4, CD28). The orientation XCL1 → population ← CD28 is a v-structure between two population-specific genes; it is not a causal statement about a cell label.</li>
-<li><strong>Receivers.</strong> XCR1 links to FGL2 and <code>population_receivers</code>; CCR7 links to <code>population_receivers</code> and to activation genes (CD83, BIRC3, SAMSN1); LAMP3 is a hub of the activation program (CD40, CD80, IL12B, EBI3, FSCN1). XCR1 and CCR7 are <strong>not directly linked</strong>: they are connected only through the DC1 / aDC1 label. This matches the claim as a change of state (XCR1⁺ resting DC1 → CCR7⁺ activated DC1), but the network cannot say that XCL1 signalling causes this activation: the activation genes do not depend on XCR1 within the receivers.</li>
-<li><strong>Design variables.</strong> Stage links only to donor (each donor has a single age, so stage is fully determined by donor). Donor and chemistry link to a few housekeeping, translation and HLA genes and to one ligand subunit (ITGA4, of the VLA-4 complex), but not to the genes of the claim.</li>
-</ul>
-<p>The full interpretation – including the remaining L–R links (MIF/APP → CD74, CD40LG → CD40, CD28 → CD80/CD86) – is left to the next notebook.</p>
 </section>
 
 </main>

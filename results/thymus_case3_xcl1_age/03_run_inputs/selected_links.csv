@@ -1,0 +1,26 @@
+pair,ligand,receptor,orientation_rule,claimed,passes_fetal,passes_postnatal,ligand_frac_fetal,ligand_frac_postnatal,receptor_pops,s5_max_mean
+XCL1_XCR1,XCL1,XCR1,receptor flag,True,True,True,0.2920353982300885,0.1164609053497942,"DC1 | fetal, DC1 | postnatal",1.123
+XCL2_XCR1,XCL2,XCR1,receptor flag,True,True,False,0.1620149761742682,0.0493827160493827,"DC1 | fetal, DC1 | postnatal",0.812
+CD74_MIF,MIF,CD74,receptor flag,False,True,True,0.8706603131381893,0.6230452674897119,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",3.855
+APP_CD74,APP,CD74,receptor flag,False,True,True,0.2899931926480599,0.1843621399176954,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",2.9
+MIF_TNFRSF14,MIF,TNFRSF14,receptor flag,False,True,True,0.8706603131381893,0.6230452674897119,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",1.416
+LGALS9_CD44,LGALS9,CD44,receptor flag,False,True,True,0.1456773315180395,0.1090534979423868,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",1.097
+CD28_CD86,CD28,CD86,receptor flag,False,True,True,0.7106875425459497,0.4292181069958847,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.845
+CD40LG_CD40,CD40LG,CD40,receptor flag,False,True,False,0.2008168822328114,0.0559670781893004,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.806
+CD80_CD28,CD28,CD80,receptor flag,False,True,True,0.7106875425459497,0.4292181069958847,"aDC1 | fetal, aDC1 | postnatal",0.753
+SPN_ICAM1,SPN,ICAM1,receptor flag,False,True,True,0.5214431586113002,0.5119341563786008,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.654
+PLAUR_a4b1 complex,a4b1 complex,PLAUR,receptor flag,False,True,True,0.1470388019060585,0.1304526748971193,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.627
+CADM1_CRTAM,CRTAM,CADM1,ambiguous,False,True,False,0.147719537100068,0.0518518518518518,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.559
+PECAM1_CD38,CD38,PECAM1,ambiguous,False,True,True,0.5895166780122533,0.5736625514403292,"DC1 | fetal, DC1 | postnatal",0.512
+CD274_PDCD1,PDCD1,CD274,ambiguous,False,True,True,0.4615384615384615,0.2868312757201646,"aDC1 | fetal, aDC1 | postnatal",0.476
+LTB_LTBR,LTB,LTBR,receptor flag,False,True,True,0.4703880190605854,0.4880658436213991,"DC1 | fetal, DC1 | postnatal",0.475
+ICAM1_ITGAL,ITGAL,ICAM1,ambiguous,False,True,True,0.2273655547991831,0.2049382716049382,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.468
+aLb2 complex_ICAM1,aLb2 complex,ICAM1,receptor flag,False,True,True,0.2273655547991831,0.2049382716049382,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.468
+CD200_CD200R1,CD200,CD200R1,receptor flag,False,True,True,0.3955071477195371,0.1744855967078189,"DC1 | fetal, DC1 | postnatal",0.428
+PDCD1LG2_PDCD1,PDCD1,PDCD1LG2,ambiguous,False,True,False,0.4615384615384615,0.2868312757201646,aDC1 | fetal,0.427
+aLb2 complex_ICAM3,ICAM3,aLb2 complex,integrin,False,True,True,0.4962559564329475,0.3860082304526749,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal",0.422
+LTA_TNFRSF1B,LTA,TNFRSF1B,receptor flag,False,True,False,0.1552076242341729,0.0275720164609053,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.402
+ALCAM_CD6,CD6,ALCAM,ambiguous,False,True,True,0.3859768550034037,0.4316872427983539,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.394
+LTA_TNFRSF14,LTA,TNFRSF14,receptor flag,False,True,False,0.1552076242341729,0.0275720164609053,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.384
+FLT3LG_FLT3,FLT3LG,FLT3,receptor flag,False,True,False,0.1204901293396868,0.0979423868312757,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.369
+CD47_SIRPG,SIRPG,CD47,receptor flag,False,True,True,0.2001361470388019,0.1617283950617284,"DC1 | fetal, DC1 | postnatal, aDC1 | fetal, aDC1 | postnatal",0.346

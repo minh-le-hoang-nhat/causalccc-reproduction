@@ -1,14 +1,15 @@
 """Reproduce fig. S11: expression of thymic-development signalling genes per cell type x stage.
 Groups = Anno_level_fig1 x Anno_stage, groups with < 50 cells dropped (fig. S11 rule).
 Statistics on all cells (no subsampling): mean log-normalised expression and fraction of cells > 0.
-Run in WSL: python 05_figS11_expression.py"""
+Run from the root of the repository: python scripts/thymus/05_figS11_expression.py"""
+from pathlib import Path
 import os
 import anndata as ad, numpy as np, pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-ROOT = '/mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction'
+ROOT = Path(__file__).resolve().parents[2]   # root of the repository
 OUT = f'{ROOT}/results/thymus/figS11'
 os.makedirs(OUT, exist_ok=True)
 GENES = ['LTB', 'LTBR', 'TNFSF11', 'TNFRSF11A', 'FGF7', 'FGFR2', 'NOTCH1', 'JAG1', 'JAG2', 'DLL4']

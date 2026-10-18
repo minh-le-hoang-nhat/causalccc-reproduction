@@ -1,10 +1,11 @@
 """Build results/thymus/first_results.html: fig. S11 reproduction, CellPhoneDB by stage, overview, Table S5.
 Needs the outputs of 02_run_cellphonedb.py, 04_cpdb_by_stage.py and 05_figS11_expression.py.
-Run in WSL: python 03_make_first_results_html.py"""
+Run from the root of the repository: python scripts/thymus/03_make_first_results_html.py"""
+from pathlib import Path
 import base64, html, io
 import pandas as pd
 
-R = '/mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction'
+R = Path(__file__).resolve().parents[2]   # root of the repository
 RES = f'{R}/results/thymus'
 STAGES = ['early', 'middle', 'late']
 STROMA = {'Fb_1', 'Fb_2', 'Fb_cycling', 'Endo', 'VSMC', 'Lymph', 'cTEC', 'mTEC(I)', 'mTEC(II)', 'mTEC(III)',

@@ -3,12 +3,13 @@ Groups = Anno_level_fig1 x Anno_stage (early 7-11 pcw, middle 12 pcw-10 m, late 
 groups with < 50 cells dropped (fig. S11 rule), <= 1000 cells sampled per group (paper protocol).
 One CellPhoneDB run per stage: only same-stage couples are interpreted, and a single run with all
 99 groups (9,801 couples) exhausted the 7.8 GB of the WSL machine.
-Run in WSL: python 04_cpdb_by_stage.py [stage ...]"""
+Run from the root of the repository: python scripts/thymus/04_cpdb_by_stage.py [stage ...]"""
+from pathlib import Path
 import os, sys
 import anndata as ad, numpy as np, pandas as pd
 from cellphonedb.src.core.methods import cpdb_statistical_analysis_method
 
-ROOT = '/mnt/c/Users/Dell 5540/Documents/computational_biology_project/causalccc-reproduction'
+ROOT = Path(__file__).resolve().parents[2]   # root of the repository
 DB = os.path.expanduser('~/cpdb_db')
 LEVEL, MIN_CELLS, MAX_CELLS = 'Anno_level_fig1', 50, 1000
 STAGES = sys.argv[1:] or ['early', 'middle', 'late']
