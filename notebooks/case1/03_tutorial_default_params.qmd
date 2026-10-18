@@ -18,7 +18,8 @@ Notebook 02 showed that MIIC gives exactly the authors' network when it is run o
 build those input files ourselves, from the public data, by following the [CausalCCC
 tutorial](https://miic.curie.fr/tutorial_causalCCC.php) with its **default parameters**, then run MIIC with the
 settings of the authors' server job and compare the network with theirs and with the statements of the paper
-(`docs/case_study1_article_description.txt`).
+(Results, case study 1, of Dupuis *et al.*, *Nucleic Acids Research* 2025,
+[doi:10.1093/nar/gkaf404](https://doi.org/10.1093/nar/gkaf404)).
 
 **Inputs:** the NicheNet Seurat object (`data/case1/nichenet_seurat/`), and the authors' server job
 (`data/case1/causalccc_server_eaP9Br0llvzxN07zZZEC/`) for its L-R pairs and for the comparison.

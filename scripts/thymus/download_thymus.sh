@@ -2,11 +2,12 @@
 # =============================================================================
 # Download the data for the thymus analyses (early and medullary niches):
 # human thymus cell atlas of Park et al., Science 2020 (doi:10.1126/science.aay3224),
-# and the CellPhoneDB v2 database files needed to read their table S5.
+# the CellPhoneDB v2 database files needed to read their table S5, and the CollecTRI
+# transcription factor regulons (gene sets of the activity scores, notebook 10).
 #
 # Usage (from the root of the repository):
 #   bash scripts/thymus/download_thymus.sh                 # everything (about 4.2 GB)
-#   bash scripts/thymus/download_thymus.sh --skip-zenodo   # table S5 check + CellPhoneDB only (< 1 MB)
+#   bash scripts/thymus/download_thymus.sh --skip-zenodo   # table S5 check + CellPhoneDB + CollecTRI only (< 20 MB)
 #
 # Safe to run again: complete files are skipped, interrupted downloads resume.
 # Sources are described in data/README.md.
@@ -48,6 +49,12 @@ CPDB_FILES=(
 # Zenodo record 5500511 (version 1.0.2 of the authors' data and code; official checksums published by Zenodo)
 ZENODO_URL="https://zenodo.org/records/5500511/files"
 ZENODO_DIR="${THYMUS_DIR}/zenodo_5500511"
+
+# CollecTRI regulons (Mueller-Dott et al., NAR 2023, doi:10.1093/nar/gkad841), human, from the OmniPath web service.
+# CollecTRI has no versioned release: the first download is kept (download() skips existing files), its date is in
+# the log and its md5 in the checksum file. OmnipathR::collectri() is not used: it fails in OmnipathR 4.1.0.
+COLLECTRI_URL="https://omnipathdb.org/interactions?datasets=collectri&genesymbols=yes&organisms=9606&fields=curation_effort,references"
+COLLECTRI_FILE="${THYMUS_DIR}/collectri/collectri_human.tsv"
 
 
 # --- 2. Checks before starting -----------------------------------------------
@@ -120,7 +127,7 @@ unzip_once() {
 
 # --- 4. Table S5 (copied by hand) --------------------------------------------
 
-echo "[1/3] Table S5 of Park et al."
+echo "[1/4] Table S5 of Park et al."
 
 if [[ ! -f "$S5_FILE" ]]; then
   echo "ERROR: $S5_FILE is missing. Download table S5 from the supplementary materials of" >&2
@@ -135,9 +142,9 @@ echo "  checksum OK:  $S5_FILE"
 
 
 # --- 5. CellPhoneDB v2 database files (less than 1 MB) ------------------------
-# GitHub publishes no md5: ours are recorded at first download (section 7).
+# GitHub publishes no md5: ours are recorded at first download (section 8).
 
-echo "[2/3] CellPhoneDB v2 database files"
+echo "[2/4] CellPhoneDB v2 database files"
 
 for f in "${CPDB_FILES[@]}"; do
   download "${CPDB_2019_09_URL}/${f}" "${CPDB_DIR}/db_2019-09/${f}"
@@ -145,12 +152,18 @@ for f in "${CPDB_FILES[@]}"; do
 done
 
 
-# --- 6. Park et al. atlas and code (Zenodo 5500511, about 4.2 GB) -------------
+# --- 6. CollecTRI regulons (about 12 MB) -------------------------------------
+
+echo "[3/4] CollecTRI regulons (OmniPath)"
+download "$COLLECTRI_URL" "$COLLECTRI_FILE"
+
+
+# --- 7. Park et al. atlas and code (Zenodo 5500511, about 4.2 GB) -------------
 
 if [[ "$SKIP_ZENODO" == true ]]; then
-  echo "[3/3] Zenodo files skipped (run without --skip-zenodo to download them)"
+  echo "[4/4] Zenodo files skipped (run without --skip-zenodo to download them)"
 else
-  echo "[3/3] Thymus atlas, metadata and code (Zenodo 5500511)"
+  echo "[4/4] Thymus atlas, metadata and code (Zenodo 5500511)"
   download "${ZENODO_URL}/sample_metadata_fix.xlsx?download=1" \
            "${ZENODO_DIR}/sample_metadata_fix.xlsx" \
            "16fcb558c27016665f0c946d29c2b9aa"
@@ -169,7 +182,7 @@ else
 fi
 
 
-# --- 7. Check, then record, the checksums of everything we have ---------------
+# --- 8. Check, then record, the checksums of everything we have ---------------
 # Data files must never be modified. If a previous run recorded checksums,
 # first make sure the files are unchanged, then record the new list.
 # You can also check by hand at any time:  cd data && md5sum -c checksums_thymus.md5

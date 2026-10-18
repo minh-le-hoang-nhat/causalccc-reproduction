@@ -181,7 +181,7 @@ compare_networks <- function(net, authors_net) {
                                       authors_net$orientation[match(both, authors_net$key)]))
 }
 
-# Links described in the Results section of the paper (docs/case_study1_article_description.txt):
+# Links described in the Results section of the paper (case study 1, Dupuis et al. 2025, doi:10.1093/nar/gkaf404):
 # first-degree neighbours of the H2 ligands, Stat1 -> B2m, Stat1 and IFN genes, and downstream of Cd8a / Klrd1
 paper_links <- tribble(
   ~a,         ~b,

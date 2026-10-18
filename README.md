@@ -45,19 +45,17 @@ from the rendered site, <https://minh-le-hoang-nhat.github.io/causalccc-reproduc
   - [x] **CellPhoneDB re-run** on the atlas, overall and by stage, and reproduction of fig. S11
         (`scripts/thymus/01_*.py` to `05_*.py`, `results/thymus/`).
   - [x] **Early thymic niche** – stromal cells (cTEC, mTEC(II), Fb_1, endothelium) and early lymphoid cells (ETP, DN,
-        ILC3, NK, γδT) of the prenatal thymus at 7–11 post-conception weeks. `notebooks/thymus_early/`: 01 (data
-        inventory), 02 (cell populations), 03 (candidate ligand–receptor pairs), 04–06 (run A, stroma → lymphoid: input,
-        CausalCCC, interpretation of the Notch claim), 07–09 (run B, lymphoid → stroma: links, CausalCCC, interpretation
-        of the LTB, RANKL and CD40LG claims, comparison of both runs).
-  - [x] **XCL1 relay in the medulla** (Fig. 4D, fig. S26) – XCL1 from CD8αα(I) and NK cells → XCR1 on DC1, which then
-        become activated (aDC1, CCR7⁺), all ages pooled. `notebooks/thymus_case2_xcl1/`: 01 (cell populations), 02
-        (candidate pairs), 03 (input), 04 (CausalCCC, with sequencing depth as a variable; the first run without it is
-        kept as `04_causalccc_without_depth.html`), 05 (interpretation).
-  - [x] **XCL1 relay, fetal versus postnatal** – CD8αα(I) senders only, one run per age class, with sequencing depth
-        as a variable. `notebooks/thymus_case3_xcl1_age/`: 01–03 (cells, pairs, inputs), 04 (CausalCCC, rendered once
-        per run by `run_both.sh`: `04_causalccc_fetal.html`, `04_causalccc_postnatal.html`), 05 (comparison). XCL1 in
-        CD8αα(I) cells drops at birth (29% → 12% of cells) and, at both ages, belongs to an activation program
-        (TNFRSF9 / 4-1BB); the DC1 side is the same at both ages.
+        ILC3, NK, γδT) of the prenatal human thymus at 7–11 post-conception weeks, with the CellPhoneDB ligand–receptor
+        pairs of the authors (data: Park *et al.*, *Science* 2020, [doi:10.1126/science.aay3224](https://doi.org/10.1126/science.aay3224)).
+        `notebooks/thymus_early/`: 01 (data inventory), 02 (cell populations), 03 (candidate ligand–receptor pairs),
+        04–06 (run A, stroma → lymphoid: input, CausalCCC, interpretation of the Notch claim), 07–09 (run B,
+        lymphoid → stroma: links, CausalCCC, interpretation of the LTB, RANKL and CD40LG claims, comparison of both runs),
+        10 (a Notch activity score per cell from the CollecTRI RBPJ regulon with AUCell: it fails its positive control,
+        ETP and DN(early) scoring lowest of the lymphoid populations, so it is not used in a network).
+        Notebooks 01–04 and 07 are Python (`.ipynb`), 05, 06, 08, 09 and 10 R (Quarto `.qmd`).
+  - [ ] CellPhoneDB re-run on the thymus atlas, overall and by stage (`scripts/thymus/01_*.py` to `05_*.py`,
+        `results/thymus/`).
+  - [ ] Medullary niche of the same atlas (Fig. 4 of Park *et al.*).
 
   **Limits of the thymus analysis.** Sender and receiver cells are unpaired: the ligand → receptor links come from
   CellPhoneDB and are imposed in the network, and the causal inference is within each group of cells. In the stroma,
@@ -77,9 +75,7 @@ from the rendered site, <https://minh-le-hoang-nhat.github.io/causalccc-reproduc
 │   ├── case1/           # case study 1: 01_* to 05_*
 │   ├── case2/           # case study 2: 03_* to 10_*, and preprocessing/ (raw reads -> matrix, Python)
 │   ├── tutorial/        # CausalCCC step by step: preprocessing, pitfalls, choice of settings
-│   ├── thymus_early/    # early thymic niche: 01_* to 09_*
-│   ├── thymus_case2_xcl1/      # XCL1 relay, CD8αα(I)/NK → DC1/aDC1: 01_* to 05_*
-│   └── thymus_case3_xcl1_age/  # XCL1 relay, fetal versus postnatal: 01_* to 05_*
+│   └── thymus_early/    # early thymic niche: 01_* to 10_* (Python .ipynb and R Quarto .qmd)
 ├── scripts/
 │   ├── helpers.R, run_miic.R   # shared by all case studies
 │   ├── case1/           # download_case1.sh, case1_helpers.R (functions of notebooks 03 and 04)
@@ -107,7 +103,7 @@ and MIIC and read the networks.
 
 ## Team
 
-Minh Le and Jeanne Leclerc (ENS-PSL).
+Minh Le and Jeanne Leclerc (ENS-PSL). Who did what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 
 ## Acknowledgements
 

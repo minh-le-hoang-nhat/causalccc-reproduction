@@ -13,7 +13,7 @@ and how to obtain it, so that `data/` can be rebuilt from scratch.
 |              | `bash scripts/case1/download_case1.sh --with-geo` | also GEO raw data, about 860 MB in total |
 | Case study 2 | `bash scripts/case2/download_case2.sh`            | about 5 MB                               |
 | Thymus       | `bash scripts/thymus/download_thymus.sh`          | about 4.2 GB, plus the unzipped archives |
-|              | `bash scripts/thymus/download_thymus.sh --skip-zenodo` | table S5 check and CellPhoneDB files only, < 1 MB |
+|              | `bash scripts/thymus/download_thymus.sh --skip-zenodo` | table S5 check, CellPhoneDB and CollecTRI files only, about 12 MB |
 
 Run the scripts from the root of the repository. They can be run again at any time: complete files are skipped,
 interrupted downloads resume, and files that were modified since the last run are reported. Each download is recorded
@@ -43,7 +43,8 @@ data/
 └── thymus/
     ├── zenodo_5500511/                          atlas (raw counts, annotated matrices), sample metadata, authors' code
     ├── park2020_supplement/                     supplementary tables of Park et al. (copied by hand, see below)
-    └── cellphonedb_v2_db/db_2019-09/, db_2019-07/   CellPhoneDB v2 database files (two versions, see below)
+    ├── cellphonedb_v2_db/db_2019-09/, db_2019-07/   CellPhoneDB v2 database files (two versions, see below)
+    └── collectri/collectri_human.tsv            CollecTRI transcription factor regulons, human (see below)
 ```
 
 ## Sources – case study 1
@@ -132,9 +133,10 @@ ligand–receptor pairs of the authors' CellPhoneDB analysis (table S5).
 | `thymus/park2020_supplement/`       | Supplementary material of Park *et al.* (Science website)                                 | `aay3224_table-s5.csv`: CellPhoneDB means, 710 interactions × 53 × 53 cell-type pairs (no p-values). Copied by hand (the Science supplement refuses scripted downloads); the script checks its md5 (`f2b5c69fa8468414a9db1df93e3aad5f`). Tables S1–S4 and data S1 are copied by hand too and not used by the notebooks. | 17 MB   |
 | `thymus/cellphonedb_v2_db/db_2019-09/` | GitHub [ventolab/cellphonedb-data](https://github.com/ventolab/cellphonedb-data), tag `v2.0.0`, commit `05d95ad` (2019-09-05) | `protein_input.csv` (receptor flags), `complex_input.csv` (subunits), `gene_input.csv` (UniProt → gene), `interaction_input.csv`. Same files as in CellPhoneDB code releases v2.1.0 to v2.1.7. | < 1 MB  |
 | `thymus/cellphonedb_v2_db/db_2019-07/` | GitHub [ventolab/CellphoneDB](https://github.com/ventolab/CellphoneDB), tag `v2.0.6`, commit `095d4ae` (2019-07-23), `cellphonedb/src/core/data/` | Same four files, as bundled with code releases v2.0.0 to v2.0.6. | < 1 MB  |
+| `thymus/collectri/`                 | CollecTRI (Müller-Dott *et al.*, *Nucleic Acids Res* 2023, [doi:10.1093/nar/gkad841](https://doi.org/10.1093/nar/gkad841)), from the [OmniPath](https://omnipathdb.org) web service, downloaded 2026-10-17 | `collectri_human.tsv`: 64,516 rows, 62,411 distinct transcription factor → target gene pairs, including complexes such as `NFKB1_RELB` (columns `source_genesymbol`, `target_genesymbol`, `is_stimulation`, `is_inhibition`, literature references). Gene sets of the activity scores (notebook 10). md5 `2f626e289712311596bc5a6687e44384`. | 12 MB   |
 
-Checksums of the Zenodo files are verified against the values published by Zenodo. GitHub publishes no checksums: ours
-are recorded at first download.
+Checksums of the Zenodo files are verified against the values published by Zenodo. GitHub and OmniPath publish no
+checksums: ours are recorded at first download.
 
 ### Notes and open questions
 
@@ -151,6 +153,13 @@ are recorded at first download.
   in `envs/`. The CellPhoneDB re-run of `scripts/thymus/01_*.py` to `05_*.py` uses CellPhoneDB 5.0.1 with its own
   database, and reads the atlas and table S5 from other paths (`data/thymus/HTA08_v01_A05_Science_human_fig1.h5ad`,
   `data/thymus/aay3224_table-s5.csv`); the two layouts are still to be harmonised.
+- CollecTRI has no versioned release: the OmniPath service returns the current version, so a later download can differ.
+  The script keeps the first download; compare a new one with the md5 above. The downloaded version is larger than the
+  one described in the paper (43,175 interactions) and cites `CollecTRI2` references, so it is a later update.
+  `OmnipathR::collectri()` (OmnipathR 4.1.0, installed with LIANA) is not used: it fails with
+  `Join columns in y must be present in the data … ncbi_tax_id`.
+- In CollecTRI, the NF-κB family (RELA, RELB, REL, NFKB1, NFKB2) share 803 targets through their complexes, so the
+  RELB and NFKB2 regulons do not separate the non-canonical from the canonical NF-κB pathway.
 
 ## Server jobs downloaded by the tutorial
 
