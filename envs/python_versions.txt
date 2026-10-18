@@ -1,4 +1,4 @@
-# packages in environment at /home/minhle/miniforge3/envs/csbc-causalccc:
+# packages in environment csbc-causalccc:
 #
 # Name                       Version          Build                    Channel
 _openmp_mutex                4.5              20_gnu                   conda-forge
