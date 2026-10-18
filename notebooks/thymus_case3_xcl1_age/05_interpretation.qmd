@@ -101,7 +101,6 @@ neighbour_string <- function(net, v, n = Inf) {
   if (nrow(nb) == 0) return("–")
   paste0(var_label(nb$other), " (", round(nb$info_shifted), ")", collapse = ", ")
 }
-map_chr(nets, \(n) format(attr(n$result, "run_time")))
 ```
 
 ## 1. Overview of the two networks
@@ -156,8 +155,6 @@ map(c("within senders", "within receivers"), \(w) {
 ```
 
 **Reading.**
-- **Run times:** the postnatal MIIC run took 19.5 minutes. The 1.4 days of the fetal run include a suspension of the
-  computer (sleep) during the run; its computing time was of the same order.
 - **Sizes:** both networks have about 140 genes per group.
   - Fetal: 307 links among the senders and 251 among the receivers, with 10 genuine causations.
   - Postnatal: 284 and 340 links, with 2 genuine causations.
@@ -511,6 +508,59 @@ lr_context |> select(-ligands, -receptors) |> write_csv(file.path(out_dir, "lr_l
 list.files(out_dir)
 ```
 
+## 8. What the literature says
+
+Three findings of sections 2 and 4 go beyond the claim of Park *et al.*. For each, what is already published, what the
+networks add, and what remains untested.
+
+**XCL1 with TNFRSF9 (4-1BB) and TCR-activation genes: plausible, not described as such.**
+
+- **Known:**
+  - Human CD8αα⁺ PD-1⁺ thymocytes are selected by a strong (agonist) TCR signal, before conventional selection
+    (Verstichel *et al.*, *Sci Immunol* 2017, [doi:10.1126/sciimmunol.aah4232](https://doi.org/10.1126/sciimmunol.aah4232)).
+  - In mice, the thymic precursors of CD8αα intraepithelial lymphocytes carry the program of a recent, strong TCR signal
+    (Ruscher *et al.*, *Nat Immunol* 2017, [doi:10.1038/ni.3751](https://doi.org/10.1038/ni.3751)).
+  - In mice, CD8 T cells secrete XCL1 when they recognise their antigen, and XCR1 is restricted to cross-presenting DCs
+    (Dorner *et al.*, *Immunity* 2009, [doi:10.1016/j.immuni.2009.08.027](https://doi.org/10.1016/j.immuni.2009.08.027)).
+    That XCL1 goes with an activation program is therefore expected.
+- **Added by the networks:** in human thymic CD8αα(I) cells, XCL1 goes with the 4-1BB⁺ activated fraction (TNFRSF9 is its
+  strongest or second neighbour at both ages), and this fraction is larger before birth. No published study names an
+  XCL1–TNFRSF9 association in these cells.
+- **Untested:** whether these cells are the authors' "T(agonist)" population, and whether they are the GNG4⁺ cells of
+  the claim (GNG4 is not in the networks).
+
+**CRTAM → CADM1: a known pair, here found in the human thymus.**
+
+- **Known:**
+  - CRTAM binds CADM1 (Necl2), and the binding makes CRTAM⁺ and CADM1⁺ cells adhere (Arase *et al.*, *Int Immunol*
+    2005, [doi:10.1093/intimm/dxh299](https://doi.org/10.1093/intimm/dxh299); Galibert *et al.*, *J Biol Chem* 2005,
+    [doi:10.1074/jbc.M502095200](https://doi.org/10.1074/jbc.M502095200)).
+  - CADM1 marks the BDCA3⁺ human and CD8α⁺ mouse DCs (Galibert 2005), the DC1 lineage: this agrees with the CADM1–CLEC9A
+    link of the fetal network.
+  - CRTAM is induced late after CD8 T-cell activation (Takeuchi *et al.*, *J Immunol* 2009,
+    [doi:10.4049/jimmunol.0901248](https://doi.org/10.4049/jimmunol.0901248)): this agrees with its postnatal neighbours
+    BHLHE40 and RGS16, two genes induced by TCR signalling.
+- **Added by the networks:** in the fetal network, CRTAM is linked to XCL1 and CADM1 to CLEC9A, so the pair connects the
+  XCL1⁺ CD8αα(I) cells to DC1 in the human thymus (case 2, all ages pooled, gives CRTAM–XCL2 and CADM1–CLEC9A).
+  Postnatally, CRTAM stays in the activation program (BHLHE40, RGS16) but CADM1 moves to HLA-DPA1. Galibert 2005
+  proposed a role in the mouse thymus; we found no human thymus data.
+- **Untested:** adhesion or signalling between these two cell types; the network shows co-variation only.
+
+**Costimulation and the aDC1 program: the crosstalk is known, the fetal restriction is not.**
+
+- **Known:**
+  - Self-reactive thymocytes drive the maturation of thymic DCs through CD40 (Oh *et al.*, *J Immunol* 2018,
+    [doi:10.4049/jimmunol.1700768](https://doi.org/10.4049/jimmunol.1700768)).
+  - Distinct thymocyte types provide the signals for distinct thymic DC subsets (Srinivasan *et al.*, *Nat Immunol*
+    2026, [doi:10.1038/s41590-025-02371-9](https://doi.org/10.1038/s41590-025-02371-9)).
+  - CD28–CD80/86 and CD40–CD40L cooperate in the thymic medulla (Williams *et al.*, *J Immunol* 2014,
+    [doi:10.4049/jimmunol.1302550](https://doi.org/10.4049/jimmunol.1302550)).
+- **Added by the networks:** the same pairs (CD28 → CD80, CD40LG → CD40, PDCD1 → CD274) connect CD8αα(I) cells to the
+  aDC1 activation module in the human fetal thymus.
+- **Untested:** that this crosstalk is restricted to fetal life. The studies above are mostly in adult mice, and the
+  postnatal network has only 35 aDC1. As noted in section 4, CD40, CD80 and CD274 are themselves activation markers of
+  DCs, so these links may reflect co-expression in aDC1 rather than signalling.
+
 ## Conclusions
 
 1. **XCL1 in CD8αα(I) cells drops at birth.**
@@ -522,6 +572,7 @@ list.files(out_dir)
      refines the claim: CD8αα(I) cells are an XCL1 source mainly in the fetal thymus, and it is the cells carrying a
      TCR-activation signature that produce it.
    - GNG4 is not in the networks, so its role cannot be read from them.
+   - This association is new but fits the literature on agonist-selected CD8αα cells (section 8).
 2. **The receiver side is the same at both ages, and as in case 2.**
    - XCR1 marks resting DC1, and CCR7 / LAMP3 mark activated DC1; the two are almost never co-expressed.
    - The activation program does not depend on XCR1.
@@ -529,7 +580,9 @@ list.files(out_dir)
      to XCL1 signalling.
 3. **Costimulation is a fetal feature in these networks.** CD28 → CD80, CD40LG → CD40 and PDCD1 → CD274 connect
    CD8αα(I) cells to the aDC1 activation module in fetal cells; postnatally only PD-L1 stays tied to aDC1, with 35 aDC1
-   cells only.
+   cells only. The thymocyte–DC costimulation crosstalk is known; its restriction to fetal life is not (section 8).
+4. **CRTAM → CADM1 links the XCL1⁺ CD8αα(I) cells to DC1 in fetal cells.** It is a known adhesion pair between
+   activated cytotoxic cells and DC1, here found in the human thymus (section 8).
 
 **Limits.**
 - The two networks rest on different gene selections and share few links (Jaccard 0.22–0.31), so they are compared

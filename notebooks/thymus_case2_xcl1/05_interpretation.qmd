@@ -585,8 +585,16 @@ The claim has three parts; the network supports them unevenly.
    activation program depend on XCR1, and recruitment into the medulla cannot be tested on dissociated cells.
 3. **Other signals between the same cells.**
    - The costimulation pairs from CD8αα(I) cells (CD40LG → CD40, CD28 → CD80 / CD86, PDCD1 → CD274) reach the
-     activation program of aDC1 more directly than XCL1 → XCR1.
-   - CRTAM → CADM1 links the XCL2⁺ cytotoxic program to CLEC9A⁺ DC1, in parallel with the XCL axis.
+     activation program of aDC1 more directly than XCL1 → XCR1. Thymocytes are known to drive the maturation of
+     thymic DCs through CD40 (Oh *et al.*, *J Immunol* 2018,
+     [doi:10.4049/jimmunol.1700768](https://doi.org/10.4049/jimmunol.1700768); Srinivasan *et al.*, *Nat Immunol*
+     2026, [doi:10.1038/s41590-025-02371-9](https://doi.org/10.1038/s41590-025-02371-9)).
+   - CRTAM → CADM1 links the XCL2⁺ cytotoxic program to CLEC9A⁺ DC1, in parallel with the XCL axis. CRTAM binding to
+     CADM1 makes the cells adhere, and CADM1 marks the DC1 lineage (Arase *et al.*, *Int Immunol* 2005,
+     [doi:10.1093/intimm/dxh299](https://doi.org/10.1093/intimm/dxh299); Galibert *et al.*, *J Biol Chem* 2005,
+     [doi:10.1074/jbc.M502095200](https://doi.org/10.1074/jbc.M502095200)).
+   - Thymus case 3 (notebook 05, section 8) discusses these pairs, and the XCL1–TNFRSF9 association, against the
+     literature.
    - The top-ranked S5 pairs (MIF / APP → CD74) are not specific to these cells.
 
 **Technical checks.**
